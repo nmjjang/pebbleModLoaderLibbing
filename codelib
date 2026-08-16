@@ -231,6 +231,11 @@ local DefaultTheme = {
     AccentText = Color3.fromRGB(55, 30, 43),
 
     Border = Color3.fromRGB(54, 54, 54),
+
+    -- Slightly brighter than the normal UI border so an inactive
+    -- 14x14 checkbox remains visible on top of a Section card.
+    CheckboxBorder = Color3.fromRGB(72, 72, 72),
+
     Element = Color3.fromRGB(34, 34, 34),
     ElementHover = Color3.fromRGB(40, 40, 40),
 
@@ -634,9 +639,17 @@ function Section:Checkbox(config)
     boxStroke.Name = "CheckboxBorder"
     boxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     boxStroke.LineJoinMode = Enum.LineJoinMode.Round
-    boxStroke.Thickness = config.BorderThickness or 1
-    boxStroke.Color = config.BorderColor or theme.Border
-    boxStroke.Transparency = config.BorderTransparency == nil and 0 or config.BorderTransparency
+    boxStroke.Thickness = config.BorderThickness or 1.25
+    boxStroke.Color =
+        config.BorderColor
+        or theme.CheckboxBorder
+        or theme.Border
+        or Color3.fromRGB(72, 72, 72)
+
+    boxStroke.Transparency =
+        config.BorderTransparency == nil
+        and 0
+        or config.BorderTransparency
     boxStroke.Parent = box
 
     local state = {
@@ -705,7 +718,9 @@ function Section:Checkbox(config)
 
         local inactiveBorderColor =
             config.BorderColor
+            or theme.CheckboxBorder
             or theme.Border
+            or Color3.fromRGB(72, 72, 72)
 
         local activeBorderTransparency =
             config.ActiveBorderTransparency == nil
@@ -773,6 +788,25 @@ function Section:Checkbox(config)
 
     function object:GetCheckboxIcon()
         return state.CheckboxIcon
+    end
+
+    function object:SetBorderColor(color)
+        if typeof(color) == "Color3" then
+            config.BorderColor = color
+            renderCheckbox(false)
+        end
+
+        return self
+    end
+
+    function object:SetBorderThickness(thickness)
+        thickness = tonumber(thickness)
+
+        if thickness then
+            boxStroke.Thickness = math.max(0, thickness)
+        end
+
+        return self
     end
 
     box.MouseButton1Click:Connect(function()
