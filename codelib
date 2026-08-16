@@ -1848,7 +1848,7 @@ function Section:Colorpicker(config)
 
     local popup = Instance.new("Frame")
     popup.Name = "ColorpickerPopup"
-    popup.BackgroundColor3 = config.PopupBackground or Color3.fromRGB(245, 245, 245)
+    popup.BackgroundColor3 = config.PopupBackground or Color3.fromRGB(24, 24, 24)
     popup.BorderSizePixel = 0
     popup.Visible = false
     popup.AnchorPoint = Vector2.new(1, 0)
@@ -2710,7 +2710,10 @@ function Library:CreateWindow(config)
     local screen = Instance.new("ScreenGui")
     screen.Name = config.Name or "MovementWaveV3"
     screen.ResetOnSpawn = false
-    screen.IgnoreGuiInset = true
+    -- Keep Roblox GUI coordinates in the same coordinate space used by
+    -- mouse/touch input. This avoids the small visual-vs-hitbox offset that
+    -- can happen with custom input handlers when IgnoreGuiInset is enabled.
+    screen.IgnoreGuiInset = false
     screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     screen.Parent = PlayerGui
 
