@@ -1,8 +1,29 @@
---UI Lib by 4NMNN--
+--[[
+    MovementWaveUI.lua
+    Original UI framework inspired by the structure/style requested by the user.
+    Features:
+      - Lucide icon pack via loadstring
+      - Window + draggable frame
+      - RightShift visibility toggle
+      - X close button
+      - Sidebar tabs + tab dividers
+      - Independent invisible left/right scrolling columns
+      - Sections
+      - Button, Checkbox, Toggle, Keybind, Slider, Dropdown, Input,
+        Colorpicker, Paragraph, Code, Divider, Space, Tag
+      - Notifications, Dialogs, Popups
+      - Theme customization
+      - Callback + Set/Get/Lock/Unlock patterns
+
+    Notes:
+      - This file only builds UI/components and callback plumbing.
+      - Game-specific behavior belongs in your callbacks.
+]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
 local HttpService = game:GetService("HttpService")
 
 local LocalPlayer = Players.LocalPlayer
@@ -10,6 +31,10 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local Library = {}
 Library.__index = Library
+
+--============================================================
+-- Utilities
+--============================================================
 
 local function clamp(v, a, b)
     return math.max(a, math.min(b, v))
@@ -127,6 +152,10 @@ local function makeText(parent, props)
     return label
 end
 
+--============================================================
+-- Lucide loader
+--============================================================
+
 local ICONS_URL = "https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua"
 local Lucide
 
@@ -180,6 +209,10 @@ local function createIcon(parent, iconName, size, color, zIndex)
     return icon
 end
 
+--============================================================
+-- Default theme
+--============================================================
+
 local DefaultTheme = {
     Font = Enum.Font.Gotham,
 
@@ -213,6 +246,10 @@ local DefaultTheme = {
     CodeBackground = Color3.fromRGB(21, 21, 21),
     InputBackground = Color3.fromRGB(24, 24, 24),
 }
+
+--============================================================
+-- Base element helpers
+--============================================================
 
 local function attachLockAPI(object, state, visual)
     state.Locked = state.Locked or false
@@ -1812,7 +1849,7 @@ function Section:Colorpicker(config)
 
     local popup = Instance.new("Frame")
     popup.Name = "ColorpickerPopup"
-    popup.BackgroundColor3 = config.PopupBackground or Color3.fromRGB(245, 245, 245)
+    popup.BackgroundColor3 = config.PopupBackground or Color3.fromRGB(24, 24, 24)
     popup.BorderSizePixel = 0
     popup.Visible = false
     popup.AnchorPoint = Vector2.new(1, 0)
@@ -2426,68 +2463,118 @@ function Window:Notify(config)
     config = config or {}
     local theme = self.Theme
 
+    local message = tostring(config.Content or config.Text or config.Title or "Notification")
+    local font = config.Font or theme.Font
+    local textSize = config.TextSize or 12
+    local paddingX = config.PaddingX or 7
+    local paddingY = config.PaddingY or 4
+
+    local textBounds = TextService:GetTextSize(
+        message,
+        textSize,
+        font,
+        Vector2.new(config.MaxWidth or 500, 1000)
+    )
+
+    local width = math.clamp(
+        textBounds.X + (paddingX * 2),
+        config.MinWidth or 70,
+        config.MaxWidth or 500
+    )
+
+    local height = math.max(
+        config.Height or 23,
+        textBounds.Y + (paddingY * 2)
+    )
+
+    local holder = Instance.new("Frame")
+    holder.Name = "Notification"
+    holder.BackgroundTransparency = 1
+    holder.BorderSizePixel = 0
+    holder.Size = UDim2.fromOffset(width, height)
+    holder.LayoutOrder = #self.Notifications + 1
+    holder.ClipsDescendants = false
+    holder.ZIndex = 201
+    holder.Parent = self.NotificationHolder
+
     local card = Instance.new("Frame")
-    card.Name = "Notification"
-    card.BackgroundColor3 = config.BackgroundColor or theme.Popup
+    card.Name = "Card"
+    card.Position = UDim2.fromOffset(-(width + (config.SwipeDistance or 14)), 0)
+    card.Size = UDim2.fromOffset(width, height)
+    card.BackgroundColor3 = config.BackgroundColor or Color3.fromRGB(17, 17, 17)
+    card.BackgroundTransparency = config.BackgroundTransparency or 0.08
     card.BorderSizePixel = 0
-    card.Size = UDim2.new(1, 0, 0, 0)
-    card.AutomaticSize = Enum.AutomaticSize.Y
-    card.LayoutOrder = #self.Notifications + 1
-    card.Parent = self.NotificationHolder
-    round(card, config.Corner or 7)
-    stroke(card, theme.Border, 1, 0.5)
-    padding(card, 10, 10, 10, 10)
+    card.ZIndex = 202
+    card.Parent = holder
+    round(card, config.Corner or 1)
 
-    local content = Instance.new("Frame")
-    content.BackgroundTransparency = 1
-    content.Size = UDim2.new(1, 0, 0, 0)
-    content.AutomaticSize = Enum.AutomaticSize.Y
-    content.Parent = card
-    local l = list(content, 4)
+    local border = Instance.new("UIStroke")
+    border.Name = "Border"
+    border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    border.Thickness = config.BorderThickness or 1
+    border.Color = config.BorderColor or Color3.fromRGB(78, 78, 78)
+    border.Transparency = config.BorderTransparency or 0
+    border.Parent = card
 
-    if config.Title then
-        local title = makeText(content, {
-            Text = config.Title,
-            TextColor3 = theme.Text,
-            TextSize = 12,
-            Font = theme.Font,
-            Size = UDim2.new(1, 0, 0, 18),
-        })
-    end
-
-    if config.Content or config.Text then
-        local body = Instance.new("TextLabel")
-        body.BackgroundTransparency = 1
-        body.Text = config.Content or config.Text
-        body.TextColor3 = theme.MutedText
-        body.TextSize = 11
-        body.Font = theme.Font
-        body.TextWrapped = true
-        body.TextXAlignment = Enum.TextXAlignment.Left
-        body.AutomaticSize = Enum.AutomaticSize.Y
-        body.Size = UDim2.new(1, 0, 0, 0)
-        body.Parent = content
-    end
+    local label = Instance.new("TextLabel")
+    label.Name = "Text"
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.fromOffset(paddingX, 0)
+    label.Size = UDim2.new(1, -(paddingX * 2), 1, 0)
+    label.Font = font
+    label.Text = message
+    label.TextColor3 = config.TextColor or Color3.fromRGB(225, 225, 225)
+    label.TextSize = textSize
+    label.TextWrapped = config.TextWrapped or false
+    label.TextXAlignment = config.TextXAlignment or Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.ZIndex = 203
+    label.Parent = card
 
     local object = {
         __type = "Notification",
-        UI = card,
+        UI = holder,
+        Card = card,
+        Label = label,
         Closed = false,
     }
+
+    local swipeTime = config.SwipeTime or 0.12
+
+    function object:SetText(value)
+        label.Text = tostring(value)
+        return self
+    end
 
     function object:Close()
         if self.Closed then return end
         self.Closed = true
-        tween(card, 0.18, { BackgroundTransparency = 1 })
-        task.delay(0.2, function()
-            if card then card:Destroy() end
+
+        local outTime = config.SwipeOutTime or swipeTime
+
+        tween(card, outTime, {
+            Position = UDim2.fromOffset(-(width + (config.SwipeDistance or 14)), 0),
+            BackgroundTransparency = 1,
+        })
+
+        tween(label, outTime, { TextTransparency = 1 })
+        tween(border, outTime, { Transparency = 1 })
+
+        task.delay(outTime + 0.03, function()
+            if holder then holder:Destroy() end
         end)
     end
 
     table.insert(self.Notifications, object)
 
+    task.defer(function()
+        tween(card, swipeTime, {
+            Position = UDim2.fromOffset(0, 0)
+        })
+    end)
+
     if config.Duration ~= false then
-        task.delay(config.Duration or 4, function()
+        task.delay(config.Duration or 2.5, function()
             if not object.Closed then
                 object:Close()
             end
@@ -2780,12 +2867,12 @@ function Library:CreateWindow(config)
     local notificationHolder = Instance.new("Frame")
     notificationHolder.Name = "NotificationHolder"
     notificationHolder.BackgroundTransparency = 1
-    notificationHolder.AnchorPoint = Vector2.new(1, 0)
-    notificationHolder.Position = UDim2.new(1, -18, 0, 18)
-    notificationHolder.Size = UDim2.fromOffset(config.NotificationWidth or 280, 400)
+    notificationHolder.AnchorPoint = Vector2.new(0, 0)
+    notificationHolder.Position = config.NotificationPosition or UDim2.fromOffset(2, 2)
+    notificationHolder.Size = UDim2.fromOffset(config.NotificationWidth or 520, 400)
     notificationHolder.ZIndex = 200
     notificationHolder.Parent = screen
-    local notificationLayout = list(notificationHolder, 8)
+    local notificationLayout = list(notificationHolder, config.NotificationGap or 4)
 
     local window = setmetatable({
         __type = "Window",
