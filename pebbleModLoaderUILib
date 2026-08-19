@@ -1,3 +1,25 @@
+--[[
+    MovementWaveUI.lua
+    Original UI framework inspired by the structure/style requested by the user.
+    Features:
+      - Lucide icon pack via loadstring
+      - Window + draggable frame
+      - RightShift visibility toggle
+      - X close button
+      - Sidebar tabs + tab dividers
+      - Independent invisible left/right scrolling columns
+      - Sections
+      - Button, Checkbox, Toggle, Keybind, Slider, Dropdown, Input,
+        Colorpicker, Paragraph, Code, Divider, Space, Tag
+      - Notifications, Dialogs, Popups
+      - Theme customization
+      - Callback + Set/Get/Lock/Unlock patterns
+
+    Notes:
+      - This file only builds UI/components and callback plumbing.
+      - Game-specific behavior belongs in your callbacks.
+]]
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -1880,12 +1902,19 @@ end
 
 function Section:Colorpicker(config)
     config = config or {}
-    local theme = self.Window.Theme
+
+    local window = self.Window
+    local theme = window.Theme
+
     config.RightReserve = config.RightReserve or 40
 
     local row, title = makeRow(self, config, config.Height or 30)
     local initial = config.Default or config.Value or Color3.new(1, 1, 1)
     local h, s, v = Color3.toHSV(initial)
+
+    --========================================================
+    -- SWATCH
+    --========================================================
 
     local swatch = Instance.new("TextButton")
     swatch.Name = "ColorSwatch"
@@ -1899,6 +1928,7 @@ function Section:Colorpicker(config)
     swatch.Active = true
     swatch.ZIndex = 20
     swatch.Parent = row
+
     round(swatch, config.Corner or 5)
     stroke(swatch, config.SwatchBorderColor or theme.Border, 1, 0.25)
 
@@ -1912,22 +1942,40 @@ function Section:Colorpicker(config)
     local fieldHeight = config.FieldHeight or 125
     local bottomHeight = config.BottomHeight or 45
     local hueHeight = config.HueHeight or 8
+    local popupHeight = fieldHeight + bottomHeight
+
+    --========================================================
+    -- GLOBAL POPUP
+    --
+    -- Parent is ScreenGui instead of the swatch/section.
+    -- This means it is not clipped by the main window, scrolling
+    -- frames, sections, or any other container.
+    --========================================================
 
     local popup = Instance.new("Frame")
     popup.Name = "ColorpickerPopup"
     popup.BackgroundColor3 = config.PopupBackground or Color3.fromRGB(24, 24, 24)
     popup.BorderSizePixel = 0
     popup.Visible = false
-    popup.AnchorPoint = Vector2.new(1, 0)
-    popup.Position = config.PopupPosition or UDim2.new(1, 0, 1, 6)
-    popup.Size = UDim2.fromOffset(popupWidth, fieldHeight + bottomHeight)
+    popup.AnchorPoint = Vector2.new(0, 0)
+    popup.Position = UDim2.fromOffset(0, 0)
+    popup.Size = UDim2.fromOffset(popupWidth, popupHeight)
     popup.ClipsDescendants = true
-    popup.ZIndex = 80
-    popup.Parent = swatch
-    round(popup, config.PopupCorner or 6)
-    stroke(popup, config.PopupBorderColor or theme.Border, 1, 0.25)
+    popup.ZIndex = config.PopupZIndex or 1000
+    popup.Parent = window.ScreenGui
 
-    -- Saturation / Value field.
+    round(popup, config.PopupCorner or 6)
+    stroke(
+        popup,
+        config.PopupBorderColor or theme.Border,
+        config.PopupBorderThickness or 1,
+        config.PopupBorderTransparency == nil and 0.25 or config.PopupBorderTransparency
+    )
+
+    --========================================================
+    -- SATURATION / VALUE
+    --========================================================
+
     local svArea = Instance.new("TextButton")
     svArea.Name = "SaturationValue"
     svArea.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
@@ -1936,15 +1984,15 @@ function Section:Colorpicker(config)
     svArea.AutoButtonColor = false
     svArea.Active = true
     svArea.Size = UDim2.new(1, 0, 0, fieldHeight)
-    svArea.ZIndex = 81
+    svArea.ZIndex = popup.ZIndex + 1
     svArea.Parent = popup
 
-    -- White on the left, transparent on the right.
     local whiteLayer = Instance.new("Frame")
+    whiteLayer.Name = "WhiteGradient"
     whiteLayer.BackgroundColor3 = Color3.new(1, 1, 1)
     whiteLayer.BorderSizePixel = 0
     whiteLayer.Size = UDim2.fromScale(1, 1)
-    whiteLayer.ZIndex = 82
+    whiteLayer.ZIndex = popup.ZIndex + 2
     whiteLayer.Parent = svArea
 
     local whiteGradient = Instance.new("UIGradient")
@@ -1954,12 +2002,12 @@ function Section:Colorpicker(config)
     })
     whiteGradient.Parent = whiteLayer
 
-    -- Transparent on top, black on bottom.
     local blackLayer = Instance.new("Frame")
+    blackLayer.Name = "BlackGradient"
     blackLayer.BackgroundColor3 = Color3.new(0, 0, 0)
     blackLayer.BorderSizePixel = 0
     blackLayer.Size = UDim2.fromScale(1, 1)
-    blackLayer.ZIndex = 83
+    blackLayer.ZIndex = popup.ZIndex + 3
     blackLayer.Parent = svArea
 
     local blackGradient = Instance.new("UIGradient")
@@ -1975,8 +2023,9 @@ function Section:Colorpicker(config)
     svPicker.AnchorPoint = Vector2.new(0.5, 0.5)
     svPicker.Size = UDim2.fromOffset(config.PickerSize or 20, config.PickerSize or 20)
     svPicker.BackgroundTransparency = 1
-    svPicker.ZIndex = 86
+    svPicker.ZIndex = popup.ZIndex + 6
     svPicker.Parent = svArea
+
     round(svPicker, 99)
 
     local svPickerStroke = Instance.new("UIStroke")
@@ -1985,7 +2034,10 @@ function Section:Colorpicker(config)
     svPickerStroke.Color = config.PickerColor or Color3.new(1, 1, 1)
     svPickerStroke.Parent = svPicker
 
-    -- Hue rainbow bar.
+    --========================================================
+    -- HUE BAR
+    --========================================================
+
     local hueBar = Instance.new("TextButton")
     hueBar.Name = "HueBar"
     hueBar.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -1995,8 +2047,9 @@ function Section:Colorpicker(config)
     hueBar.Active = true
     hueBar.Position = UDim2.new(0, 12, 1, -(bottomHeight / 2) - (hueHeight / 2))
     hueBar.Size = UDim2.new(1, -24, 0, hueHeight)
-    hueBar.ZIndex = 82
+    hueBar.ZIndex = popup.ZIndex + 2
     hueBar.Parent = popup
+
     round(hueBar, 99)
 
     local hueGradient = Instance.new("UIGradient")
@@ -2018,8 +2071,9 @@ function Section:Colorpicker(config)
     hueKnob.Size = UDim2.fromOffset(config.HueKnobSize or 20, config.HueKnobSize or 20)
     hueKnob.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
     hueKnob.BorderSizePixel = 0
-    hueKnob.ZIndex = 85
+    hueKnob.ZIndex = popup.ZIndex + 5
     hueKnob.Parent = hueBar
+
     round(hueKnob, 99)
 
     local hueKnobStroke = Instance.new("UIStroke")
@@ -2028,8 +2082,43 @@ function Section:Colorpicker(config)
     hueKnobStroke.Color = config.HueKnobBorderColor or Color3.new(1, 1, 1)
     hueKnobStroke.Parent = hueKnob
 
+    --========================================================
+    -- CLOSE BUTTON
+    --========================================================
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Name = "Close"
+    closeButton.AnchorPoint = Vector2.new(1, 0)
+    closeButton.Position = UDim2.new(1, -5, 0, 5)
+    closeButton.Size = UDim2.fromOffset(config.CloseSize or 18, config.CloseSize or 18)
+    closeButton.BackgroundColor3 = config.CloseBackground or Color3.fromRGB(18, 18, 18)
+    closeButton.BackgroundTransparency = config.CloseBackgroundTransparency or 0.2
+    closeButton.BorderSizePixel = 0
+    closeButton.Text = config.CloseText or "×"
+    closeButton.TextColor3 = config.CloseColor or Color3.fromRGB(240, 240, 240)
+    closeButton.TextSize = config.CloseTextSize or 17
+    closeButton.Font = config.CloseFont or Enum.Font.GothamBold
+    closeButton.AutoButtonColor = false
+    closeButton.Active = true
+    closeButton.ZIndex = popup.ZIndex + 20
+    closeButton.Parent = popup
+
+    round(closeButton, config.CloseCorner or 5)
+
+    local closeStroke = Instance.new("UIStroke")
+    closeStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    closeStroke.Thickness = config.CloseBorderThickness or 1
+    closeStroke.Color = config.CloseBorderColor or Color3.fromRGB(75, 75, 75)
+    closeStroke.Transparency = config.CloseBorderTransparency or 0.15
+    closeStroke.Parent = closeButton
+
+    --========================================================
+    -- OBJECT
+    --========================================================
+
     local object = {
         __type = "Colorpicker",
+
         UIElements = {
             Row = row,
             Title = title,
@@ -2039,11 +2128,62 @@ function Section:Colorpicker(config)
             SVPicker = svPicker,
             HueBar = hueBar,
             HueKnob = hueKnob,
+            CloseButton = closeButton,
         },
     }
 
+    --========================================================
+    -- POSITIONING
+    --
+    -- Keeps the popup inside the actual game screen, while allowing
+    -- it to freely leave the UI window itself.
+    --========================================================
+
+    local function updatePopupPosition()
+        local screenSize = window.ScreenGui.AbsoluteSize
+
+        -- AbsoluteSize can briefly be 0 on the first frame.
+        if screenSize.X <= 0 or screenSize.Y <= 0 then
+            local camera = workspace.CurrentCamera
+            screenSize = camera and camera.ViewportSize or Vector2.new(1920, 1080)
+        end
+
+        local swatchPos = swatch.AbsolutePosition
+        local swatchSize = swatch.AbsoluteSize
+        local margin = config.ScreenMargin or 6
+        local gap = config.PopupGap or 6
+
+        -- Align the popup's right edge with the swatch's right edge.
+        local x = swatchPos.X + swatchSize.X - popupWidth
+        local y = swatchPos.Y + swatchSize.Y + gap
+
+        -- If it would go below the screen, open upward instead.
+        if y + popupHeight > screenSize.Y - margin then
+            y = swatchPos.Y - popupHeight - gap
+        end
+
+        x = clamp(
+            x,
+            margin,
+            math.max(margin, screenSize.X - popupWidth - margin)
+        )
+
+        y = clamp(
+            y,
+            margin,
+            math.max(margin, screenSize.Y - popupHeight - margin)
+        )
+
+        popup.Position = UDim2.fromOffset(x, y)
+    end
+
+    --========================================================
+    -- RENDER
+    --========================================================
+
     local function render(fireCallback)
         state.Value = Color3.fromHSV(h, s, v)
+
         local hueColor = Color3.fromHSV(h, 1, 1)
 
         swatch.BackgroundColor3 = state.Value
@@ -2057,30 +2197,43 @@ function Section:Colorpicker(config)
         end
     end
 
+    --========================================================
+    -- INPUT
+    --========================================================
+
     local draggingSV = false
     local draggingHue = false
 
     local function updateSV(position)
         local pos = svArea.AbsolutePosition
         local size = svArea.AbsoluteSize
-        if size.X <= 0 or size.Y <= 0 then return end
+
+        if size.X <= 0 or size.Y <= 0 then
+            return
+        end
 
         s = clamp((position.X - pos.X) / size.X, 0, 1)
         v = 1 - clamp((position.Y - pos.Y) / size.Y, 0, 1)
+
         render(true)
     end
 
     local function updateHue(position)
         local pos = hueBar.AbsolutePosition
         local size = hueBar.AbsoluteSize
-        if size.X <= 0 then return end
+
+        if size.X <= 0 then
+            return
+        end
 
         h = clamp((position.X - pos.X) / size.X, 0, 1)
         render(true)
     end
 
     svArea.InputBegan:Connect(function(input)
-        if state.Locked then return end
+        if state.Locked then
+            return
+        end
 
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch
@@ -2091,7 +2244,9 @@ function Section:Colorpicker(config)
     end)
 
     hueBar.InputBegan:Connect(function(input)
-        if state.Locked then return end
+        if state.Locked then
+            return
+        end
 
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch
@@ -2102,13 +2257,20 @@ function Section:Colorpicker(config)
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if state.Locked then return end
+        if state.Locked then
+            return
+        end
 
         if input.UserInputType == Enum.UserInputType.MouseMovement
             or input.UserInputType == Enum.UserInputType.Touch
         then
-            if draggingSV then updateSV(input.Position) end
-            if draggingHue then updateHue(input.Position) end
+            if draggingSV then
+                updateSV(input.Position)
+            end
+
+            if draggingHue then
+                updateHue(input.Position)
+            end
         end
     end)
 
@@ -2121,10 +2283,18 @@ function Section:Colorpicker(config)
         end
     end)
 
+    --========================================================
+    -- METHODS
+    --========================================================
+
     function object:Set(color, fireCallback)
-        if typeof(color) ~= "Color3" then return self end
+        if typeof(color) ~= "Color3" then
+            return self
+        end
+
         h, s, v = Color3.toHSV(color)
         render(fireCallback)
+
         return self
     end
 
@@ -2140,31 +2310,99 @@ function Section:Colorpicker(config)
         h = clamp(tonumber(hue) or h, 0, 1)
         s = clamp(tonumber(saturation) or s, 0, 1)
         v = clamp(tonumber(value) or v, 0, 1)
+
         render(fireCallback)
+
         return self
     end
 
     function object:Open()
-        if state.Locked then return self end
+        if state.Locked then
+            return self
+        end
+
+        -- Only one colorpicker may be open at once.
+        if window.ActiveColorpicker
+            and window.ActiveColorpicker ~= self
+        then
+            window.ActiveColorpicker:Close()
+        end
+
+        window.ActiveColorpicker = self
+
         state.Open = true
         popup.Visible = true
-        render(false)
+
+        -- Wait one render step so AbsolutePosition/AbsoluteSize are valid.
+        task.defer(function()
+            if state.Open and popup.Parent then
+                updatePopupPosition()
+                render(false)
+            end
+        end)
+
         return self
     end
 
     function object:Close()
         state.Open = false
+        draggingSV = false
+        draggingHue = false
         popup.Visible = false
+
+        if window.ActiveColorpicker == self then
+            window.ActiveColorpicker = nil
+        end
+
         return self
     end
 
     function object:Toggle()
-        return state.Open and self:Close() or self:Open()
+        if state.Open then
+            return self:Close()
+        end
+
+        return self:Open()
+    end
+
+    function object:IsOpen()
+        return state.Open
     end
 
     swatch.MouseButton1Click:Connect(function()
         if not state.Locked then
             object:Toggle()
+        end
+    end)
+
+    closeButton.MouseButton1Click:Connect(function()
+        object:Close()
+    end)
+
+    closeButton.MouseEnter:Connect(function()
+        tween(
+            closeButton,
+            0.08,
+            {
+                BackgroundTransparency = 0,
+            }
+        )
+    end)
+
+    closeButton.MouseLeave:Connect(function()
+        tween(
+            closeButton,
+            0.08,
+            {
+                BackgroundTransparency = config.CloseBackgroundTransparency or 0.2,
+            }
+        )
+    end)
+
+    -- Reposition if the window moves while this picker is open.
+    swatch:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+        if state.Open then
+            updatePopupPosition()
         end
     end)
 
@@ -2515,6 +2753,11 @@ end
 function Window:ToggleVisibility()
     self.Visible = not self.Visible
     self.Main.Visible = self.Visible
+
+    if not self.Visible and self.ActiveColorpicker then
+        self.ActiveColorpicker:Close()
+    end
+
     return self.Visible
 end
 
@@ -2958,6 +3201,7 @@ function Library:CreateWindow(config)
         Tabs = {},
         Notifications = {},
         ActiveTab = nil,
+        ActiveColorpicker = nil,
         SidebarOrder = 0,
         Visible = true,
         Destroyed = false,
