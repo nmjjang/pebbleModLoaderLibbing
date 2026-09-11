@@ -23,6 +23,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
 local HttpService = game:GetService("HttpService")
 
@@ -1649,7 +1650,9 @@ end
 
 function Section:Dropdown(config)
     config = config or {}
-    local theme = self.Window.Theme
+
+    local window = self.Window
+    local theme = window.Theme
 
     local values = config.Values or {}
     local multi = config.Multi == true
@@ -1670,17 +1673,19 @@ function Section:Dropdown(config)
         Text = config.Title or "Dropdown",
         TextColor3 = config.TextColor or theme.Text,
         TextSize = config.TextSize or 12,
-        Font = theme.Font,
+        Font = config.Font or theme.Font,
         Size = UDim2.new(1, 0, 0, 20),
     })
 
     local selector = Instance.new("TextButton")
+    selector.Name = "Selector"
     selector.BackgroundColor3 = config.BackgroundColor or theme.InputBackground
     selector.BorderSizePixel = 0
     selector.Text = ""
     selector.AutoButtonColor = false
     selector.Position = UDim2.fromOffset(0, 25)
     selector.Size = UDim2.new(1, 0, 0, config.BoxHeight or 26)
+    selector.ZIndex = config.SelectorZIndex or 5
     selector.Parent = holder
     round(selector, config.Corner or 4)
 
@@ -1691,26 +1696,31 @@ function Section:Dropdown(config)
         Font = theme.Font,
         Position = UDim2.fromOffset(8, 0),
         Size = UDim2.new(1, -34, 1, 0),
+        ZIndex = selector.ZIndex + 1,
     })
 
-    local chev = createIcon(selector, "chevrons-up-down", 14, theme.MutedText, 3)
+    local chev = createIcon(selector, "chevrons-up-down", 14, theme.MutedText, selector.ZIndex + 2)
     if chev then
         chev.AnchorPoint = Vector2.new(1, 0.5)
         chev.Position = UDim2.new(1, -8, 0.5, 0)
     end
 
+    -- IMPORTANT:
+    -- The menu lives directly under ScreenGui instead of inside Selector.
+    -- This prevents Section/ScrollingFrame/Main clipping and lets it render
+    -- above every normal UI element in the window.
     local menu = Instance.new("Frame")
     menu.Name = "DropdownMenu"
     menu.BackgroundColor3 = config.MenuColor or theme.Popup
     menu.BorderSizePixel = 0
     menu.Visible = false
-    menu.Position = UDim2.new(0, 0, 1, 6)
-    menu.Size = UDim2.new(1, 0, 0, 0)
-    menu.ZIndex = 30
+    menu.Position = UDim2.fromOffset(0, 0)
+    menu.Size = UDim2.fromOffset(0, 0)
+    menu.ZIndex = config.MenuZIndex or 5000
     menu.ClipsDescendants = true
-    menu.Parent = selector
+    menu.Parent = window.ScreenGui
     round(menu, config.MenuCorner or 5)
-    stroke(menu, theme.Border, 1, 0.5)
+    stroke(menu, config.MenuBorderColor or theme.Border, 1, 0.5)
 
     local scroll = Instance.new("ScrollingFrame")
     scroll.BackgroundTransparency = 1
@@ -1720,10 +1730,10 @@ function Section:Dropdown(config)
     scroll.CanvasSize = UDim2.new()
     scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
     scroll.Size = UDim2.new(1, 0, 1, 0)
-    scroll.ZIndex = 31
+    scroll.ZIndex = menu.ZIndex + 1
     scroll.Parent = menu
     padding(scroll, 5, 5, 5, 5)
-    local menuLayout = list(scroll, 4)
+    list(scroll, 4)
 
     local state = {
         Value = current,
@@ -1734,18 +1744,34 @@ function Section:Dropdown(config)
 
     local object = {
         __type = "Dropdown",
-        UIElements = { Holder = holder, Title = title, Selector = selector, Value = valueLabel, Menu = menu, Scroll = scroll },
+        UIElements = {
+            Holder = holder,
+            Title = title,
+            Selector = selector,
+            Value = valueLabel,
+            Menu = menu,
+            Scroll = scroll,
+        },
     }
+
+    local followConnection = nil
 
     local function valueToText()
         if multi then
             if #state.Value == 0 then
                 return config.Placeholder or "Select..."
             end
+
             local parts = {}
-            for _, v in ipairs(state.Value) do
-                table.insert(parts, type(v) == "table" and (v.Title or v.Name or tostring(v)) or tostring(v))
+            for _, value in ipairs(state.Value) do
+                table.insert(
+                    parts,
+                    type(value) == "table"
+                        and (value.Title or value.Name or tostring(value))
+                        or tostring(value)
+                )
             end
+
             return table.concat(parts, ", ")
         end
 
@@ -1753,15 +1779,18 @@ function Section:Dropdown(config)
             return config.Placeholder or "Select..."
         end
 
-        return type(state.Value) == "table" and (state.Value.Title or state.Value.Name or tostring(state.Value)) or tostring(state.Value)
+        return type(state.Value) == "table"
+            and (state.Value.Title or state.Value.Name or tostring(state.Value))
+            or tostring(state.Value)
     end
 
     local function contains(tbl, value)
-        for i, v in ipairs(tbl) do
-            if v == value then
-                return true, i
+        for index, existing in ipairs(tbl) do
+            if existing == value then
+                return true, index
             end
         end
+
         return false, nil
     end
 
@@ -1769,9 +1798,80 @@ function Section:Dropdown(config)
         valueLabel.Text = valueToText()
     end
 
-    local function closeMenu()
+    local function getMenuHeight()
+        local count = math.min(#state.Values, config.MaxVisible or 6)
+
+        if count <= 0 then
+            return 10
+        end
+
+        return count * (config.ItemHeight or 28)
+            + math.max(0, count - 1) * 4
+            + 10
+    end
+
+    local function updateMenuPosition()
+        if not state.Open or not selector.Parent or not menu.Parent then
+            return
+        end
+
+        local selectorPosition = selector.AbsolutePosition
+        local selectorSize = selector.AbsoluteSize
+        local screenSize = window.ScreenGui.AbsoluteSize
+        local gap = config.MenuGap or 6
+        local targetHeight = getMenuHeight()
+        local width = selectorSize.X
+
+        local x = selectorPosition.X
+        local belowY = selectorPosition.Y + selectorSize.Y + gap
+        local aboveY = selectorPosition.Y - targetHeight - gap
+        local y = belowY
+
+        -- If there is not enough space below, open upward instead.
+        if belowY + targetHeight > screenSize.Y and aboveY >= 0 then
+            y = aboveY
+        end
+
+        -- Keep the popup inside the screen horizontally.
+        if x + width > screenSize.X then
+            x = math.max(0, screenSize.X - width)
+        end
+
+        x = math.max(0, x)
+
+        menu.Position = UDim2.fromOffset(x, y)
+        menu.Size = UDim2.fromOffset(width, menu.Size.Y.Offset)
+    end
+
+    local function stopFollowing()
+        if followConnection then
+            followConnection:Disconnect()
+            followConnection = nil
+        end
+    end
+
+    local function closeMenu(instant)
+        if not state.Open and not menu.Visible then
+            return
+        end
+
         state.Open = false
-        tween(menu, 0.12, { Size = UDim2.new(1, 0, 0, 0) })
+        stopFollowing()
+
+        if window.ActiveDropdown == object then
+            window.ActiveDropdown = nil
+        end
+
+        if instant then
+            menu.Size = UDim2.fromOffset(menu.Size.X.Offset, 0)
+            menu.Visible = false
+            return
+        end
+
+        tween(menu, 0.12, {
+            Size = UDim2.fromOffset(menu.Size.X.Offset, 0),
+        })
+
         task.delay(0.13, function()
             if not state.Open and menu.Parent then
                 menu.Visible = false
@@ -1780,12 +1880,45 @@ function Section:Dropdown(config)
     end
 
     local function openMenu()
-        if state.Locked then return end
+        if state.Locked or state.Open then
+            return
+        end
+
+        -- Only one dropdown may be open in a Window at a time.
+        if window.ActiveDropdown and window.ActiveDropdown ~= object then
+            window.ActiveDropdown:Close()
+        end
+
+        window.ActiveDropdown = object
         state.Open = true
         menu.Visible = true
-        local count = math.min(#state.Values, config.MaxVisible or 6)
-        local h = count * (config.ItemHeight or 28) + math.max(0, count - 1) * 4 + 10
-        tween(menu, 0.12, { Size = UDim2.new(1, 0, 0, h) })
+
+        local targetHeight = getMenuHeight()
+        local width = selector.AbsoluteSize.X
+
+        menu.Size = UDim2.fromOffset(width, 0)
+        updateMenuPosition()
+
+        tween(menu, 0.12, {
+            Size = UDim2.fromOffset(width, targetHeight),
+        })
+
+        -- The popup is outside the scrolling section, so keep it attached to
+        -- the selector while the window is dragged or its column is scrolled.
+        stopFollowing()
+        followConnection = RunService.RenderStepped:Connect(function()
+            if not state.Open or not selector.Parent or not menu.Parent then
+                closeMenu(true)
+                return
+            end
+
+            if not window.Visible or not holder.Visible then
+                closeMenu(true)
+                return
+            end
+
+            updateMenuPosition()
+        end)
     end
 
     local function clearMenu()
@@ -1800,53 +1933,71 @@ function Section:Dropdown(config)
         clearMenu()
 
         for index, value in ipairs(state.Values) do
-            local text = type(value) == "table" and (value.Title or value.Name or tostring(index)) or tostring(value)
+            local text = type(value) == "table"
+                and (value.Title or value.Name or tostring(index))
+                or tostring(value)
 
             local item = makeText(scroll, {
                 Text = text,
                 Button = true,
                 TextColor3 = theme.Text,
-                TextSize = 11,
+                TextSize = config.ItemTextSize or 11,
                 Font = theme.Font,
-                BackgroundColor3 = theme.Element,
+                BackgroundColor3 = config.ItemColor or theme.Element,
                 BackgroundTransparency = 0,
                 Size = UDim2.new(1, 0, 0, config.ItemHeight or 28),
                 TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 32,
+                ZIndex = menu.ZIndex + 2,
             })
+
             item.LayoutOrder = index
-            round(item, 4)
+            round(item, config.ItemCorner or 4)
             padding(item, 8, 8, 0, 0)
 
             item.MouseEnter:Connect(function()
-                tween(item, 0.08, { BackgroundColor3 = theme.ElementHover })
+                tween(item, 0.08, {
+                    BackgroundColor3 = config.ItemHoverColor or theme.ElementHover,
+                })
             end)
 
             item.MouseLeave:Connect(function()
-                tween(item, 0.08, { BackgroundColor3 = theme.Element })
+                tween(item, 0.08, {
+                    BackgroundColor3 = config.ItemColor or theme.Element,
+                })
             end)
 
             item.MouseButton1Click:Connect(function()
-                if state.Locked then return end
+                if state.Locked then
+                    return
+                end
 
                 if multi then
-                    local exists, idx = contains(state.Value, value)
+                    local exists, existingIndex = contains(state.Value, value)
+
                     if exists then
                         if config.AllowNone == false and #state.Value <= 1 then
                             return
                         end
-                        table.remove(state.Value, idx)
+
+                        table.remove(state.Value, existingIndex)
                     else
                         table.insert(state.Value, value)
                     end
                 else
                     state.Value = value
-                    closeMenu()
+                    closeMenu(false)
                 end
 
                 renderValue()
                 safeCallback(config.Callback, state.Value)
             end)
+        end
+
+        if state.Open then
+            updateMenuPosition()
+            tween(menu, 0.12, {
+                Size = UDim2.fromOffset(selector.AbsoluteSize.X, getMenuHeight()),
+            })
         end
     end
 
@@ -1856,21 +2007,28 @@ function Section:Dropdown(config)
     end
 
     function object:Close()
-        closeMenu()
+        closeMenu(false)
         return self
     end
 
     function object:Toggle()
-        if state.Open then closeMenu() else openMenu() end
+        if state.Open then
+            closeMenu(false)
+        else
+            openMenu()
+        end
+
         return self
     end
 
     function object:Set(value, fireCallback)
         state.Value = value
         renderValue()
+
         if fireCallback ~= false then
             safeCallback(config.Callback, state.Value)
         end
+
         return self
     end
 
@@ -1880,17 +2038,41 @@ function Section:Dropdown(config)
 
     function object:Refresh(newValues, keepValue)
         state.Values = newValues or {}
+
         if not keepValue then
             state.Value = multi and {} or nil
         end
+
         rebuild()
         renderValue()
+
         return self
     end
 
+    function object:IsOpen()
+        return state.Open
+    end
+
     selector.MouseButton1Click:Connect(function()
-        if state.Locked then return end
+        if state.Locked then
+            return
+        end
+
         object:Toggle()
+    end)
+
+    -- If this component is destroyed while open, clean up the floating popup
+    -- and its RenderStepped connection as well.
+    holder.Destroying:Connect(function()
+        stopFollowing()
+
+        if window.ActiveDropdown == object then
+            window.ActiveDropdown = nil
+        end
+
+        if menu then
+            menu:Destroy()
+        end
     end)
 
     attachLockAPI(object, state, selector)
@@ -2542,6 +2724,10 @@ function Window:_setActiveTab(tab)
         return
     end
 
+    if self.ActiveDropdown then
+        self.ActiveDropdown:Close()
+    end
+
     for _, t in ipairs(self.Tabs) do
         local selected = t == tab
         t.Container.Visible = selected
@@ -2754,8 +2940,14 @@ function Window:ToggleVisibility()
     self.Visible = not self.Visible
     self.Main.Visible = self.Visible
 
-    if not self.Visible and self.ActiveColorpicker then
-        self.ActiveColorpicker:Close()
+    if not self.Visible then
+        if self.ActiveColorpicker then
+            self.ActiveColorpicker:Close()
+        end
+
+        if self.ActiveDropdown then
+            self.ActiveDropdown:Close()
+        end
     end
 
     return self.Visible
@@ -2763,6 +2955,17 @@ end
 
 function Window:Close()
     self.Destroyed = true
+
+    if self.ActiveDropdown then
+        self.ActiveDropdown:Close()
+        self.ActiveDropdown = nil
+    end
+
+    if self.ActiveColorpicker then
+        self.ActiveColorpicker:Close()
+        self.ActiveColorpicker = nil
+    end
+
     if self.ScreenGui then
         self.ScreenGui:Destroy()
     end
@@ -3202,6 +3405,7 @@ function Library:CreateWindow(config)
         Notifications = {},
         ActiveTab = nil,
         ActiveColorpicker = nil,
+        ActiveDropdown = nil,
         SidebarOrder = 0,
         Visible = true,
         Destroyed = false,
