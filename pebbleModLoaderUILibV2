@@ -1,4 +1,4 @@
-local Hybrid = { Version = "1.1.0" }
+local PebbleUI = { Version = "1.1.0" }
 
 --============================================================
 -- Services
@@ -30,7 +30,7 @@ do
     if ok and typeof(result) == "table" then
         LucideIcons = result
     else
-        warn("[HybridUI] Failed to load Lucide:", result)
+        warn("[PebbleUI] Failed to load Lucide:", result)
     end
 end
 
@@ -50,7 +50,7 @@ local function clamp01(v) return math.clamp(tonumber(v) or 0, 0, 1) end
 local function safeCallback(cb, ...)
     if type(cb) ~= "function" then return end
     local ok, err = pcall(cb, ...)
-    if not ok then warn("[HybridUI] Callback error:", err) end
+    if not ok then warn("[PebbleUI] Callback error:", err) end
 end
 
 local function copyTable(t)
@@ -201,7 +201,7 @@ local DefaultTheme = {
     TopbarIconHover   = Color3.fromRGB(110, 111, 120),
 }
 
-Hybrid.Theme = DefaultTheme
+PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
     Title = "Pebble UI Lib",
@@ -2514,7 +2514,7 @@ end
 -- Library creation
 --============================================================
 
-function Hybrid:CreateWindow(config)
+function PebbleUI:CreateWindow(config)
     config = config or {}
     local self = setmetatable({}, Window)
 
@@ -2543,7 +2543,7 @@ function Hybrid:CreateWindow(config)
     local topHeight = config.TopbarHeight or Defaults.TopbarHeight
     local corner = config.CornerRadius or Defaults.CornerRadius
 
-    local guiName = config.Name or ("HybridUI_" .. tostring(math.random(100000, 999999)))
+    local guiName = config.Name or ("PebbleUI_" .. tostring(math.random(100000, 999999)))
     local existing = CoreGui:FindFirstChild(guiName)
     if existing then existing:Destroy() end
 
@@ -2762,5 +2762,5 @@ function Hybrid:CreateWindow(config)
     return self
 end
 
-print("[HybridUI] Loaded v" .. Hybrid.Version)
-return Hybrid
+print("[PebbleUI] Loaded v" .. PebbleUI.Version)
+return PebbleUI
