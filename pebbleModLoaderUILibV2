@@ -1,4 +1,4 @@
-local Hybrid = { Version = "1.0.0" }
+local Hybrid = { Version = "1.1.0" }
 
 --============================================================
 -- Services
@@ -116,16 +116,33 @@ local function List(parent, gap, fill)
     })
 end
 
+-- ============ ANIMATION HELPERS (mais suaves) ============
+
+-- Default easing suave para toda a UI
+local EASE_OUT    = Enum.EasingStyle.Quint
+local EASE_SOFT   = Enum.EasingStyle.Quart
+local EASE_BOUNCE = Enum.EasingStyle.Back
+
 local function Tween(obj, duration, props, style, direction)
     local t = TweenService:Create(
         obj,
-        TweenInfo.new(duration or 0.15,
-            style or Enum.EasingStyle.Quart,
+        TweenInfo.new(duration or 0.28,
+            style or EASE_OUT,
             direction or Enum.EasingDirection.Out),
         props
     )
     t:Play()
     return t
+end
+
+-- Tween mais "gostoso" pra hover (levemente mais longo + Back)
+local function HoverTween(obj, duration, props)
+    return Tween(obj, duration or 0.22, props, EASE_SOFT, Enum.EasingDirection.Out)
+end
+
+-- Spring-like para cliques
+local function SpringTween(obj, props)
+    return Tween(obj, 0.32, props, EASE_BOUNCE, Enum.EasingDirection.Out)
 end
 
 --============================================================
@@ -176,6 +193,12 @@ local DefaultTheme = {
     Warning           = Color3.fromRGB(245, 184, 69),
     Danger            = Color3.fromRGB(235, 76, 76),
     Overlay           = Color3.fromRGB(0, 0, 0),
+
+    -- TOPBAR (agora bem apagada, estilo "Movement Ware V3")
+    TopbarText        = Color3.fromRGB(72, 73, 80),
+    TopbarTextHover   = Color3.fromRGB(120, 121, 130),
+    TopbarIcon        = Color3.fromRGB(58, 59, 66),
+    TopbarIconHover   = Color3.fromRGB(110, 111, 120),
 }
 
 Hybrid.Theme = DefaultTheme
@@ -198,7 +221,9 @@ local Defaults = {
     ColumnGap = 5,
     SectionGap = 10,
 
+    -- Transparência configurável do fundo
     BackgroundTransparency = 0.05,
+
     ToggleKey = Enum.KeyCode.RightShift,
     Draggable = true,
     Resizable = true,
@@ -265,7 +290,7 @@ local function CreateIcon(name, size, color, zIndex)
 end
 
 --============================================================
--- Row helper (Wind-style compact)
+-- Row helper
 --============================================================
 
 local function RowHeight(config, base)
@@ -373,8 +398,11 @@ function Section:_recalculateHeight()
     task.defer(function()
         if not self.Frame.Parent then return end
         local contentH = self.Layout.AbsoluteContentSize.Y
-        self.Frame.Size = UDim2.new(1, 0, 0,
-            self.HeaderHeight + self.PaddingBottom + contentH)
+        local target = self.HeaderHeight + self.PaddingBottom + contentH
+        -- animação suave ao recalcular altura
+        Tween(self.Frame, 0.25, {
+            Size = UDim2.new(1, 0, 0, target)
+        }, EASE_SOFT, Enum.EasingDirection.Out)
     end)
 end
 
@@ -559,11 +587,26 @@ function Section:Button(config)
 
     btn.MouseEnter:Connect(function()
         if not state.Locked then
-            Tween(btn, 0.08, { BackgroundColor3 = config.HoverColor or theme.AccentHover })
+            HoverTween(btn, 0.22, { BackgroundColor3 = config.HoverColor or theme.AccentHover })
         end
     end)
     btn.MouseLeave:Connect(function()
-        Tween(btn, 0.08, { BackgroundColor3 = config.Color or theme.Accent })
+        HoverTween(btn, 0.28, { BackgroundColor3 = config.Color or theme.Accent })
+    end)
+
+    -- Feedback visual de clique (encolhe e volta)
+    btn.MouseButton1Down:Connect(function()
+        if state.Locked then return end
+        Tween(btn, 0.12, {
+            Size = UDim2.new(btn.Size.X.Scale, btn.Size.X.Offset - 4,
+                              btn.Size.Y.Scale, btn.Size.Y.Offset - 2)
+        }, EASE_SOFT, Enum.EasingDirection.Out)
+    end)
+    btn.MouseButton1Up:Connect(function()
+        if state.Locked then return end
+        SpringTween(btn, {
+            Size = config.Size or UDim2.new(1, 0, 0, h)
+        })
     end)
     btn.MouseButton1Click:Connect(function()
         if state.Locked then return end
@@ -588,7 +631,6 @@ function Section:Checkbox(config)
     config = config or {}
     local theme = self.Window.Theme
 
-    -- Normalizar keybind
     local keyConfig = config.Keybind
     if keyConfig == nil or keyConfig == true then
         keyConfig = {}
@@ -612,7 +654,6 @@ function Section:Checkbox(config)
 
     local row, title = MakeRow(self, config, config.Height or 30)
 
-    -- Checkbox box
     local box = New("TextButton", {
         Name = "Checkbox",
         AnchorPoint = Vector2.new(1, 0.5),
@@ -665,8 +706,8 @@ function Section:Checkbox(config)
         local inactiveBorderColor = config.BorderColor or theme.CheckboxBorder
 
         if animated then
-            Tween(box, 0.08, { BackgroundColor3 = state.Value and activeColor or inactiveColor })
-            Tween(boxStroke, 0.08, { Color = state.Value and activeBorderColor or inactiveBorderColor })
+            HoverTween(box, 0.2, { BackgroundColor3 = state.Value and activeColor or inactiveColor })
+            HoverTween(boxStroke, 0.2, { Color = state.Value and activeBorderColor or inactiveBorderColor })
         else
             box.BackgroundColor3 = state.Value and activeColor or inactiveColor
             boxStroke.Color = state.Value and activeBorderColor or inactiveBorderColor
@@ -688,7 +729,6 @@ function Section:Checkbox(config)
         obj:Set(not state.Value, true)
     end)
 
-    -- Right-side cursor (pixel distance from right edge)
     local rightCursor = boxRightPadding + boxSize + keyGap
 
     --========== KEYBIND ==========
@@ -780,7 +820,7 @@ function Section:Checkbox(config)
 
         display.MouseEnter:Connect(function()
             if not state.Locked and not keyState.Locked and not keyState.Picking then
-                Tween(display, 0.08, { TextColor3 = keyConfig.HoverColor or theme.Text })
+                HoverTween(display, 0.2, { TextColor3 = keyConfig.HoverColor or theme.Text })
             end
         end)
         display.MouseLeave:Connect(renderKey)
@@ -976,12 +1016,19 @@ function Section:Slider(config)
         return tostring(v)
     end
 
+    local lastText = ""
     local function render()
         local range = max - min
         local ratio = range == 0 and 0 or clamp((state.Value - min) / range, 0, 1)
-        fill.Size = UDim2.new(ratio, 0, 1, 0)
-        knob.Position = UDim2.new(ratio, 0, 0.5, 0)
-        valueLabel.Text = (config.Prefix or "") .. format(state.Value) .. (config.Suffix or "")
+        -- tween suave no fill e no knob
+        Tween(fill, 0.18, { Size = UDim2.new(ratio, 0, 1, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
+        Tween(knob, 0.18, { Position = UDim2.new(ratio, 0, 0.5, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
+
+        local newText = (config.Prefix or "") .. format(state.Value) .. (config.Suffix or "")
+        if newText ~= lastText then
+            lastText = newText
+            valueLabel.Text = newText
+        end
     end
 
     function obj:Set(v, fire)
@@ -998,11 +1045,28 @@ function Section:Slider(config)
         obj:Set(min + ((max - min) * ratio), true)
     end
 
+    -- Knob cresce suavemente ao hover
+    track.MouseEnter:Connect(function()
+        Tween(knob, 0.22, {
+            Size = UDim2.fromOffset((config.KnobSize or 11) + 3, (config.KnobSize or 11) + 3)
+        }, EASE_OUT, Enum.EasingDirection.Out)
+    end)
+    track.MouseLeave:Connect(function()
+        if not state.Dragging then
+            Tween(knob, 0.28, {
+                Size = UDim2.fromOffset(config.KnobSize or 11, config.KnobSize or 11)
+            }, EASE_OUT, Enum.EasingDirection.Out)
+        end
+    end)
+
     track.InputBegan:Connect(function(input)
         if state.Locked then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             state.Dragging = true
+            Tween(knob, 0.2, {
+                Size = UDim2.fromOffset((config.KnobSize or 11) + 4, (config.KnobSize or 11) + 4)
+            }, EASE_OUT, Enum.EasingDirection.Out)
             updateFromX(input.Position.X)
         end
     end)
@@ -1016,7 +1080,12 @@ function Section:Slider(config)
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
-            state.Dragging = false
+            if state.Dragging then
+                state.Dragging = false
+                Tween(knob, 0.28, {
+                    Size = UDim2.fromOffset(config.KnobSize or 11, config.KnobSize or 11)
+                }, EASE_OUT, Enum.EasingDirection.Out)
+            end
         end
     end)
 
@@ -1069,6 +1138,14 @@ function Section:Input(config)
     })
     Corner(box, config.Corner or 6)
     Padding(box, 8, 8, 0, 0)
+
+    -- transição suave ao focar
+    box.Focused:Connect(function()
+        Tween(box, 0.22, { BackgroundColor3 = config.FocusColor or theme.Surface2 }, EASE_OUT, Enum.EasingDirection.Out)
+    end)
+    box.FocusLost:Connect(function()
+        Tween(box, 0.25, { BackgroundColor3 = config.BackgroundColor or theme.Input }, EASE_OUT, Enum.EasingDirection.Out)
+    end)
 
     local state = { Value = box.Text, Locked = config.Locked or false }
     local obj = { __type = "Input", UIElements = { Holder = holder, Title = title, Input = box } }
@@ -1189,22 +1266,16 @@ function Section:Dropdown(config)
         Parent = self.Content,
     })
 
-    local titleLabel = New("TextLabel", {
-        Name = "TitleLabel",
+    local title = New("TextLabel", {
         BackgroundTransparency = 1,
-        Text = self.Title,
-        TextColor3 = self.Theme.SubText,
-        TextSize = 15,
-        Font = self.Theme.Font,
-        Position = UDim2.fromOffset(0, 7),
-        Size = UDim2.new(1, -70, 0, 25),
-        TextXAlignment = Enum.TextXAlignment.Right,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        TextTransparency = 0.25,
-        Parent = topbar,
+        Text = config.Title or "Dropdown",
+        TextColor3 = theme.Text,
+        TextSize = config.TextSize or 12,
+        Font = config.Font or theme.Font,
+        Size = UDim2.new(1, 0, 0, 20),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = holder,
     })
-    
-    self.TitleLabel = titleLabel
 
     local selector = New("TextButton", {
         Name = "Selector",
@@ -1329,14 +1400,17 @@ function Section:Dropdown(config)
         stopFollowing()
         if window.ActiveDropdown == obj then window.ActiveDropdown = nil end
 
+        -- gira a seta suavemente
+        Tween(chev, 0.28, { Rotation = 0 }, EASE_SOFT, Enum.EasingDirection.Out)
+
         if instant then
             menu.Size = UDim2.fromOffset(menu.Size.X.Offset, 0)
             menu.Visible = false
             return
         end
 
-        Tween(menu, 0.12, { Size = UDim2.fromOffset(menu.Size.X.Offset, 0) })
-        task.delay(0.13, function()
+        Tween(menu, 0.22, { Size = UDim2.fromOffset(menu.Size.X.Offset, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
+        task.delay(0.24, function()
             if not state.Open and menu.Parent then menu.Visible = false end
         end)
     end
@@ -1350,11 +1424,13 @@ function Section:Dropdown(config)
         state.Open = true
         menu.Visible = true
 
+        Tween(chev, 0.28, { Rotation = 180 }, EASE_SOFT, Enum.EasingDirection.Out)
+
         local targetH = getMenuHeight()
         local w = selector.AbsoluteSize.X
         menu.Size = UDim2.fromOffset(w, 0)
         updateMenuPosition()
-        Tween(menu, 0.12, { Size = UDim2.fromOffset(w, targetH) })
+        Tween(menu, 0.26, { Size = UDim2.fromOffset(w, targetH) }, EASE_SOFT, Enum.EasingDirection.Out)
 
         stopFollowing()
         followConn = RunService.RenderStepped:Connect(function()
@@ -1397,10 +1473,10 @@ function Section:Dropdown(config)
             Padding(item, 8, 8, 0, 0)
 
             item.MouseEnter:Connect(function()
-                Tween(item, 0.08, { BackgroundColor3 = config.ItemHoverColor or theme.SurfaceHover })
+                HoverTween(item, 0.22, { BackgroundColor3 = config.ItemHoverColor or theme.SurfaceHover })
             end)
             item.MouseLeave:Connect(function()
-                Tween(item, 0.08, { BackgroundColor3 = config.ItemColor or theme.Surface2 })
+                HoverTween(item, 0.26, { BackgroundColor3 = config.ItemColor or theme.Surface2 })
             end)
 
             item.MouseButton1Click:Connect(function()
@@ -1422,7 +1498,7 @@ function Section:Dropdown(config)
         end
         if state.Open then
             updateMenuPosition()
-            Tween(menu, 0.12, { Size = UDim2.fromOffset(selector.AbsoluteSize.X, getMenuHeight()) })
+            Tween(menu, 0.24, { Size = UDim2.fromOffset(selector.AbsoluteSize.X, getMenuHeight()) }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end
 
@@ -1463,6 +1539,10 @@ function Section:Dropdown(config)
     renderValue()
     return obj
 end
+
+--============================================================
+-- Colorpicker (popup HSV flutuante)
+--============================================================
 
 function Section:Colorpicker(config)
     config = config or {}
@@ -1600,7 +1680,6 @@ function Section:Colorpicker(config)
     Corner(hueKnob, 99)
     Stroke(hueKnob, Color3.new(1, 1, 1), 2, 0)
 
-    -- Close
     local closeBtn = New("TextButton", {
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -5, 0, 5),
@@ -1649,7 +1728,8 @@ function Section:Colorpicker(config)
     local function render(fire)
         state.Value = Color3.fromHSV(h, s, v)
         local hc = Color3.fromHSV(h, 1, 1)
-        swatch.BackgroundColor3 = state.Value
+        -- transição suave das cores
+        Tween(swatch, 0.18, { BackgroundColor3 = state.Value }, EASE_SOFT, Enum.EasingDirection.Out)
         svArea.BackgroundColor3 = hc
         svPicker.Position = UDim2.fromScale(s, 1 - v)
         hueKnob.Position = UDim2.new(h, 0, 0.5, 0)
@@ -1725,10 +1805,17 @@ function Section:Colorpicker(config)
         window.ActiveColorpicker = self
         state.Open = true
         popup.Visible = true
+        -- animação de aparecer
+        popup.Size = UDim2.fromOffset(popupWidth, 0)
+        popup.BackgroundTransparency = 1
         task.defer(function()
             if state.Open and popup.Parent then
                 updatePopupPosition()
                 render(false)
+                Tween(popup, 0.28, {
+                    Size = UDim2.fromOffset(popupWidth, popupHeight),
+                    BackgroundTransparency = 0
+                }, EASE_SOFT, Enum.EasingDirection.Out)
             end
         end)
         return self
@@ -1738,7 +1825,13 @@ function Section:Colorpicker(config)
         state.Open = false
         draggingSV = false
         draggingHue = false
-        popup.Visible = false
+        Tween(popup, 0.2, {
+            Size = UDim2.fromOffset(popupWidth, 0),
+            BackgroundTransparency = 1
+        }, EASE_SOFT, Enum.EasingDirection.Out)
+        task.delay(0.22, function()
+            if not state.Open then popup.Visible = false end
+        end)
         if window.ActiveColorpicker == self then window.ActiveColorpicker = nil end
         return self
     end
@@ -1761,6 +1854,10 @@ function Section:Colorpicker(config)
     render(false)
     return obj
 end
+
+--============================================================
+-- Tab
+--============================================================
 
 function Tab:_nextSectionOrder(side)
     self.SectionOrders[side] += 1
@@ -1853,6 +1950,10 @@ function Tab:Section(config)
     return section
 end
 
+--============================================================
+-- Window
+--============================================================
+
 function Window:_setActiveTab(tab)
     if not tab or self.ActiveTab == tab then return end
 
@@ -1862,11 +1963,18 @@ function Window:_setActiveTab(tab)
     for _, t in ipairs(self.Tabs) do
         local selected = t == tab
         t.Container.Visible = selected
-        t.ButtonLabel.TextColor3 = selected and self.Theme.Text or self.Theme.SubText
+        -- transições suaves de cor
+        Tween(t.ButtonLabel, 0.25, {
+            TextColor3 = selected and self.Theme.Text or self.Theme.SubText
+        }, EASE_SOFT, Enum.EasingDirection.Out)
         if t.ButtonIcon then
-            t.ButtonIcon.ImageColor3 = selected and self.Theme.IconSelected or self.Theme.Icon
+            Tween(t.ButtonIcon, 0.25, {
+                ImageColor3 = selected and self.Theme.IconSelected or self.Theme.Icon
+            }, EASE_SOFT, Enum.EasingDirection.Out)
         end
-        if t.Accent then t.Accent.Visible = selected end
+        if t.Accent then
+            t.Accent.Visible = selected
+        end
     end
 
     self.ActiveTab = tab
@@ -2042,14 +2150,14 @@ function Window:Tab(config)
 
     button.MouseEnter:Connect(function()
         if self.ActiveTab ~= tab then
-            label.TextColor3 = theme.Text
-            if icon then icon.ImageColor3 = theme.IconSelected end
+            HoverTween(label, 0.22, { TextColor3 = theme.Text })
+            if icon then HoverTween(icon, 0.22, { ImageColor3 = theme.IconSelected }) end
         end
     end)
     button.MouseLeave:Connect(function()
         if self.ActiveTab ~= tab then
-            label.TextColor3 = theme.SubText
-            if icon then icon.ImageColor3 = theme.MutedText end
+            HoverTween(label, 0.26, { TextColor3 = theme.SubText })
+            if icon then HoverTween(icon, 0.26, { ImageColor3 = theme.MutedText }) end
         end
     end)
     button.MouseButton1Click:Connect(function()
@@ -2076,10 +2184,43 @@ function Window:SetSelectColor(color)
     return self
 end
 
+-- ============ NOVO: Transparência do fundo ============
+function Window:SetBackgroundTransparency(value)
+    value = clamp01(value)
+    self.BackgroundTransparency = value
+    if self.Main then
+        Tween(self.Main, 0.3, { BackgroundTransparency = value }, EASE_SOFT, Enum.EasingDirection.Out)
+    end
+    if self.MainGradient then
+        -- o gradiente em si não tem transparência individual, então usamos o Frame
+    end
+    return self
+end
+
+function Window:GetBackgroundTransparency()
+    return self.BackgroundTransparency or 0
+end
+
 function Window:ToggleVisibility()
     self.Visible = not self.Visible
-    self.Main.Visible = self.Visible
-    if not self.Visible then
+    if self.Visible then
+        self.Main.Visible = true
+        -- animação de aparecer
+        self.Main.Size = UDim2.new(
+            self.Main.Size.X.Scale, self.Main.Size.X.Offset - 20,
+            self.Main.Size.Y.Scale, self.Main.Size.Y.Offset - 20
+        )
+        SpringTween(self.Main, { Size = self.Config.Size or Defaults.Size })
+    else
+        Tween(self.Main, 0.18, {
+            Size = UDim2.new(
+                self.Main.Size.X.Scale, self.Main.Size.X.Offset - 20,
+                self.Main.Size.Y.Scale, self.Main.Size.Y.Offset - 20
+            )
+        }, EASE_SOFT, Enum.EasingDirection.In)
+        task.delay(0.18, function()
+            if not self.Visible then self.Main.Visible = false end
+        end)
         if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
         if self.ActiveDropdown then self.ActiveDropdown:Close() end
     end
@@ -2094,6 +2235,10 @@ function Window:Close()
 end
 
 function Window:Destroy() self:Close() end
+
+--============================================================
+-- Notify / Dialog / Popup
+--============================================================
 
 function Window:Notify(config)
     config = config or {}
@@ -2151,18 +2296,18 @@ function Window:Notify(config)
     function obj:Close()
         if self.Closed then return end
         self.Closed = true
-        Tween(card, 0.12, {
+        Tween(card, 0.24, {
             Position = UDim2.fromOffset(-(width + 14), 0),
             BackgroundTransparency = 1,
-        })
-        Tween(label, 0.12, { TextTransparency = 1 })
-        Tween(border, 0.12, { Transparency = 1 })
-        task.delay(0.15, function() if holder then holder:Destroy() end end)
+        }, EASE_SOFT, Enum.EasingDirection.In)
+        Tween(label, 0.24, { TextTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
+        Tween(border, 0.24, { Transparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
+        task.delay(0.28, function() if holder then holder:Destroy() end end)
     end
 
     table.insert(self.Notifications, obj)
     task.defer(function()
-        Tween(card, 0.12, { Position = UDim2.fromOffset(0, 0) })
+        Tween(card, 0.28, { Position = UDim2.fromOffset(0, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
     end)
 
     if config.Duration ~= false then
@@ -2180,7 +2325,7 @@ function Window:Dialog(config)
     local overlay = New("TextButton", {
         Name = "DialogOverlay",
         BackgroundColor3 = theme.Overlay,
-        BackgroundTransparency = config.OverlayTransparency or 0.35,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
@@ -2251,7 +2396,13 @@ function Window:Dialog(config)
     function obj:Close()
         if self.Closed then return end
         self.Closed = true
-        overlay:Destroy()
+        Tween(overlay, 0.22, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
+        Tween(dialog, 0.24, {
+            Size = UDim2.fromOffset((config.Size or UDim2.fromOffset(330, 170)).X.Offset - 30,
+                                     (config.Size or UDim2.fromOffset(330, 170)).Y.Offset - 20),
+            BackgroundTransparency = 1,
+        }, EASE_SOFT, Enum.EasingDirection.In)
+        task.delay(0.26, function() overlay:Destroy() end)
     end
 
     for _, bcfg in ipairs(config.Buttons or { { Title = "Close", Callback = function() end } }) do
@@ -2269,6 +2420,14 @@ function Window:Dialog(config)
             Parent = buttons,
         })
         Corner(b, 6)
+
+        b.MouseEnter:Connect(function()
+            HoverTween(b, 0.22, { BackgroundColor3 = theme.AccentHover })
+        end)
+        b.MouseLeave:Connect(function()
+            HoverTween(b, 0.26, { BackgroundColor3 = bcfg.Color or theme.Accent })
+        end)
+
         b.MouseButton1Click:Connect(function()
             safeCallback(bcfg.Callback, obj)
             if bcfg.Close ~= false then obj:Close() end
@@ -2278,6 +2437,18 @@ function Window:Dialog(config)
     if config.CloseOnOverlay then
         overlay.MouseButton1Click:Connect(function() obj:Close() end)
     end
+
+    -- animação de aparecer
+    task.defer(function()
+        Tween(overlay, 0.25, {
+            BackgroundTransparency = config.OverlayTransparency or 0.35
+        }, EASE_SOFT, Enum.EasingDirection.Out)
+        local baseSize = config.Size or UDim2.fromOffset(330, 170)
+        dialog.Size = UDim2.fromOffset(baseSize.X.Offset - 30, baseSize.Y.Offset - 20)
+        dialog.BackgroundTransparency = 0.3
+        SpringTween(dialog, { Size = baseSize, BackgroundTransparency = 0 })
+    end)
+
     return obj
 end
 
@@ -2327,9 +2498,21 @@ function Window:Popup(config)
     })
 
     local obj = { __type = "Popup", UI = popup }
-    function obj:Close() popup:Destroy() end
+    function obj:Close()
+        Tween(popup, 0.2, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
+        task.delay(0.22, function() popup:Destroy() end)
+    end
+
+    -- aparecer suavemente
+    popup.BackgroundTransparency = 1
+    Tween(popup, 0.28, { BackgroundTransparency = 0 }, EASE_SOFT, Enum.EasingDirection.Out)
+
     return obj
 end
+
+--============================================================
+-- Library creation
+--============================================================
 
 function Hybrid:CreateWindow(config)
     config = config or {}
@@ -2350,6 +2533,11 @@ function Hybrid:CreateWindow(config)
     self.Destroyed = false
     self._themeBindings = {}
 
+    -- Transparência configurável (aceita config.BackgroundTransparency)
+    local bgTransparency = config.BackgroundTransparency
+    if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
+    self.BackgroundTransparency = clamp01(bgTransparency)
+
     local size = config.Size or Defaults.Size
     local sidebarWidth = config.SidebarWidth or Defaults.SidebarWidth
     local topHeight = config.TopbarHeight or Defaults.TopbarHeight
@@ -2369,12 +2557,14 @@ function Hybrid:CreateWindow(config)
     if not ok then screen.Parent = PlayerGui end
     self.ScreenGui = screen
 
+    -- Main (com transparência aplicada)
     local main = New("Frame", {
         Name = "Main",
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = config.Position or Defaults.Position,
         Size = size,
         BackgroundColor3 = self.Theme.BackgroundTop,
+        BackgroundTransparency = self.BackgroundTransparency,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         Parent = screen,
@@ -2392,18 +2582,22 @@ function Hybrid:CreateWindow(config)
     })
     self.MainGradient = mainGrad
 
+    -- Sidebar (também recebe leve transparência pra casar com o fundo)
     local sidebar = New("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = self.Theme.Sidebar,
+        BackgroundTransparency = self.BackgroundTransparency * 0.6,
         BorderSizePixel = 0,
         Size = UDim2.new(0, sidebarWidth, 1, 0),
         Parent = main,
     })
     Corner(sidebar, corner)
+    self.Sidebar = sidebar
 
     New("Frame", {
         Name = "SidebarRightMask",
         BackgroundColor3 = self.Theme.Sidebar,
+        BackgroundTransparency = self.BackgroundTransparency * 0.6,
         BorderSizePixel = 0,
         Position = UDim2.new(1, -corner, 0, 0),
         Size = UDim2.new(0, corner, 1, 0),
@@ -2431,6 +2625,7 @@ function Hybrid:CreateWindow(config)
     List(sidebarList, 0)
     self.SidebarList = sidebarList
 
+    -- TOPBAR (agora com texto bem apagado, estilo "Movement Ware V3")
     local topbar = New("Frame", {
         Name = "Topbar",
         BackgroundTransparency = 1,
@@ -2440,19 +2635,22 @@ function Hybrid:CreateWindow(config)
     })
     self.Topbar = topbar
 
+    -- Texto do título agora é bem apagado (TopbarText)
     local titleLabel = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = self.Title,
-        TextColor3 = self.Theme.Text,
+        TextColor3 = self.Theme.TopbarText,   -- <-- apagado
         TextSize = 14,
         Font = self.Theme.FontMedium,
         Position = UDim2.fromOffset(0, 7),
         Size = UDim2.new(1, -90, 0, 25),
         TextXAlignment = Enum.TextXAlignment.Right,
+        TextTransparency = config.TopbarTextTransparency or 0.25, -- <-- mais apagado ainda
         Parent = topbar,
     })
     self.TitleLabel = titleLabel
 
+    -- Close button (ícone também apagado)
     local closeBtn = New("TextButton", {
         Name = "CloseButton",
         AnchorPoint = Vector2.new(1, 0),
@@ -2464,26 +2662,36 @@ function Hybrid:CreateWindow(config)
         ZIndex = 50,
         Parent = main,
     })
+    self.CloseButton = closeBtn
 
-    local closeIcon = CreateIcon("x", 14, self.Theme.MutedText, 51)
+    local closeIcon = CreateIcon("x", 14, self.Theme.TopbarIcon, 51)
     closeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
     closeIcon.Position = UDim2.fromScale(0.5, 0.5)
+    closeIcon.ImageTransparency = config.TopbarIconTransparency or 0.35
     closeIcon.Parent = closeBtn
 
     closeBtn.MouseEnter:Connect(function()
-        Tween(closeIcon, 0.14, { ImageColor3 = self.Theme.Text })
+        HoverTween(closeIcon, 0.25, {
+            ImageColor3 = self.Theme.TopbarIconHover,
+            ImageTransparency = 0.05,
+        })
     end)
     closeBtn.MouseLeave:Connect(function()
-        Tween(closeIcon, 0.14, { ImageColor3 = self.Theme.MutedText })
+        HoverTween(closeIcon, 0.28, {
+            ImageColor3 = self.Theme.TopbarIcon,
+            ImageTransparency = config.TopbarIconTransparency or 0.35,
+        })
     end)
     closeBtn.MouseButton1Click:Connect(function()
-        Tween(main, 0.18, {
+        Tween(main, 0.22, {
             Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset - 18,
                 main.Size.Y.Scale, main.Size.Y.Offset - 18),
-        })
-        task.delay(0.18, function() self:Close() end)
+            BackgroundTransparency = 1,
+        }, EASE_SOFT, Enum.EasingDirection.In)
+        task.delay(0.22, function() self:Close() end)
     end)
 
+    -- Content host
     local contentHost = New("Frame", {
         Name = "ContentHost",
         BackgroundTransparency = 1,
@@ -2493,6 +2701,7 @@ function Hybrid:CreateWindow(config)
     })
     self.ContentHost = contentHost
 
+    -- Notification holder
     local notifHolder = New("Frame", {
         Name = "NotificationHolder",
         BackgroundTransparency = 1,
@@ -2505,6 +2714,7 @@ function Hybrid:CreateWindow(config)
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
 
+    -- Toggle key
     local toggleKey = config.ToggleKey or Defaults.ToggleKey
     local inputConn
     inputConn = UserInputService.InputBegan:Connect(function(input, gp)
@@ -2515,6 +2725,7 @@ function Hybrid:CreateWindow(config)
         end
     end)
 
+    -- Drag
     if config.Draggable ~= false then
         local dragging, dragStart, startPos, dragInput
 
