@@ -1189,16 +1189,22 @@ function Section:Dropdown(config)
         Parent = self.Content,
     })
 
-    local title = New("TextLabel", {
+    local titleLabel = New("TextLabel", {
+        Name = "TitleLabel",
         BackgroundTransparency = 1,
-        Text = config.Title or "Dropdown",
-        TextColor3 = theme.Text,
-        TextSize = config.TextSize or 12,
-        Font = config.Font or theme.Font,
-        Size = UDim2.new(1, 0, 0, 20),
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = holder,
+        Text = self.Title,
+        TextColor3 = self.Theme.SubText,
+        TextSize = 15,
+        Font = self.Theme.Font,
+        Position = UDim2.fromOffset(0, 7),
+        Size = UDim2.new(1, -70, 0, 25),
+        TextXAlignment = Enum.TextXAlignment.Right,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTransparency = 0.25,
+        Parent = topbar,
     })
+    
+    self.TitleLabel = titleLabel
 
     local selector = New("TextButton", {
         Name = "Selector",
@@ -1231,7 +1237,6 @@ function Section:Dropdown(config)
     chev.Position = UDim2.new(1, -8, 0.5, 0)
     chev.Parent = selector
 
-    -- Popup parented to ScreenGui (não é cortado)
     local menu = New("Frame", {
         Name = "DropdownMenu",
         BackgroundColor3 = config.MenuColor or theme.Popup,
@@ -1459,10 +1464,6 @@ function Section:Dropdown(config)
     return obj
 end
 
---============================================================
--- Colorpicker (popup HSV flutuante)
---============================================================
-
 function Section:Colorpicker(config)
     config = config or {}
     local window = self.Window
@@ -1511,7 +1512,6 @@ function Section:Colorpicker(config)
     Corner(popup, config.PopupCorner or 6)
     Stroke(popup, theme.Border, 1, 0.25)
 
-    -- SV area
     local svArea = New("TextButton", {
         BackgroundColor3 = Color3.fromHSV(h, 1, 1),
         BorderSizePixel = 0,
@@ -1564,7 +1564,6 @@ function Section:Colorpicker(config)
     Corner(svPicker, 99)
     Stroke(svPicker, Color3.new(1, 1, 1), 2, 0)
 
-    -- Hue bar
     local hueBar = New("TextButton", {
         BackgroundColor3 = Color3.new(1, 1, 1),
         BorderSizePixel = 0,
@@ -1763,10 +1762,6 @@ function Section:Colorpicker(config)
     return obj
 end
 
---============================================================
--- Tab
---============================================================
-
 function Tab:_nextSectionOrder(side)
     self.SectionOrders[side] += 1
     return self.SectionOrders[side]
@@ -1857,10 +1852,6 @@ function Tab:Section(config)
     table.insert(self.Sections, section)
     return section
 end
-
---============================================================
--- Window
---============================================================
 
 function Window:_setActiveTab(tab)
     if not tab or self.ActiveTab == tab then return end
@@ -2104,10 +2095,6 @@ end
 
 function Window:Destroy() self:Close() end
 
---============================================================
--- Notify / Dialog / Popup
---============================================================
-
 function Window:Notify(config)
     config = config or {}
     local theme = self.Theme
@@ -2344,10 +2331,6 @@ function Window:Popup(config)
     return obj
 end
 
---============================================================
--- Library creation
---============================================================
-
 function Hybrid:CreateWindow(config)
     config = config or {}
     local self = setmetatable({}, Window)
@@ -2372,7 +2355,6 @@ function Hybrid:CreateWindow(config)
     local topHeight = config.TopbarHeight or Defaults.TopbarHeight
     local corner = config.CornerRadius or Defaults.CornerRadius
 
-    -- ScreenGui
     local guiName = config.Name or ("HybridUI_" .. tostring(math.random(100000, 999999)))
     local existing = CoreGui:FindFirstChild(guiName)
     if existing then existing:Destroy() end
@@ -2387,7 +2369,6 @@ function Hybrid:CreateWindow(config)
     if not ok then screen.Parent = PlayerGui end
     self.ScreenGui = screen
 
-    -- Main
     local main = New("Frame", {
         Name = "Main",
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2411,7 +2392,6 @@ function Hybrid:CreateWindow(config)
     })
     self.MainGradient = mainGrad
 
-    -- Sidebar
     local sidebar = New("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = self.Theme.Sidebar,
@@ -2421,7 +2401,6 @@ function Hybrid:CreateWindow(config)
     })
     Corner(sidebar, corner)
 
-    -- Máscara para não vazar cantos do sidebar
     New("Frame", {
         Name = "SidebarRightMask",
         BackgroundColor3 = self.Theme.Sidebar,
@@ -2452,7 +2431,6 @@ function Hybrid:CreateWindow(config)
     List(sidebarList, 0)
     self.SidebarList = sidebarList
 
-    -- Topbar
     local topbar = New("Frame", {
         Name = "Topbar",
         BackgroundTransparency = 1,
@@ -2475,7 +2453,6 @@ function Hybrid:CreateWindow(config)
     })
     self.TitleLabel = titleLabel
 
-    -- Close button
     local closeBtn = New("TextButton", {
         Name = "CloseButton",
         AnchorPoint = Vector2.new(1, 0),
@@ -2507,7 +2484,6 @@ function Hybrid:CreateWindow(config)
         task.delay(0.18, function() self:Close() end)
     end)
 
-    -- Content host
     local contentHost = New("Frame", {
         Name = "ContentHost",
         BackgroundTransparency = 1,
@@ -2517,7 +2493,6 @@ function Hybrid:CreateWindow(config)
     })
     self.ContentHost = contentHost
 
-    -- Notification holder
     local notifHolder = New("Frame", {
         Name = "NotificationHolder",
         BackgroundTransparency = 1,
@@ -2530,7 +2505,6 @@ function Hybrid:CreateWindow(config)
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
 
-    -- Toggle key
     local toggleKey = config.ToggleKey or Defaults.ToggleKey
     local inputConn
     inputConn = UserInputService.InputBegan:Connect(function(input, gp)
@@ -2541,7 +2515,6 @@ function Hybrid:CreateWindow(config)
         end
     end)
 
-    -- Drag
     if config.Draggable ~= false then
         local dragging, dragStart, startPos, dragInput
 
