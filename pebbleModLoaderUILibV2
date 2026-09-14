@@ -1,24 +1,3 @@
---[[
-    HybridUI v1.0.0
-    MovementWave (estilo) + Pebble (engine)
-
-    Features:
-      - Lucide icons
-      - Window draggable + toggle RightShift + close X + minimize/maximize/resize
-      - Sidebar colapsável com toggle
-      - Tabs com divider e ícones
-      - Duas colunas independentes (Left/Right) por tab
-      - Runtime theme + per-window overrides
-      - Checkbox quadrado com keybind "=" integrado
-      - Dropdown e Colorpicker flutuantes (fora do clipping)
-      - Notify / Dialog / Popup
-      - Player headshot panel
-
-    Elements:
-      Checkbox, Toggle, Button, Slider, Input, Dropdown,
-      Keybind, Colorpicker, Paragraph, Code, Tag, Divider, Space
---]]
-
 local Hybrid = { Version = "1.0.0" }
 
 --============================================================
@@ -202,7 +181,7 @@ local DefaultTheme = {
 Hybrid.Theme = DefaultTheme
 
 local Defaults = {
-    Title = "HybridUI",
+    Title = "Pebble UI Lib",
     Version = "v1.0",
     Icon = "sparkles",
 
