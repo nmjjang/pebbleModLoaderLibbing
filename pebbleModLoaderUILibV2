@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.1.0" }
+local PebbleUI = { Version = "1.1.1" }
 
 --============================================================
 -- Services
@@ -116,9 +116,20 @@ local function List(parent, gap, fill)
     })
 end
 
--- ============ ANIMATION HELPERS (mais suaves) ============
+-- ============ SCROLLBAR DISCRETA ============
+-- Aplica estilo "fino e cinza" numa ScrollingFrame
+local function StyleScrollBar(sf, opts)
+    opts = opts or {}
+    sf.ScrollBarThickness        = opts.Thickness or 3
+    sf.ScrollBarImageColor3      = opts.Color or Color3.fromRGB(90, 90, 96)
+    sf.ScrollBarImageTransparency = opts.Transparency or 0.35
+    sf.VerticalScrollBarInset    = opts.Inset or Enum.ScrollBarInset.ScrollBar
+    sf.VerticalScrollBarPosition = opts.Position or Enum.VerticalScrollBarPosition.Right
+    return sf
+end
 
--- Default easing suave para toda a UI
+-- ============ ANIMATION HELPERS ============
+
 local EASE_OUT    = Enum.EasingStyle.Quint
 local EASE_SOFT   = Enum.EasingStyle.Quart
 local EASE_BOUNCE = Enum.EasingStyle.Back
@@ -135,12 +146,10 @@ local function Tween(obj, duration, props, style, direction)
     return t
 end
 
--- Tween mais "gostoso" pra hover (levemente mais longo + Back)
 local function HoverTween(obj, duration, props)
     return Tween(obj, duration or 0.22, props, EASE_SOFT, Enum.EasingDirection.Out)
 end
 
--- Spring-like para cliques
 local function SpringTween(obj, props)
     return Tween(obj, 0.32, props, EASE_BOUNCE, Enum.EasingDirection.Out)
 end
@@ -154,13 +163,11 @@ local DefaultTheme = {
     FontBold = Enum.Font.GothamBold,
     FontMedium = Enum.Font.GothamMedium,
 
-    -- Window (Pebble gradient)
     BackgroundTop     = Color3.fromRGB(24, 25, 28),
     BackgroundBottom  = Color3.fromRGB(13, 14, 16),
     Sidebar           = Color3.fromRGB(17, 18, 20),
     SidebarDivider    = Color3.fromRGB(30, 31, 35),
 
-    -- Surfaces
     Surface           = Color3.fromRGB(25, 26, 29),
     Surface2          = Color3.fromRGB(30, 31, 35),
     SurfaceHover      = Color3.fromRGB(35, 36, 40),
@@ -168,44 +175,43 @@ local DefaultTheme = {
     Popup             = Color3.fromRGB(24, 24, 24),
     CodeBackground    = Color3.fromRGB(21, 21, 21),
 
-    -- Text
     Text              = Color3.fromRGB(244, 244, 247),
     SubText           = Color3.fromRGB(148, 149, 158),
     MutedText         = Color3.fromRGB(103, 104, 113),
     DimText           = Color3.fromRGB(76, 76, 76),
 
-    -- Accent
     Accent            = Color3.fromRGB(246, 143, 193),
     AccentHover       = Color3.fromRGB(255, 160, 205),
     AccentText        = Color3.fromRGB(55, 30, 43),
 
-    -- Borders
     Stroke            = Color3.fromRGB(255, 255, 255),
     Border            = Color3.fromRGB(54, 54, 54),
     CheckboxBorder    = Color3.fromRGB(72, 72, 72),
 
-    -- Icons
     Icon              = Color3.fromRGB(183, 184, 194),
     IconSelected      = Color3.fromRGB(245, 245, 247),
 
-    -- Status
     Success           = Color3.fromRGB(80, 200, 120),
     Warning           = Color3.fromRGB(245, 184, 69),
     Danger            = Color3.fromRGB(235, 76, 76),
     Overlay           = Color3.fromRGB(0, 0, 0),
 
-    -- TOPBAR (agora bem apagada, estilo "Movement Ware V3")
     TopbarText        = Color3.fromRGB(72, 73, 80),
     TopbarTextHover   = Color3.fromRGB(120, 121, 130),
     TopbarIcon        = Color3.fromRGB(58, 59, 66),
     TopbarIconHover   = Color3.fromRGB(110, 111, 120),
+
+    -- Scrollbar
+    Scrollbar         = Color3.fromRGB(90, 90, 96),
+    ScrollbarTransparency = 0.35,
+    ScrollbarThickness    = 3,
 }
 
 PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
     Title = "Pebble UI Lib",
-    Version = "v1.0",
+    Version = "v1.1.1",
     Icon = "sparkles",
 
     Size = UDim2.fromOffset(742, 520),
@@ -221,7 +227,6 @@ local Defaults = {
     ColumnGap = 5,
     SectionGap = 10,
 
-    -- Transparência configurável do fundo
     BackgroundTransparency = 0.05,
 
     ToggleKey = Enum.KeyCode.RightShift,
@@ -399,7 +404,6 @@ function Section:_recalculateHeight()
         if not self.Frame.Parent then return end
         local contentH = self.Layout.AbsoluteContentSize.Y
         local target = self.HeaderHeight + self.PaddingBottom + contentH
-        -- animação suave ao recalcular altura
         Tween(self.Frame, 0.25, {
             Size = UDim2.new(1, 0, 0, target)
         }, EASE_SOFT, Enum.EasingDirection.Out)
@@ -594,7 +598,6 @@ function Section:Button(config)
         HoverTween(btn, 0.28, { BackgroundColor3 = config.Color or theme.Accent })
     end)
 
-    -- Feedback visual de clique (encolhe e volta)
     btn.MouseButton1Down:Connect(function()
         if state.Locked then return end
         Tween(btn, 0.12, {
@@ -624,7 +627,7 @@ function Section:Button(config)
 end
 
 --============================================================
--- Checkbox (com keybind "=" integrado)
+-- Checkbox
 --============================================================
 
 function Section:Checkbox(config)
@@ -1020,7 +1023,6 @@ function Section:Slider(config)
     local function render()
         local range = max - min
         local ratio = range == 0 and 0 or clamp((state.Value - min) / range, 0, 1)
-        -- tween suave no fill e no knob
         Tween(fill, 0.18, { Size = UDim2.new(ratio, 0, 1, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
         Tween(knob, 0.18, { Position = UDim2.new(ratio, 0, 0.5, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
 
@@ -1045,7 +1047,6 @@ function Section:Slider(config)
         obj:Set(min + ((max - min) * ratio), true)
     end
 
-    -- Knob cresce suavemente ao hover
     track.MouseEnter:Connect(function()
         Tween(knob, 0.22, {
             Size = UDim2.fromOffset((config.KnobSize or 11) + 3, (config.KnobSize or 11) + 3)
@@ -1139,7 +1140,6 @@ function Section:Input(config)
     Corner(box, config.Corner or 6)
     Padding(box, 8, 8, 0, 0)
 
-    -- transição suave ao focar
     box.Focused:Connect(function()
         Tween(box, 0.22, { BackgroundColor3 = config.FocusColor or theme.Surface2 }, EASE_OUT, Enum.EasingDirection.Out)
     end)
@@ -1245,7 +1245,7 @@ function Section:Keybind(config)
 end
 
 --============================================================
--- Dropdown (popup flutuante global)
+-- Dropdown
 --============================================================
 
 function Section:Dropdown(config)
@@ -1325,13 +1325,13 @@ function Section:Dropdown(config)
     local scroll = New("ScrollingFrame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 0,
         CanvasSize = UDim2.new(),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         Size = UDim2.new(1, 0, 1, 0),
         ZIndex = menu.ZIndex + 1,
         Parent = menu,
     })
+    StyleScrollBar(scroll, { Thickness = 2, Transparency = 0.5 })
     Padding(scroll, 5, 5, 5, 5)
     List(scroll, 4)
 
@@ -1400,7 +1400,6 @@ function Section:Dropdown(config)
         stopFollowing()
         if window.ActiveDropdown == obj then window.ActiveDropdown = nil end
 
-        -- gira a seta suavemente
         Tween(chev, 0.28, { Rotation = 0 }, EASE_SOFT, Enum.EasingDirection.Out)
 
         if instant then
@@ -1541,7 +1540,7 @@ function Section:Dropdown(config)
 end
 
 --============================================================
--- Colorpicker (popup HSV flutuante)
+-- Colorpicker
 --============================================================
 
 function Section:Colorpicker(config)
@@ -1728,7 +1727,6 @@ function Section:Colorpicker(config)
     local function render(fire)
         state.Value = Color3.fromHSV(h, s, v)
         local hc = Color3.fromHSV(h, 1, 1)
-        -- transição suave das cores
         Tween(swatch, 0.18, { BackgroundColor3 = state.Value }, EASE_SOFT, Enum.EasingDirection.Out)
         svArea.BackgroundColor3 = hc
         svPicker.Position = UDim2.fromScale(s, 1 - v)
@@ -1805,7 +1803,6 @@ function Section:Colorpicker(config)
         window.ActiveColorpicker = self
         state.Open = true
         popup.Visible = true
-        -- animação de aparecer
         popup.Size = UDim2.fromOffset(popupWidth, 0)
         popup.BackgroundTransparency = 1
         task.defer(function()
@@ -1963,7 +1960,6 @@ function Window:_setActiveTab(tab)
     for _, t in ipairs(self.Tabs) do
         local selected = t == tab
         t.Container.Visible = selected
-        -- transições suaves de cor
         Tween(t.ButtonLabel, 0.25, {
             TextColor3 = selected and self.Theme.Text or self.Theme.SubText
         }, EASE_SOFT, Enum.EasingDirection.Out)
@@ -1993,7 +1989,7 @@ function Window:TabDivider(config)
     self.SidebarOrder += 1
 
     if config.Title then
-        local label = New("TextLabel", {
+        New("TextLabel", {
             BackgroundTransparency = 1,
             Text = config.Title,
             TextColor3 = config.TextColor or self.Theme.DimText,
@@ -2078,12 +2074,11 @@ function Window:Tab(config)
         Parent = self.ContentHost,
     })
 
-    local leftScroll = New("ScrollingFrame", {
+    -- ✅ LEFT SCROLL com barra discreta
+    local leftScroll = StyleScrollBar(New("ScrollingFrame", {
         Name = "LeftScroll",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 0,
-        ScrollBarImageTransparency = 1,
         ScrollingDirection = Enum.ScrollingDirection.Y,
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         CanvasSize = UDim2.new(),
@@ -2091,6 +2086,11 @@ function Window:Tab(config)
         Position = UDim2.fromOffset(0, 0),
         Size = UDim2.new(0, self.Config.LeftColumnWidth or 289, 1, 0),
         Parent = container,
+    }), {
+        Thickness = self.Theme.ScrollbarThickness or 3,
+        Color = self.Theme.Scrollbar or Color3.fromRGB(90, 90, 96),
+        Transparency = self.Theme.ScrollbarTransparency or 0.35,
+        Inset = Enum.ScrollBarInset.ScrollBar,
     })
 
     local leftContainer = New("Frame", {
@@ -2102,12 +2102,11 @@ function Window:Tab(config)
     })
     local leftLayout = List(leftContainer, self.Config.SectionGap or 10)
 
-    local rightScroll = New("ScrollingFrame", {
+    -- ✅ RIGHT SCROLL com barra discreta
+    local rightScroll = StyleScrollBar(New("ScrollingFrame", {
         Name = "RightScroll",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ScrollBarThickness = 0,
-        ScrollBarImageTransparency = 1,
         ScrollingDirection = Enum.ScrollingDirection.Y,
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         CanvasSize = UDim2.new(),
@@ -2115,6 +2114,11 @@ function Window:Tab(config)
         Position = UDim2.fromOffset((self.Config.LeftColumnWidth or 289) + (self.Config.ColumnGap or 5), 0),
         Size = UDim2.new(1, -((self.Config.LeftColumnWidth or 289) + (self.Config.ColumnGap or 5)), 1, 0),
         Parent = container,
+    }), {
+        Thickness = self.Theme.ScrollbarThickness or 3,
+        Color = self.Theme.Scrollbar or Color3.fromRGB(90, 90, 96),
+        Transparency = self.Theme.ScrollbarTransparency or 0.35,
+        Inset = Enum.ScrollBarInset.ScrollBar,
     })
 
     local rightContainer = New("Frame", {
@@ -2184,15 +2188,11 @@ function Window:SetSelectColor(color)
     return self
 end
 
--- ============ NOVO: Transparência do fundo ============
 function Window:SetBackgroundTransparency(value)
     value = clamp01(value)
     self.BackgroundTransparency = value
     if self.Main then
         Tween(self.Main, 0.3, { BackgroundTransparency = value }, EASE_SOFT, Enum.EasingDirection.Out)
-    end
-    if self.MainGradient then
-        -- o gradiente em si não tem transparência individual, então usamos o Frame
     end
     return self
 end
@@ -2205,7 +2205,6 @@ function Window:ToggleVisibility()
     self.Visible = not self.Visible
     if self.Visible then
         self.Main.Visible = true
-        -- animação de aparecer
         self.Main.Size = UDim2.new(
             self.Main.Size.X.Scale, self.Main.Size.X.Offset - 20,
             self.Main.Size.Y.Scale, self.Main.Size.Y.Offset - 20
@@ -2438,7 +2437,6 @@ function Window:Dialog(config)
         overlay.MouseButton1Click:Connect(function() obj:Close() end)
     end
 
-    -- animação de aparecer
     task.defer(function()
         Tween(overlay, 0.25, {
             BackgroundTransparency = config.OverlayTransparency or 0.35
@@ -2503,7 +2501,6 @@ function Window:Popup(config)
         task.delay(0.22, function() popup:Destroy() end)
     end
 
-    -- aparecer suavemente
     popup.BackgroundTransparency = 1
     Tween(popup, 0.28, { BackgroundTransparency = 0 }, EASE_SOFT, Enum.EasingDirection.Out)
 
@@ -2533,7 +2530,6 @@ function PebbleUI:CreateWindow(config)
     self.Destroyed = false
     self._themeBindings = {}
 
-    -- Transparência configurável (aceita config.BackgroundTransparency)
     local bgTransparency = config.BackgroundTransparency
     if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
     self.BackgroundTransparency = clamp01(bgTransparency)
@@ -2557,7 +2553,6 @@ function PebbleUI:CreateWindow(config)
     if not ok then screen.Parent = PlayerGui end
     self.ScreenGui = screen
 
-    -- Main (com transparência aplicada)
     local main = New("Frame", {
         Name = "Main",
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -2582,7 +2577,6 @@ function PebbleUI:CreateWindow(config)
     })
     self.MainGradient = mainGrad
 
-    -- Sidebar (também recebe leve transparência pra casar com o fundo)
     local sidebar = New("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = self.Theme.Sidebar,
@@ -2625,7 +2619,6 @@ function PebbleUI:CreateWindow(config)
     List(sidebarList, 0)
     self.SidebarList = sidebarList
 
-    -- TOPBAR (agora com texto bem apagado, estilo "Movement Ware V3")
     local topbar = New("Frame", {
         Name = "Topbar",
         BackgroundTransparency = 1,
@@ -2635,22 +2628,20 @@ function PebbleUI:CreateWindow(config)
     })
     self.Topbar = topbar
 
-    -- Texto do título agora é bem apagado (TopbarText)
     local titleLabel = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = self.Title,
-        TextColor3 = self.Theme.TopbarText,   -- <-- apagado
+        TextColor3 = self.Theme.TopbarText,
         TextSize = 14,
         Font = self.Theme.FontMedium,
         Position = UDim2.fromOffset(0, 7),
         Size = UDim2.new(1, -90, 0, 25),
         TextXAlignment = Enum.TextXAlignment.Right,
-        TextTransparency = config.TopbarTextTransparency or 0.25, -- <-- mais apagado ainda
+        TextTransparency = config.TopbarTextTransparency or 0.25,
         Parent = topbar,
     })
     self.TitleLabel = titleLabel
 
-    -- Close button (ícone também apagado)
     local closeBtn = New("TextButton", {
         Name = "CloseButton",
         AnchorPoint = Vector2.new(1, 0),
@@ -2691,7 +2682,6 @@ function PebbleUI:CreateWindow(config)
         task.delay(0.22, function() self:Close() end)
     end)
 
-    -- Content host
     local contentHost = New("Frame", {
         Name = "ContentHost",
         BackgroundTransparency = 1,
@@ -2701,7 +2691,6 @@ function PebbleUI:CreateWindow(config)
     })
     self.ContentHost = contentHost
 
-    -- Notification holder
     local notifHolder = New("Frame", {
         Name = "NotificationHolder",
         BackgroundTransparency = 1,
@@ -2714,7 +2703,6 @@ function PebbleUI:CreateWindow(config)
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
 
-    -- Toggle key
     local toggleKey = config.ToggleKey or Defaults.ToggleKey
     local inputConn
     inputConn = UserInputService.InputBegan:Connect(function(input, gp)
@@ -2725,7 +2713,6 @@ function PebbleUI:CreateWindow(config)
         end
     end)
 
-    -- Drag
     if config.Draggable ~= false then
         local dragging, dragStart, startPos, dragInput
 
@@ -2757,9 +2744,7 @@ function PebbleUI:CreateWindow(config)
                 )
             end
         end)
-    end
-
-    return self
+    end    return self
 end
 
 print("[PebbleUI] Loaded v" .. PebbleUI.Version)
