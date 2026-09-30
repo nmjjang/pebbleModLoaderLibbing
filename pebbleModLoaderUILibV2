@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.1.1" }
+local PebbleUI = { Version = "1.2.0-cafe" }
 
 --============================================================
 -- Services
@@ -154,80 +154,176 @@ local function SpringTween(obj, props)
     return Tween(obj, 0.32, props, EASE_BOUNCE, Enum.EasingDirection.Out)
 end
 
+-- ============ CUTE MOTION HELPERS ============
+-- Centralized micro-interactions used across the whole library.
+local function EnsureScale(obj)
+    local scale = obj:FindFirstChildOfClass("UIScale")
+    if not scale then
+        scale = New("UIScale", { Scale = 1, Parent = obj })
+    end
+    return scale
+end
+
+local function PopIn(obj, delayTime)
+    local scale = EnsureScale(obj)
+    scale.Scale = 0.94
+    task.delay(delayTime or 0, function()
+        if not obj or not obj.Parent then return end
+        Tween(scale, 0.34, { Scale = 1.025 }, EASE_BOUNCE, Enum.EasingDirection.Out)
+        task.delay(0.2, function()
+            if scale and scale.Parent then
+                Tween(scale, 0.18, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+            end
+        end)
+    end)
+end
+
+local function HoverScale(obj, overScale)
+    local scale = EnsureScale(obj)
+    Tween(scale, 0.18, { Scale = overScale or 1.018 }, EASE_SOFT, Enum.EasingDirection.Out)
+end
+
+local function RestScale(obj)
+    local scale = EnsureScale(obj)
+    Tween(scale, 0.22, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+end
+
+local function PressScale(obj)
+    local scale = EnsureScale(obj)
+    Tween(scale, 0.09, { Scale = 0.965 }, EASE_SOFT, Enum.EasingDirection.Out)
+end
+
+local function ReleaseScale(obj)
+    local scale = EnsureScale(obj)
+    Tween(scale, 0.24, { Scale = 1.02 }, EASE_BOUNCE, Enum.EasingDirection.Out)
+    task.delay(0.14, function()
+        if scale and scale.Parent then
+            Tween(scale, 0.16, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+        end
+    end)
+end
+
+local function Ripple(button, inputPosition, color)
+    if not button or not button.Parent then return end
+    button.ClipsDescendants = true
+    local size = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 1.5
+    local pos = inputPosition
+    local x = button.AbsoluteSize.X / 2
+    local y = button.AbsoluteSize.Y / 2
+    if pos then
+        x = pos.X - button.AbsolutePosition.X
+        y = pos.Y - button.AbsolutePosition.Y
+    end
+
+    local ripple = New("Frame", {
+        Name = "Ripple",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromOffset(x, y),
+        Size = UDim2.fromOffset(0, 0),
+        BackgroundColor3 = color or Color3.new(1, 1, 1),
+        BackgroundTransparency = 0.72,
+        BorderSizePixel = 0,
+        ZIndex = button.ZIndex + 10,
+        Parent = button,
+    })
+    Corner(ripple, 999)
+    Tween(ripple, 0.36, {
+        Size = UDim2.fromOffset(size, size),
+        BackgroundTransparency = 1,
+    }, EASE_SOFT, Enum.EasingDirection.Out)
+    task.delay(0.4, function()
+        if ripple then ripple:Destroy() end
+    end)
+end
+
+local function CuteStroke(parent, color, transparency)
+    return Stroke(parent, color, 1.15, transparency == nil and 0.18 or transparency)
+end
+
 --============================================================
 -- Theme
 --============================================================
 
 local DefaultTheme = {
+    -- Rounded/cute cafe inspired palette: cream paper, baby blue, soft red.
     Font = Enum.Font.Gotham,
-    FontBold = Enum.Font.GothamBold,
+    FontBold = Enum.Font.FredokaOne,
     FontMedium = Enum.Font.GothamMedium,
+    FontDisplay = Enum.Font.FredokaOne,
 
-    BackgroundTop     = Color3.fromRGB(24, 25, 28),
-    BackgroundBottom  = Color3.fromRGB(13, 14, 16),
-    Sidebar           = Color3.fromRGB(17, 18, 20),
-    SidebarDivider    = Color3.fromRGB(30, 31, 35),
+    BackgroundTop     = Color3.fromRGB(250, 246, 231),
+    BackgroundBottom  = Color3.fromRGB(242, 231, 207),
+    Sidebar           = Color3.fromRGB(183, 218, 231),
+    SidebarDivider    = Color3.fromRGB(160, 196, 211),
 
-    Surface           = Color3.fromRGB(25, 26, 29),
-    Surface2          = Color3.fromRGB(30, 31, 35),
-    SurfaceHover      = Color3.fromRGB(35, 36, 40),
-    Input             = Color3.fromRGB(29, 30, 34),
-    Popup             = Color3.fromRGB(24, 24, 24),
-    CodeBackground    = Color3.fromRGB(21, 21, 21),
+    Surface           = Color3.fromRGB(255, 251, 238),
+    Surface2          = Color3.fromRGB(248, 238, 217),
+    SurfaceHover      = Color3.fromRGB(255, 235, 205),
+    Input             = Color3.fromRGB(255, 253, 247),
+    Popup             = Color3.fromRGB(255, 249, 232),
+    CodeBackground    = Color3.fromRGB(239, 229, 210),
 
-    Text              = Color3.fromRGB(244, 244, 247),
-    SubText           = Color3.fromRGB(148, 149, 158),
-    MutedText         = Color3.fromRGB(103, 104, 113),
-    DimText           = Color3.fromRGB(76, 76, 76),
+    Text              = Color3.fromRGB(116, 50, 54),
+    SubText           = Color3.fromRGB(147, 91, 83),
+    MutedText         = Color3.fromRGB(177, 128, 108),
+    DimText           = Color3.fromRGB(188, 153, 132),
 
-    Accent            = Color3.fromRGB(246, 143, 193),
-    AccentHover       = Color3.fromRGB(255, 160, 205),
-    AccentText        = Color3.fromRGB(55, 30, 43),
+    Accent            = Color3.fromRGB(187, 58, 67),
+    AccentHover       = Color3.fromRGB(209, 76, 84),
+    AccentText        = Color3.fromRGB(255, 248, 229),
 
-    Stroke            = Color3.fromRGB(255, 255, 255),
-    Border            = Color3.fromRGB(54, 54, 54),
-    CheckboxBorder    = Color3.fromRGB(72, 72, 72),
+    Stroke            = Color3.fromRGB(222, 194, 164),
+    Border            = Color3.fromRGB(218, 188, 158),
+    CheckboxBorder    = Color3.fromRGB(201, 166, 139),
 
-    Icon              = Color3.fromRGB(183, 184, 194),
-    IconSelected      = Color3.fromRGB(245, 245, 247),
+    Icon              = Color3.fromRGB(143, 96, 88),
+    IconSelected      = Color3.fromRGB(177, 55, 64),
 
-    Success           = Color3.fromRGB(80, 200, 120),
-    Warning           = Color3.fromRGB(245, 184, 69),
-    Danger            = Color3.fromRGB(235, 76, 76),
-    Overlay           = Color3.fromRGB(0, 0, 0),
+    Success           = Color3.fromRGB(109, 164, 121),
+    Warning           = Color3.fromRGB(226, 165, 79),
+    Danger            = Color3.fromRGB(193, 65, 68),
+    Overlay           = Color3.fromRGB(77, 57, 45),
 
-    TopbarText        = Color3.fromRGB(72, 73, 80),
-    TopbarTextHover   = Color3.fromRGB(120, 121, 130),
-    TopbarIcon        = Color3.fromRGB(58, 59, 66),
-    TopbarIconHover   = Color3.fromRGB(110, 111, 120),
+    TopbarText        = Color3.fromRGB(130, 67, 69),
+    TopbarTextHover   = Color3.fromRGB(176, 56, 65),
+    TopbarIcon        = Color3.fromRGB(145, 88, 83),
+    TopbarIconHover   = Color3.fromRGB(188, 57, 66),
 
-    -- Scrollbar
-    Scrollbar         = Color3.fromRGB(90, 90, 96),
-    ScrollbarTransparency = 0.35,
-    ScrollbarThickness    = 3,
+    -- Extra decorative colors used by the new skin.
+    Sky               = Color3.fromRGB(166, 211, 230),
+    SkySoft           = Color3.fromRGB(221, 239, 245),
+    Butter            = Color3.fromRGB(246, 215, 138),
+    Peach             = Color3.fromRGB(244, 190, 154),
+    Mint              = Color3.fromRGB(185, 215, 191),
+    Paper             = Color3.fromRGB(255, 251, 238),
+    Shadow            = Color3.fromRGB(107, 76, 58),
+
+    Scrollbar         = Color3.fromRGB(180, 137, 117),
+    ScrollbarTransparency = 0.48,
+    ScrollbarThickness    = 4,
 }
 
 PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
-    Title = "Pebble UI Lib",
-    Version = "v1.1.1",
+    Title = "Pebble Café UI",
+    Version = "v1.2.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(742, 520),
+    Size = UDim2.fromOffset(760, 540),
     Position = UDim2.fromScale(0.5, 0.5),
     MinSize = Vector2.new(560, 380),
     MaxSize = Vector2.new(1400, 900),
 
-    TopbarHeight = 40,
-    SidebarWidth = 145,
-    CollapsedSidebarWidth = 60,
-    CornerRadius = 8,
-    LeftColumnWidth = 289,
-    ColumnGap = 5,
-    SectionGap = 10,
+    TopbarHeight = 48,
+    SidebarWidth = 158,
+    CollapsedSidebarWidth = 64,
+    CornerRadius = 20,
+    LeftColumnWidth = 292,
+    ColumnGap = 10,
+    SectionGap = 12,
 
-    BackgroundTransparency = 0.05,
+    BackgroundTransparency = 0,
 
     ToggleKey = Enum.KeyCode.RightShift,
     Draggable = true,
@@ -335,7 +431,7 @@ local function MakeRow(section, config, height)
         Text = config.Title or config.Name or "Element",
         TextColor3 = config.TextColor or theme.Text,
         TextSize = config.TextSize or 12,
-        Font = config.Font or theme.Font,
+        Font = config.Font or theme.FontMedium,
         Position = UDim2.fromOffset(iconOffset, 0),
         Size = UDim2.new(1, -(iconOffset + (config.RightReserve or 70)),
             hasDesc and 0 or 1, hasDesc and 18 or 0),
@@ -469,7 +565,7 @@ function Section:Tag(config)
         BorderSizePixel = 0,
         Parent = holder,
     })
-    Corner(tag, config.Corner or 4)
+    Corner(tag, config.Corner or 8)
 
     local obj = { __type = "Tag", UIElements = { Holder = holder, Tag = tag }, Value = tag.Text }
     function obj:Set(t) self.Value = tostring(t); tag.Text = self.Value; return self end
@@ -519,7 +615,7 @@ function Section:Code(config)
         LayoutOrder = self:_nextOrder(),
         Parent = self.Content,
     })
-    Corner(holder, config.Corner or 5)
+    Corner(holder, config.Corner or 10)
     Padding(holder, 10, 10, 8, 8)
 
     local code = New("TextLabel", {
@@ -548,7 +644,7 @@ end
 function Section:Button(config)
     config = config or {}
     local theme = self.Window.Theme
-    local h = RowHeight(config, 28)
+    local h = RowHeight(config, 34)
 
     local btn = New("TextButton", {
         Name = config.Title or "Button",
@@ -561,16 +657,17 @@ function Section:Button(config)
         ZIndex = config.ZIndex or 5,
         Parent = self.Content,
     })
-    Corner(btn, config.Corner or 6)
+    Corner(btn, config.Corner or 11)
+    CuteStroke(btn, config.BorderColor or theme.AccentHover, 0.45)
 
     local iconOffset = 0
     if config.Icon then
-        local icon = CreateIcon(config.Icon, config.IconSize or 13,
+        local icon = CreateIcon(config.Icon, config.IconSize or 14,
             config.IconColor or theme.AccentText, btn.ZIndex + 1)
         icon.AnchorPoint = Vector2.new(0, 0.5)
-        icon.Position = UDim2.new(0, 10, 0.5, 0)
+        icon.Position = UDim2.new(0, 12, 0.5, 0)
         icon.Parent = btn
-        iconOffset = (config.IconSize or 13) + 8
+        iconOffset = (config.IconSize or 14) + 9
     end
 
     local label = New("TextLabel", {
@@ -579,8 +676,8 @@ function Section:Button(config)
         TextColor3 = config.TextColor or theme.AccentText,
         TextSize = config.TextSize or 12,
         Font = config.Font or theme.FontMedium,
-        Position = UDim2.fromOffset(10 + iconOffset, 0),
-        Size = UDim2.new(1, -(20 + iconOffset), 1, 0),
+        Position = UDim2.fromOffset(12 + iconOffset, 0),
+        Size = UDim2.new(1, -(24 + iconOffset), 1, 0),
         TextXAlignment = config.TextXAlignment or (config.Icon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center),
         ZIndex = btn.ZIndex + 2,
         Parent = btn,
@@ -590,26 +687,27 @@ function Section:Button(config)
     local obj = { __type = "Button", UIElements = { Button = btn, Label = label } }
 
     btn.MouseEnter:Connect(function()
-        if not state.Locked then
-            HoverTween(btn, 0.22, { BackgroundColor3 = config.HoverColor or theme.AccentHover })
-        end
+        if state.Locked then return end
+        HoverTween(btn, 0.18, { BackgroundColor3 = config.HoverColor or theme.AccentHover })
+        HoverScale(btn, 1.012)
     end)
     btn.MouseLeave:Connect(function()
-        HoverTween(btn, 0.28, { BackgroundColor3 = config.Color or theme.Accent })
+        HoverTween(btn, 0.24, { BackgroundColor3 = config.Color or theme.Accent })
+        RestScale(btn)
     end)
 
-    btn.MouseButton1Down:Connect(function()
+    btn.InputBegan:Connect(function(input)
         if state.Locked then return end
-        Tween(btn, 0.12, {
-            Size = UDim2.new(btn.Size.X.Scale, btn.Size.X.Offset - 4,
-                              btn.Size.Y.Scale, btn.Size.Y.Offset - 2)
-        }, EASE_SOFT, Enum.EasingDirection.Out)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            PressScale(btn)
+            Ripple(btn, input.Position, theme.AccentText)
+        end
     end)
-    btn.MouseButton1Up:Connect(function()
+    btn.InputEnded:Connect(function(input)
         if state.Locked then return end
-        SpringTween(btn, {
-            Size = config.Size or UDim2.new(1, 0, 0, h)
-        })
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            ReleaseScale(btn)
+        end
     end)
     btn.MouseButton1Click:Connect(function()
         if state.Locked then return end
@@ -618,11 +716,13 @@ function Section:Button(config)
 
     AttachLockAPI(obj, config, function()
         local locked = obj.Locked
+        state.Locked = locked
         label.TextColor3 = locked and theme.MutedText or (config.TextColor or theme.AccentText)
-        btn.BackgroundTransparency = locked and 0.4 or 0
+        btn.BackgroundTransparency = locked and 0.45 or 0
     end)
 
     function obj:SetText(t) label.Text = tostring(t); return self end
+    PopIn(btn, 0.02)
     return obj
 end
 
@@ -644,7 +744,7 @@ function Section:Checkbox(config)
     local hasKeybind = keyConfig ~= false
     local hasValueText = config.ValueText ~= nil
 
-    local boxSize = config.BoxSize or 14
+    local boxSize = config.BoxSize or 18
     local keyWidth = hasKeybind and ((type(keyConfig) == "table" and keyConfig.Width) or config.KeybindWidth or 34) or 0
     local keyGap = config.KeybindGap or 7
     local boxRightPadding = config.BoxRightPadding or 0
@@ -662,24 +762,24 @@ function Section:Checkbox(config)
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -boxRightPadding, 0.5, 0),
         Size = UDim2.fromOffset(boxSize, boxSize),
-        BackgroundColor3 = config.BoxColor or theme.Surface,
+        BackgroundColor3 = config.BoxColor or theme.Paper,
         BorderSizePixel = 0,
         Text = "",
         AutoButtonColor = false,
         ZIndex = config.BoxZIndex or 5,
         Parent = row,
     })
-    Corner(box, config.Corner or 4)
+    Corner(box, config.Corner or 6)
 
     local boxStroke = Stroke(box,
         config.BorderColor or theme.CheckboxBorder,
-        config.BorderThickness or 1.25,
+        config.BorderThickness or 1.4,
         config.BorderTransparency == nil and 0 or config.BorderTransparency)
 
     local state = {
         Value = config.Default == true,
         Locked = config.Locked or false,
-        CheckboxIcon = config.CheckboxIcon or config.CheckIcon,
+        CheckboxIcon = config.CheckboxIcon or config.CheckIcon or "check",
     }
 
     local checkIcon
@@ -704,7 +804,7 @@ function Section:Checkbox(config)
 
     local function render(animated)
         local activeColor = config.ActiveColor or theme.Accent
-        local inactiveColor = config.BoxColor or theme.Surface
+        local inactiveColor = config.BoxColor or theme.Paper
         local activeBorderColor = config.ActiveBorderColor or activeColor
         local inactiveBorderColor = config.BorderColor or theme.CheckboxBorder
 
@@ -729,7 +829,9 @@ function Section:Checkbox(config)
 
     box.MouseButton1Click:Connect(function()
         if state.Locked then return end
+        PressScale(box)
         obj:Set(not state.Value, true)
+        ReleaseScale(box)
     end)
 
     local rightCursor = boxRightPadding + boxSize + keyGap
@@ -973,8 +1075,8 @@ function Section:Slider(config)
     local track = New("TextButton", {
         BackgroundColor3 = config.TrackColor or theme.Surface2,
         BorderSizePixel = 0,
-        Position = UDim2.fromOffset(0, 30),
-        Size = UDim2.new(1, 0, 0, config.TrackHeight or 4),
+        Position = UDim2.fromOffset(0, 31),
+        Size = UDim2.new(1, 0, 0, config.TrackHeight or 6),
         Text = "",
         AutoButtonColor = false,
         Parent = holder,
@@ -990,14 +1092,15 @@ function Section:Slider(config)
     Corner(fill, 99)
 
     local knob = New("Frame", {
-        BackgroundColor3 = config.KnobColor or theme.Text,
+        BackgroundColor3 = config.KnobColor or theme.Paper,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(config.KnobSize or 11, config.KnobSize or 11),
+        Size = UDim2.fromOffset(config.KnobSize or 14, config.KnobSize or 14),
         Parent = track,
     })
     Corner(knob, 99)
+    CuteStroke(knob, theme.Accent, 0.1)
 
     local state = {
         Value = default,
@@ -1137,14 +1240,17 @@ function Section:Input(config)
         Size = UDim2.new(1, 0, 0, config.BoxHeight or 26),
         Parent = holder,
     })
-    Corner(box, config.Corner or 6)
-    Padding(box, 8, 8, 0, 0)
+    Corner(box, config.Corner or 10)
+    local inputStroke = CuteStroke(box, theme.Border, 0.25)
+    Padding(box, 10, 10, 0, 0)
 
     box.Focused:Connect(function()
-        Tween(box, 0.22, { BackgroundColor3 = config.FocusColor or theme.Surface2 }, EASE_OUT, Enum.EasingDirection.Out)
+        Tween(box, 0.22, { BackgroundColor3 = config.FocusColor or theme.Paper }, EASE_OUT, Enum.EasingDirection.Out)
+        Tween(inputStroke, 0.22, { Color = theme.Accent, Transparency = 0.05 }, EASE_SOFT, Enum.EasingDirection.Out)
     end)
     box.FocusLost:Connect(function()
         Tween(box, 0.25, { BackgroundColor3 = config.BackgroundColor or theme.Input }, EASE_OUT, Enum.EasingDirection.Out)
+        Tween(inputStroke, 0.25, { Color = theme.Border, Transparency = 0.25 }, EASE_SOFT, Enum.EasingDirection.Out)
     end)
 
     local state = { Value = box.Text, Locked = config.Locked or false }
@@ -1180,7 +1286,8 @@ function Section:Keybind(config)
     local row, title = MakeRow(self, config, config.Height or 30)
 
     local display = New("TextButton", {
-        BackgroundTransparency = 1,
+        BackgroundColor3 = theme.Surface2,
+        BackgroundTransparency = 0,
         Text = config.Display or config.Text or "=",
         TextColor3 = config.KeyTextColor or theme.DimText,
         TextSize = config.KeyTextSize or 11,
@@ -1193,6 +1300,8 @@ function Section:Keybind(config)
         ZIndex = 8,
         Parent = row,
     })
+    Corner(display, 8)
+    CuteStroke(display, theme.Border, 0.35)
 
     local state = {
         Value = config.Value or config.Default or nil,
@@ -1288,7 +1397,8 @@ function Section:Dropdown(config)
         ZIndex = 5,
         Parent = holder,
     })
-    Corner(selector, config.Corner or 6)
+    Corner(selector, config.Corner or 10)
+    local selectorStroke = CuteStroke(selector, theme.Border, 0.25)
 
     local valueLabel = New("TextLabel", {
         BackgroundTransparency = 1,
@@ -1319,8 +1429,8 @@ function Section:Dropdown(config)
         ClipsDescendants = true,
         Parent = window.ScreenGui,
     })
-    Corner(menu, config.MenuCorner or 6)
-    Stroke(menu, theme.Border, 1, 0.5)
+    Corner(menu, config.MenuCorner or 12)
+    CuteStroke(menu, theme.Border, 0.18)
 
     local scroll = New("ScrollingFrame", {
         BackgroundTransparency = 1,
@@ -1334,6 +1444,15 @@ function Section:Dropdown(config)
     StyleScrollBar(scroll, { Thickness = 2, Transparency = 0.5 })
     Padding(scroll, 5, 5, 5, 5)
     List(scroll, 4)
+
+    selector.MouseEnter:Connect(function()
+        Tween(selectorStroke, 0.18, { Color = theme.Accent, Transparency = 0.12 }, EASE_SOFT, Enum.EasingDirection.Out)
+        HoverScale(selector, 1.006)
+    end)
+    selector.MouseLeave:Connect(function()
+        Tween(selectorStroke, 0.22, { Color = theme.Border, Transparency = 0.25 }, EASE_SOFT, Enum.EasingDirection.Out)
+        RestScale(selector)
+    end)
 
     local state = {
         Value = current,
@@ -1468,7 +1587,7 @@ function Section:Dropdown(config)
                 ZIndex = menu.ZIndex + 2,
                 Parent = scroll,
             })
-            Corner(item, config.ItemCorner or 4)
+            Corner(item, config.ItemCorner or 8)
             Padding(item, 8, 8, 0, 0)
 
             item.MouseEnter:Connect(function()
@@ -1566,8 +1685,8 @@ function Section:Colorpicker(config)
         ZIndex = 20,
         Parent = row,
     })
-    Corner(swatch, config.Corner or 5)
-    Stroke(swatch, theme.Border, 1, 0.25)
+    Corner(swatch, config.Corner or 8)
+    CuteStroke(swatch, theme.Border, 0.12)
 
     local state = { Value = initial, Locked = config.Locked or false, Open = false }
 
@@ -1588,8 +1707,8 @@ function Section:Colorpicker(config)
         ZIndex = 1000,
         Parent = window.ScreenGui,
     })
-    Corner(popup, config.PopupCorner or 6)
-    Stroke(popup, theme.Border, 1, 0.25)
+    Corner(popup, config.PopupCorner or 14)
+    CuteStroke(popup, theme.Border, 0.12)
 
     local svArea = New("TextButton", {
         BackgroundColor3 = Color3.fromHSV(h, 1, 1),
@@ -1683,11 +1802,11 @@ function Section:Colorpicker(config)
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -5, 0, 5),
         Size = UDim2.fromOffset(18, 18),
-        BackgroundColor3 = Color3.fromRGB(18, 18, 18),
+        BackgroundColor3 = theme.Accent,
         BackgroundTransparency = 0.2,
         BorderSizePixel = 0,
         Text = "×",
-        TextColor3 = Color3.fromRGB(240, 240, 240),
+        TextColor3 = theme.AccentText,
         TextSize = 17,
         Font = Enum.Font.GothamBold,
         AutoButtonColor = false,
@@ -1696,7 +1815,7 @@ function Section:Colorpicker(config)
         Parent = popup,
     })
     Corner(closeBtn, 5)
-    Stroke(closeBtn, Color3.fromRGB(75, 75, 75), 1, 0.15)
+    CuteStroke(closeBtn, theme.AccentHover, 0.25)
 
     local obj = {
         __type = "Colorpicker",
@@ -1877,33 +1996,42 @@ function Tab:Section(config)
         LayoutOrder = self:_nextSectionOrder(side),
         Parent = parent,
     })
-    Corner(frame, config.Corner or 8)
-    Stroke(frame, theme.Stroke, 1, 0.94)
+    Corner(frame, config.Corner or 15)
+    CuteStroke(frame, config.BorderColor or theme.Border, 0.28)
 
-    local headerHeight = config.HeaderHeight or 30
+    local headerHeight = config.HeaderHeight or 34
 
     local header = New("Frame", {
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(12, 0),
-        Size = UDim2.new(1, -24, 0, headerHeight),
+        Position = UDim2.fromOffset(13, 2),
+        Size = UDim2.new(1, -26, 0, headerHeight),
         Parent = frame,
     })
 
     local iconOffset = 0
     if config.Icon then
+        local iconBubble = New("Frame", {
+            BackgroundColor3 = config.IconBackground or theme.SkySoft,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(0, 0.5),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            Size = UDim2.fromOffset(24, 24),
+            Parent = header,
+        })
+        Corner(iconBubble, 8)
         local icon = CreateIcon(config.Icon, config.IconSize or 13,
-            config.IconColor or theme.MutedText, 2)
-        icon.AnchorPoint = Vector2.new(0, 0.5)
-        icon.Position = UDim2.new(0, 0, 0.5, 0)
-        icon.Parent = header
-        iconOffset = (config.IconSize or 13) + 7
+            config.IconColor or theme.Accent, 3)
+        icon.AnchorPoint = Vector2.new(0.5, 0.5)
+        icon.Position = UDim2.fromScale(0.5, 0.5)
+        icon.Parent = iconBubble
+        iconOffset = 31
     end
 
     local title = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or "Section",
         TextColor3 = config.TextColor or theme.Text,
-        TextSize = config.TextSize or 12,
+        TextSize = config.TextSize or 13,
         Font = config.Font or theme.FontMedium,
         Position = UDim2.fromOffset(iconOffset, 0),
         Size = UDim2.new(1, -iconOffset, 1, 0),
@@ -1915,13 +2043,13 @@ function Tab:Section(config)
     local content = New("Frame", {
         Name = "Content",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(12, headerHeight),
-        Size = UDim2.new(1, -24, 0, 0),
+        Position = UDim2.fromOffset(13, headerHeight + 2),
+        Size = UDim2.new(1, -26, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = frame,
     })
 
-    local contentLayout = List(content, config.ElementGap or 0)
+    local contentLayout = List(content, config.ElementGap or 5)
 
     local section = setmetatable({
         __type = "Section",
@@ -1933,8 +2061,8 @@ function Tab:Section(config)
         Title = title,
         Content = content,
         Layout = contentLayout,
-        HeaderHeight = headerHeight,
-        PaddingBottom = config.PaddingBottom or 10,
+        HeaderHeight = headerHeight + 4,
+        PaddingBottom = config.PaddingBottom or 12,
         Order = 0,
     }, Section)
 
@@ -1942,7 +2070,11 @@ function Tab:Section(config)
         section:_recalculateHeight()
     end)
 
+    frame.MouseEnter:Connect(function() HoverScale(frame, 1.004) end)
+    frame.MouseLeave:Connect(function() RestScale(frame) end)
+
     section:_recalculateHeight()
+    PopIn(frame, math.min(0.03 * frame.LayoutOrder, 0.18))
     table.insert(self.Sections, section)
     return section
 end
@@ -1960,20 +2092,27 @@ function Window:_setActiveTab(tab)
     for _, t in ipairs(self.Tabs) do
         local selected = t == tab
         t.Container.Visible = selected
-        Tween(t.ButtonLabel, 0.25, {
-            TextColor3 = selected and self.Theme.Text or self.Theme.SubText
+        Tween(t.ButtonLabel, 0.22, {
+            TextColor3 = selected and self.Theme.Accent or self.Theme.SubText
         }, EASE_SOFT, Enum.EasingDirection.Out)
         if t.ButtonIcon then
-            Tween(t.ButtonIcon, 0.25, {
-                ImageColor3 = selected and self.Theme.IconSelected or self.Theme.Icon
+            Tween(t.ButtonIcon, 0.22, {
+                ImageColor3 = selected and self.Theme.Accent or self.Theme.Icon
+            }, EASE_SOFT, Enum.EasingDirection.Out)
+        end
+        if t.Button then
+            Tween(t.Button, 0.24, {
+                BackgroundTransparency = selected and 0 or 1,
+                BackgroundColor3 = selected and self.Theme.Paper or self.Theme.Sidebar,
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Accent then
-            t.Accent.Visible = selected
+            Tween(t.Accent, 0.22, { BackgroundTransparency = selected and 0 or 1 }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end
 
     self.ActiveTab = tab
+    PopIn(tab.Container, 0)
     safeCallback(self.Config.OnTabChange, tab)
 end
 
@@ -2023,21 +2162,23 @@ function Window:Tab(config)
 
     local button = New("TextButton", {
         Name = title,
+        BackgroundColor3 = theme.Paper,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, config.Height or 29),
+        Size = UDim2.new(1, -12, 0, config.Height or 36),
         LayoutOrder = self.SidebarOrder,
         Text = "",
         AutoButtonColor = false,
         Parent = self.SidebarList,
     })
+    Corner(button, config.Corner or 11)
 
     local icon
     if config.Icon then
-        icon = CreateIcon(config.Icon, config.IconSize or 13,
-            config.IconColor or theme.MutedText, 2)
+        icon = CreateIcon(config.Icon, config.IconSize or 14,
+            config.IconColor or theme.Icon, 2)
         icon.AnchorPoint = Vector2.new(0, 0.5)
-        icon.Position = UDim2.new(0, 0, 0.5, 0)
+        icon.Position = UDim2.new(0, 11, 0.5, 0)
         icon.Parent = button
     end
 
@@ -2046,9 +2187,9 @@ function Window:Tab(config)
         Text = title,
         TextColor3 = theme.SubText,
         TextSize = config.TextSize or 12,
-        Font = theme.Font,
-        Position = UDim2.fromOffset(icon and 21 or 19, 0),
-        Size = UDim2.new(1, -(icon and 21 or 19), 1, 0),
+        Font = theme.FontMedium,
+        Position = UDim2.fromOffset(icon and 34 or 13, 0),
+        Size = UDim2.new(1, -(icon and 40 or 20), 1, 0),
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
         Parent = button,
@@ -2057,14 +2198,14 @@ function Window:Tab(config)
     local accent = New("Frame", {
         Name = "Accent",
         BackgroundColor3 = config.AccentColor or theme.Accent,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.fromOffset(2, 16),
+        Size = UDim2.fromOffset(4, 18),
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, 0, 0.5, 0),
-        Visible = false,
+        Position = UDim2.new(1, -5, 0.5, 0),
         Parent = button,
     })
-    Corner(accent, 2)
+    Corner(accent, 99)
 
     local container = New("Frame", {
         Name = title .. "_Container",
@@ -2074,7 +2215,9 @@ function Window:Tab(config)
         Parent = self.ContentHost,
     })
 
-    -- ✅ LEFT SCROLL com barra discreta
+    local leftWidth = self.Config.LeftColumnWidth or Defaults.LeftColumnWidth
+    local gap = self.Config.ColumnGap or Defaults.ColumnGap
+
     local leftScroll = StyleScrollBar(New("ScrollingFrame", {
         Name = "LeftScroll",
         BackgroundTransparency = 1,
@@ -2084,25 +2227,24 @@ function Window:Tab(config)
         CanvasSize = UDim2.new(),
         ElasticBehavior = Enum.ElasticBehavior.Never,
         Position = UDim2.fromOffset(0, 0),
-        Size = UDim2.new(0, self.Config.LeftColumnWidth or 289, 1, 0),
+        Size = UDim2.new(0, leftWidth, 1, 0),
         Parent = container,
     }), {
-        Thickness = self.Theme.ScrollbarThickness or 3,
-        Color = self.Theme.Scrollbar or Color3.fromRGB(90, 90, 96),
-        Transparency = self.Theme.ScrollbarTransparency or 0.35,
+        Thickness = self.Theme.ScrollbarThickness or 4,
+        Color = self.Theme.Scrollbar,
+        Transparency = self.Theme.ScrollbarTransparency or 0.48,
         Inset = Enum.ScrollBarInset.ScrollBar,
     })
 
     local leftContainer = New("Frame", {
         Name = "LeftContainer",
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, -6, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = leftScroll,
     })
-    local leftLayout = List(leftContainer, self.Config.SectionGap or 10)
+    local leftLayout = List(leftContainer, self.Config.SectionGap or Defaults.SectionGap)
 
-    -- ✅ RIGHT SCROLL com barra discreta
     local rightScroll = StyleScrollBar(New("ScrollingFrame", {
         Name = "RightScroll",
         BackgroundTransparency = 1,
@@ -2111,24 +2253,24 @@ function Window:Tab(config)
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         CanvasSize = UDim2.new(),
         ElasticBehavior = Enum.ElasticBehavior.Never,
-        Position = UDim2.fromOffset((self.Config.LeftColumnWidth or 289) + (self.Config.ColumnGap or 5), 0),
-        Size = UDim2.new(1, -((self.Config.LeftColumnWidth or 289) + (self.Config.ColumnGap or 5)), 1, 0),
+        Position = UDim2.fromOffset(leftWidth + gap, 0),
+        Size = UDim2.new(1, -(leftWidth + gap), 1, 0),
         Parent = container,
     }), {
-        Thickness = self.Theme.ScrollbarThickness or 3,
-        Color = self.Theme.Scrollbar or Color3.fromRGB(90, 90, 96),
-        Transparency = self.Theme.ScrollbarTransparency or 0.35,
+        Thickness = self.Theme.ScrollbarThickness or 4,
+        Color = self.Theme.Scrollbar,
+        Transparency = self.Theme.ScrollbarTransparency or 0.48,
         Inset = Enum.ScrollBarInset.ScrollBar,
     })
 
     local rightContainer = New("Frame", {
         Name = "RightContainer",
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, -6, 0, 0),
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = rightScroll,
     })
-    local rightLayout = List(rightContainer, self.Config.SectionGap or 10)
+    local rightLayout = List(rightContainer, self.Config.SectionGap or Defaults.SectionGap)
 
     local tab = setmetatable({
         __type = "Tab",
@@ -2154,24 +2296,25 @@ function Window:Tab(config)
 
     button.MouseEnter:Connect(function()
         if self.ActiveTab ~= tab then
-            HoverTween(label, 0.22, { TextColor3 = theme.Text })
-            if icon then HoverTween(icon, 0.22, { ImageColor3 = theme.IconSelected }) end
+            Tween(button, 0.2, { BackgroundTransparency = 0.5 }, EASE_SOFT, Enum.EasingDirection.Out)
+            HoverTween(label, 0.2, { TextColor3 = theme.Accent })
+            if icon then HoverTween(icon, 0.2, { ImageColor3 = theme.Accent }) end
+            HoverScale(button, 1.015)
         end
     end)
     button.MouseLeave:Connect(function()
         if self.ActiveTab ~= tab then
-            HoverTween(label, 0.26, { TextColor3 = theme.SubText })
-            if icon then HoverTween(icon, 0.26, { ImageColor3 = theme.MutedText }) end
+            Tween(button, 0.24, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+            HoverTween(label, 0.24, { TextColor3 = theme.SubText })
+            if icon then HoverTween(icon, 0.24, { ImageColor3 = theme.Icon }) end
+            RestScale(button)
         end
     end)
-    button.MouseButton1Click:Connect(function()
-        self:_setActiveTab(tab)
-    end)
+    button.MouseButton1Down:Connect(function() PressScale(button) end)
+    button.MouseButton1Up:Connect(function() ReleaseScale(button) end)
+    button.MouseButton1Click:Connect(function() self:_setActiveTab(tab) end)
 
-    if not self.ActiveTab then
-        self:_setActiveTab(tab)
-    end
-
+    if not self.ActiveTab then self:_setActiveTab(tab) end
     return tab
 end
 
@@ -2245,74 +2388,57 @@ function Window:Notify(config)
     local message = tostring(config.Content or config.Text or config.Title or "Notification")
     local textSize = config.TextSize or 12
 
-    local bounds = TextService:GetTextSize(message, textSize, theme.Font,
-        Vector2.new(config.MaxWidth or 500, 1000))
-
-    local width = math.clamp(bounds.X + 14, 70, config.MaxWidth or 500)
-    local height = math.max(23, bounds.Y + 8)
+    local bounds = TextService:GetTextSize(message, textSize, theme.Font, Vector2.new(config.MaxWidth or 420, 1000))
+    local width = math.clamp(bounds.X + 44, 150, config.MaxWidth or 420)
+    local height = math.max(42, bounds.Y + 18)
 
     local holder = New("Frame", {
-        Name = "Notification",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.fromOffset(width, height),
-        LayoutOrder = #self.Notifications + 1,
-        ClipsDescendants = false,
-        ZIndex = 201,
-        Parent = self.NotificationHolder,
+        Name = "Notification", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.fromOffset(width, height), LayoutOrder = #self.Notifications + 1,
+        ClipsDescendants = false, ZIndex = 201, Parent = self.NotificationHolder,
     })
 
     local card = New("Frame", {
-        Name = "Card",
-        Position = UDim2.fromOffset(-(width + 14), 0),
-        Size = UDim2.fromOffset(width, height),
-        BackgroundColor3 = config.BackgroundColor or theme.Popup,
-        BackgroundTransparency = config.BackgroundTransparency or 0.08,
-        BorderSizePixel = 0,
-        ZIndex = 202,
-        Parent = holder,
+        Name = "Card", Position = UDim2.fromOffset(-(width + 18), 0), Size = UDim2.fromOffset(width, height),
+        BackgroundColor3 = config.BackgroundColor or theme.Paper,
+        BackgroundTransparency = config.BackgroundTransparency or 0, BorderSizePixel = 0, ZIndex = 202, Parent = holder,
     })
-    Corner(card, config.Corner or 6)
-    local border = Stroke(card, config.BorderColor or theme.Border, 1, 0)
+    Corner(card, config.Corner or 13)
+    local border = CuteStroke(card, config.BorderColor or theme.Border, 0.12)
+
+    local badge = New("Frame", {
+        BackgroundColor3 = config.AccentColor or theme.SkySoft, BorderSizePixel = 0,
+        Position = UDim2.fromOffset(8, 9), Size = UDim2.fromOffset(24, 24), ZIndex = 203, Parent = card,
+    })
+    Corner(badge, 8)
+    local sparkle = CreateIcon(config.Icon or "sparkles", 13, config.IconColor or theme.Accent, 204)
+    sparkle.AnchorPoint = Vector2.new(0.5,0.5); sparkle.Position = UDim2.fromScale(0.5,0.5); sparkle.Parent = badge
 
     local label = New("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(7, 0),
-        Size = UDim2.new(1, -14, 1, 0),
-        Font = theme.Font,
-        Text = message,
-        TextColor3 = config.TextColor or theme.Text,
-        TextSize = textSize,
-        TextWrapped = config.TextWrapped or false,
-        TextXAlignment = config.TextXAlignment or Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        ZIndex = 203,
-        Parent = card,
+        BackgroundTransparency = 1, Position = UDim2.fromOffset(40, 0), Size = UDim2.new(1, -48, 1, 0),
+        Font = theme.FontMedium, Text = message, TextColor3 = config.TextColor or theme.Text, TextSize = textSize,
+        TextWrapped = config.TextWrapped ~= false, TextXAlignment = config.TextXAlignment or Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center, ZIndex = 203, Parent = card,
     })
 
     local obj = { __type = "Notification", UI = holder, Card = card, Label = label, Closed = false }
-
     function obj:Close()
         if self.Closed then return end
         self.Closed = true
-        Tween(card, 0.24, {
-            Position = UDim2.fromOffset(-(width + 14), 0),
-            BackgroundTransparency = 1,
-        }, EASE_SOFT, Enum.EasingDirection.In)
-        Tween(label, 0.24, { TextTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
-        Tween(border, 0.24, { Transparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
+        Tween(card, 0.24, { Position = UDim2.fromOffset(-(width + 18), 0), BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
+        Tween(label, 0.2, { TextTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
+        Tween(border, 0.2, { Transparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
         task.delay(0.28, function() if holder then holder:Destroy() end end)
     end
 
     table.insert(self.Notifications, obj)
     task.defer(function()
-        Tween(card, 0.28, { Position = UDim2.fromOffset(0, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
+        Tween(card, 0.3, { Position = UDim2.fromOffset(0, 0) }, EASE_BOUNCE, Enum.EasingDirection.Out)
+        PopIn(badge, 0.06)
     end)
 
     if config.Duration ~= false then
-        task.delay(config.Duration or 2.5, function()
-            if not obj.Closed then obj:Close() end
-        end)
+        task.delay(config.Duration or 3, function() if not obj.Closed then obj:Close() end end)
     end
     return obj
 end
@@ -2342,8 +2468,8 @@ function Window:Dialog(config)
         ZIndex = 101,
         Parent = overlay,
     })
-    Corner(dialog, config.Corner or 10)
-    Stroke(dialog, theme.Border, 1, 0.5)
+    Corner(dialog, config.Corner or 18)
+    CuteStroke(dialog, theme.Border, 0.12)
     Padding(dialog, 14, 14, 14, 14)
 
     local content = New("Frame", {
@@ -2358,8 +2484,8 @@ function Window:Dialog(config)
         BackgroundTransparency = 1,
         Text = config.Title or "Dialog",
         TextColor3 = theme.Text,
-        TextSize = 14,
-        Font = theme.FontMedium,
+        TextSize = 15,
+        Font = theme.FontDisplay or theme.FontBold,
         Size = UDim2.new(1, 0, 0, 22),
         TextXAlignment = Enum.TextXAlignment.Left,
         ZIndex = 102,
@@ -2418,7 +2544,7 @@ function Window:Dialog(config)
             ZIndex = 103,
             Parent = buttons,
         })
-        Corner(b, 6)
+        Corner(b, 10)
 
         b.MouseEnter:Connect(function()
             HoverTween(b, 0.22, { BackgroundColor3 = theme.AccentHover })
@@ -2464,8 +2590,8 @@ function Window:Popup(config)
         ZIndex = 90,
         Parent = self.ScreenGui,
     })
-    Corner(popup, config.Corner or 7)
-    Stroke(popup, theme.Border, 1, 0.5)
+    Corner(popup, config.Corner or 15)
+    CuteStroke(popup, theme.Border, 0.14)
     Padding(popup, 12, 12, 12, 12)
 
     local title = New("TextLabel", {
@@ -2565,6 +2691,7 @@ function PebbleUI:CreateWindow(config)
         Parent = screen,
     })
     Corner(main, corner)
+    CuteStroke(main, self.Theme.Border, 0.12)
     self.Main = main
 
     local mainGrad = New("UIGradient", {
@@ -2580,16 +2707,34 @@ function PebbleUI:CreateWindow(config)
     local sidebar = New("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = self.Theme.Sidebar,
-        BackgroundTransparency = self.BackgroundTransparency * 0.6,
+        BackgroundTransparency = 0,
         BorderSizePixel = 0,
-        Size = UDim2.new(0, sidebarWidth, 1, 0),
+        Position = UDim2.fromOffset(10, 10),
+        Size = UDim2.new(0, sidebarWidth - 10, 1, -20),
         Parent = main,
     })
-    Corner(sidebar, corner)
+    Corner(sidebar, math.max(14, corner - 4))
+    CuteStroke(sidebar, self.Theme.SidebarDivider, 0.35)
     self.Sidebar = sidebar
+
+    local brand = New("Frame", {
+        Name = "Brand", BackgroundColor3 = self.Theme.Paper, BorderSizePixel = 0,
+        Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 0, 38), Parent = sidebar,
+    })
+    Corner(brand, 12)
+    local brandIcon = CreateIcon(config.Icon or Defaults.Icon, 15, self.Theme.Accent, 3)
+    brandIcon.AnchorPoint = Vector2.new(0, 0.5); brandIcon.Position = UDim2.new(0, 10, 0.5, 0); brandIcon.Parent = brand
+    New("TextLabel", {
+        BackgroundTransparency = 1, Text = config.BrandText or "o' feeling",
+        TextColor3 = self.Theme.Accent, TextSize = 13, Font = self.Theme.FontDisplay or self.Theme.FontBold,
+        Position = UDim2.fromOffset(32, 0), Size = UDim2.new(1, -38, 1, 0),
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = brand,
+    })
+    PopIn(brand, 0.05)
 
     New("Frame", {
         Name = "SidebarRightMask",
+        Visible = false,
         BackgroundColor3 = self.Theme.Sidebar,
         BackgroundTransparency = self.BackgroundTransparency * 0.6,
         BorderSizePixel = 0,
@@ -2601,6 +2746,7 @@ function PebbleUI:CreateWindow(config)
 
     New("Frame", {
         Name = "Divider",
+        Visible = false,
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, 0, 0, 0),
         Size = UDim2.new(0, 1, 1, 0),
@@ -2612,8 +2758,8 @@ function PebbleUI:CreateWindow(config)
     local sidebarList = New("Frame", {
         Name = "SidebarList",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(25, 31),
-        Size = UDim2.new(1, -25, 1, -40),
+        Position = UDim2.fromOffset(12, 58),
+        Size = UDim2.new(1, -12, 1, -68),
         Parent = sidebar,
     })
     List(sidebarList, 0)
@@ -2622,8 +2768,8 @@ function PebbleUI:CreateWindow(config)
     local topbar = New("Frame", {
         Name = "Topbar",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(sidebarWidth + 10, 0),
-        Size = UDim2.new(1, -(sidebarWidth + 10), 0, topHeight),
+        Position = UDim2.fromOffset(sidebarWidth + 18, 6),
+        Size = UDim2.new(1, -(sidebarWidth + 28), 0, topHeight),
         Parent = main,
     })
     self.Topbar = topbar
@@ -2632,12 +2778,12 @@ function PebbleUI:CreateWindow(config)
         BackgroundTransparency = 1,
         Text = self.Title,
         TextColor3 = self.Theme.TopbarText,
-        TextSize = 14,
-        Font = self.Theme.FontMedium,
-        Position = UDim2.fromOffset(0, 7),
-        Size = UDim2.new(1, -90, 0, 25),
-        TextXAlignment = Enum.TextXAlignment.Right,
-        TextTransparency = config.TopbarTextTransparency or 0.25,
+        TextSize = 18,
+        Font = self.Theme.FontDisplay or self.Theme.FontBold,
+        Position = UDim2.fromOffset(4, 7),
+        Size = UDim2.new(1, -90, 0, 28),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTransparency = config.TopbarTextTransparency or 0,
         Parent = topbar,
     })
     self.TitleLabel = titleLabel
@@ -2646,32 +2792,33 @@ function PebbleUI:CreateWindow(config)
         Name = "CloseButton",
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -10, 0, 10),
-        Size = UDim2.fromOffset(22, 22),
-        BackgroundTransparency = 1,
+        Size = UDim2.fromOffset(28, 28),
+        BackgroundColor3 = self.Theme.Paper,
+        BackgroundTransparency = 0,
         Text = "",
         AutoButtonColor = false,
         ZIndex = 50,
         Parent = main,
     })
+    Corner(closeBtn, 10)
+    CuteStroke(closeBtn, self.Theme.Border, 0.25)
     self.CloseButton = closeBtn
 
     local closeIcon = CreateIcon("x", 14, self.Theme.TopbarIcon, 51)
     closeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
     closeIcon.Position = UDim2.fromScale(0.5, 0.5)
-    closeIcon.ImageTransparency = config.TopbarIconTransparency or 0.35
+    closeIcon.ImageTransparency = config.TopbarIconTransparency or 0.08
     closeIcon.Parent = closeBtn
 
     closeBtn.MouseEnter:Connect(function()
-        HoverTween(closeIcon, 0.25, {
-            ImageColor3 = self.Theme.TopbarIconHover,
-            ImageTransparency = 0.05,
-        })
+        HoverTween(closeIcon, 0.25, { ImageColor3 = self.Theme.TopbarIconHover, ImageTransparency = 0.05 })
+        HoverTween(closeBtn, 0.22, { BackgroundColor3 = self.Theme.SkySoft })
+        HoverScale(closeBtn, 1.04)
     end)
     closeBtn.MouseLeave:Connect(function()
-        HoverTween(closeIcon, 0.28, {
-            ImageColor3 = self.Theme.TopbarIcon,
-            ImageTransparency = config.TopbarIconTransparency or 0.35,
-        })
+        HoverTween(closeIcon, 0.28, { ImageColor3 = self.Theme.TopbarIcon, ImageTransparency = config.TopbarIconTransparency or 0.35 })
+        HoverTween(closeBtn, 0.24, { BackgroundColor3 = self.Theme.Paper })
+        RestScale(closeBtn)
     end)
     closeBtn.MouseButton1Click:Connect(function()
         Tween(main, 0.22, {
@@ -2685,8 +2832,8 @@ function PebbleUI:CreateWindow(config)
     local contentHost = New("Frame", {
         Name = "ContentHost",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(sidebarWidth + 10, topHeight),
-        Size = UDim2.new(1, -(sidebarWidth + 15), 1, -topHeight),
+        Position = UDim2.fromOffset(sidebarWidth + 18, topHeight + 3),
+        Size = UDim2.new(1, -(sidebarWidth + 28), 1, -(topHeight + 13)),
         Parent = main,
     })
     self.ContentHost = contentHost
@@ -2695,13 +2842,25 @@ function PebbleUI:CreateWindow(config)
         Name = "NotificationHolder",
         BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(0, 0),
-        Position = UDim2.fromOffset(2, 2),
+        Position = UDim2.fromOffset(12, 12),
         Size = UDim2.fromOffset(520, 400),
         ZIndex = 200,
         Parent = screen,
     })
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
+
+    -- Soft launch animation for the entire window.
+    main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
+    local mainScale = EnsureScale(main)
+    mainScale.Scale = 0.965
+    task.defer(function()
+        Tween(main, 0.28, { BackgroundTransparency = self.BackgroundTransparency }, EASE_SOFT, Enum.EasingDirection.Out)
+        Tween(mainScale, 0.36, { Scale = 1.015 }, EASE_BOUNCE, Enum.EasingDirection.Out)
+        task.delay(0.2, function()
+            if mainScale and mainScale.Parent then Tween(mainScale, 0.16, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out) end
+        end)
+    end)
 
     local toggleKey = config.ToggleKey or Defaults.ToggleKey
     local inputConn
