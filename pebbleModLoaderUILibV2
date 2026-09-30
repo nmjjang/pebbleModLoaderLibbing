@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.2.0-cafe" }
+local PebbleUI = { Version = "1.2.1-cafe" }
 
 --============================================================
 -- Services
@@ -307,7 +307,7 @@ PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
     Title = "Pebble Café UI",
-    Version = "v1.2.0",
+    Version = "v1.2.1",
     Icon = "sparkles",
 
     Size = UDim2.fromOffset(760, 540),
@@ -318,6 +318,9 @@ local Defaults = {
     TopbarHeight = 48,
     SidebarWidth = 158,
     CollapsedSidebarWidth = 64,
+    AutoFitSidebar = true,
+    MaxSidebarWidth = 300,
+    ExpandWindowForSidebar = true,
     CornerRadius = 20,
     LeftColumnWidth = 292,
     ColumnGap = 10,
@@ -2116,6 +2119,77 @@ function Window:_setActiveTab(tab)
     safeCallback(self.Config.OnTabChange, tab)
 end
 
+-- Keeps the cute sidebar readable when a tab/display name is wider than the default width.
+-- By default the main window grows together with the sidebar, preserving the content area width.
+function Window:_applySidebarWidth(targetWidth, animated)
+    local minWidth = self.Config.SidebarWidth or Defaults.SidebarWidth
+    local maxWidth = self.Config.MaxSidebarWidth or Defaults.MaxSidebarWidth
+    targetWidth = math.floor(clamp(tonumber(targetWidth) or minWidth, minWidth, maxWidth) + 0.5)
+
+    local current = self.SidebarWidth or minWidth
+    if targetWidth <= current then return self end
+
+    local delta = targetWidth - current
+    self.SidebarWidth = targetWidth
+
+    local sidebarSize = UDim2.new(0, targetWidth - 10, 1, -20)
+    local topbarPosition = UDim2.fromOffset(targetWidth + 18, 6)
+    local topbarSize = UDim2.new(1, -(targetWidth + 28), 0, self.TopbarHeight)
+    local contentPosition = UDim2.fromOffset(targetWidth + 18, self.TopbarHeight + 3)
+    local contentSize = UDim2.new(1, -(targetWidth + 28), 1, -(self.TopbarHeight + 13))
+
+    local duration = animated == false and 0 or 0.28
+    if duration > 0 then
+        Tween(self.Sidebar, duration, { Size = sidebarSize }, EASE_SOFT, Enum.EasingDirection.Out)
+        Tween(self.Topbar, duration, { Position = topbarPosition, Size = topbarSize }, EASE_SOFT, Enum.EasingDirection.Out)
+        Tween(self.ContentHost, duration, { Position = contentPosition, Size = contentSize }, EASE_SOFT, Enum.EasingDirection.Out)
+    else
+        self.Sidebar.Size = sidebarSize
+        self.Topbar.Position = topbarPosition
+        self.Topbar.Size = topbarSize
+        self.ContentHost.Position = contentPosition
+        self.ContentHost.Size = contentSize
+    end
+
+    if self.Config.ExpandWindowForSidebar ~= false and self.Main then
+        local currentSize = self.Main.Size
+        local targetOffset = currentSize.X.Offset + delta
+        local maxSize = self.Config.MaxSize or Defaults.MaxSize
+        if currentSize.X.Scale == 0 and maxSize then
+            targetOffset = math.min(targetOffset, maxSize.X)
+        end
+        local targetMainSize = UDim2.new(currentSize.X.Scale, targetOffset, currentSize.Y.Scale, currentSize.Y.Offset)
+        if duration > 0 then
+            Tween(self.Main, duration, { Size = targetMainSize }, EASE_SOFT, Enum.EasingDirection.Out)
+        else
+            self.Main.Size = targetMainSize
+        end
+    end
+
+    return self
+end
+
+function Window:_fitSidebarText(text, textSize, font, hasIcon, extraPadding)
+    if self.Config.AutoFitSidebar == false then return self end
+    text = tostring(text or "")
+    if text == "" then return self end
+
+    local ok, bounds = pcall(function()
+        return TextService:GetTextSize(
+            text,
+            textSize or 12,
+            font or self.Theme.FontMedium,
+            Vector2.new(10000, 100)
+        )
+    end)
+    if not ok or not bounds then return self end
+
+    -- Accounts for sidebar/list/button paddings, optional tab icon and the right accent pill.
+    local chrome = hasIcon and 82 or 62
+    local required = math.ceil(bounds.X + chrome + (extraPadding or 0))
+    return self:_applySidebarWidth(required, true)
+end
+
 function Window:TabDivider(config)
     config = config or {}
     local holder = New("Frame", {
@@ -2160,6 +2234,9 @@ function Window:Tab(config)
     local title = config.Title or "Tab"
     local theme = self.Theme
 
+    -- Grow the sidebar before creating the visual row so long tab names never get crushed.
+    self:_fitSidebarText(title, config.TextSize or 12, theme.FontMedium, config.Icon ~= nil)
+
     local button = New("TextButton", {
         Name = title,
         BackgroundColor3 = theme.Paper,
@@ -2192,6 +2269,7 @@ function Window:Tab(config)
         Size = UDim2.new(1, -(icon and 40 or 20), 1, 0),
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = button,
     })
 
@@ -2664,6 +2742,8 @@ function PebbleUI:CreateWindow(config)
     local sidebarWidth = config.SidebarWidth or Defaults.SidebarWidth
     local topHeight = config.TopbarHeight or Defaults.TopbarHeight
     local corner = config.CornerRadius or Defaults.CornerRadius
+    self.SidebarWidth = sidebarWidth
+    self.TopbarHeight = topHeight
 
     local guiName = config.Name or ("PebbleUI_" .. tostring(math.random(100000, 999999)))
     local existing = CoreGui:FindFirstChild(guiName)
@@ -2719,17 +2799,72 @@ function PebbleUI:CreateWindow(config)
 
     local brand = New("Frame", {
         Name = "Brand", BackgroundColor3 = self.Theme.Paper, BorderSizePixel = 0,
-        Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 0, 38), Parent = sidebar,
+        Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 0, 48), Parent = sidebar,
     })
-    Corner(brand, 12)
-    local brandIcon = CreateIcon(config.Icon or Defaults.Icon, 15, self.Theme.Accent, 3)
-    brandIcon.AnchorPoint = Vector2.new(0, 0.5); brandIcon.Position = UDim2.new(0, 10, 0.5, 0); brandIcon.Parent = brand
-    New("TextLabel", {
-        BackgroundTransparency = 1, Text = config.BrandText or "o' feeling",
-        TextColor3 = self.Theme.Accent, TextSize = 13, Font = self.Theme.FontDisplay or self.Theme.FontBold,
-        Position = UDim2.fromOffset(32, 0), Size = UDim2.new(1, -38, 1, 0),
-        TextXAlignment = Enum.TextXAlignment.Left, Parent = brand,
+    Corner(brand, 14)
+    CuteStroke(brand, self.Theme.Border, 0.4)
+    self.Brand = brand
+
+    -- Pastel circular portrait instead of a generic icon.
+    local avatarHolder = New("Frame", {
+        Name = "AvatarHolder",
+        BackgroundColor3 = config.AvatarBackgroundColor or self.Theme.SkySoft,
+        BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0, 0.5),
+        Position = UDim2.new(0, 8, 0.5, 0),
+        Size = UDim2.fromOffset(34, 34),
+        ZIndex = 3,
+        Parent = brand,
     })
+    Corner(avatarHolder, 99)
+    CuteStroke(avatarHolder, config.AvatarStrokeColor or self.Theme.Sky, 0.18)
+
+    local headshot = New("ImageLabel", {
+        Name = "Headshot",
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(2, 2),
+        Size = UDim2.new(1, -4, 1, -4),
+        Image = "",
+        ScaleType = Enum.ScaleType.Crop,
+        ZIndex = 4,
+        Parent = avatarHolder,
+    })
+    Corner(headshot, 99)
+    self.Headshot = headshot
+
+    local displayName = config.BrandText or LocalPlayer.DisplayName or LocalPlayer.Name
+    local brandLabel = New("TextLabel", {
+        Name = "DisplayName",
+        BackgroundTransparency = 1,
+        Text = displayName,
+        TextColor3 = self.Theme.Accent,
+        TextSize = 13,
+        Font = self.Theme.FontDisplay or self.Theme.FontBold,
+        Position = UDim2.fromOffset(50, 0),
+        Size = UDim2.new(1, -58, 1, 0),
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        Parent = brand,
+    })
+    self.BrandLabel = brandLabel
+
+    task.spawn(function()
+        local okThumb, thumb = pcall(function()
+            local image = Players:GetUserThumbnailAsync(
+                LocalPlayer.UserId,
+                Enum.ThumbnailType.HeadShot,
+                Enum.ThumbnailSize.Size100x100
+            )
+            return image
+        end)
+        if okThumb and thumb and headshot.Parent then
+            headshot.Image = thumb
+            headshot.ImageTransparency = 1
+            Tween(headshot, 0.32, { ImageTransparency = 0 }, EASE_SOFT, Enum.EasingDirection.Out)
+        end
+    end)
+
     PopIn(brand, 0.05)
 
     New("Frame", {
@@ -2758,8 +2893,8 @@ function PebbleUI:CreateWindow(config)
     local sidebarList = New("Frame", {
         Name = "SidebarList",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(12, 58),
-        Size = UDim2.new(1, -12, 1, -68),
+        Position = UDim2.fromOffset(12, 68),
+        Size = UDim2.new(1, -12, 1, -78),
         Parent = sidebar,
     })
     List(sidebarList, 0)
@@ -2837,6 +2972,9 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.ContentHost = contentHost
+
+    -- The profile card follows the same auto-fit rules as tabs, so long display names stay readable.
+    self:_fitSidebarText(displayName, 13, self.Theme.FontDisplay or self.Theme.FontBold, true, 12)
 
     local notifHolder = New("Frame", {
         Name = "NotificationHolder",
