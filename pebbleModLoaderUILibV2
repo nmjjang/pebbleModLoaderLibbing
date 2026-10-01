@@ -1284,27 +1284,35 @@ end
 function Section:Keybind(config)
     config = config or {}
     local theme = self.Window.Theme
-    config.RightReserve = config.RightReserve or 70
+    local displayHeight = config.DisplayHeight or 28
+    local displayRightPadding = config.DisplayRightPadding or 0
+    local displayMinWidth = config.DisplayWidth or displayHeight
+    local emptyText = config.Display or config.Text or "="
+    local requestedReserve = config.RightReserve or 0
+    config.RightReserve = math.max(requestedReserve, displayMinWidth + displayRightPadding + 10)
 
-    local row, title = MakeRow(self, config, config.Height or 30)
+    local row, title, desc = MakeRow(self, config, RowHeight(config, math.max(30, displayHeight)))
 
     local display = New("TextButton", {
-        BackgroundColor3 = theme.Surface2,
+        Name = "StandaloneKeybind",
+        BackgroundColor3 = config.KeyBackgroundColor or theme.Surface2,
         BackgroundTransparency = 0,
-        Text = config.Display or config.Text or "=",
-        TextColor3 = config.KeyTextColor or theme.DimText,
-        TextSize = config.KeyTextSize or 11,
-        Font = theme.Font,
+        BorderSizePixel = 0,
+        Text = emptyText,
+        TextColor3 = config.KeyTextColor or theme.Accent,
+        TextSize = config.KeyTextSize or 13,
+        Font = config.KeyFont or theme.FontMedium,
         AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -24, 0.5, 0),
-        Size = UDim2.fromOffset(config.DisplayWidth or 45, 20),
-        TextXAlignment = Enum.TextXAlignment.Right,
+        Position = UDim2.new(1, -displayRightPadding, 0.5, 0),
+        Size = UDim2.fromOffset(displayMinWidth, displayHeight),
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
         AutoButtonColor = false,
         ZIndex = 8,
         Parent = row,
     })
-    Corner(display, 8)
-    CuteStroke(display, theme.Border, 0.35)
+    Corner(display, config.DisplayCorner or 7)
+    local displayStroke = CuteStroke(display, config.KeyBorderColor or theme.Accent, 0.55)
 
     local state = {
         Value = config.Value or config.Default or nil,
@@ -1313,17 +1321,44 @@ function Section:Keybind(config)
         Blacklist = config.Blacklist or { Enum.KeyCode.Escape },
     }
 
-    local obj = { __type = "Keybind", UIElements = { Row = row, Title = title, Display = display } }
+    local obj = { __type = "Keybind", UIElements = { Row = row, Title = title, Display = display, Border = displayStroke } }
+
+    local hovered = false
 
     local function render()
         if state.Picking then
             display.Text = "..."
             display.TextColor3 = theme.Accent
         else
-            display.Text = typeof(state.Value) == "EnumItem" and state.Value.Name or (config.Display or "=")
-            display.TextColor3 = config.KeyTextColor or theme.DimText
+            display.Text = typeof(state.Value) == "EnumItem" and state.Value.Name or emptyText
+            display.TextColor3 = config.KeyTextColor or theme.Accent
         end
+
+        -- Keep short keys square; allow longer names to fit without overlapping the labels.
+        local textBounds = TextService:GetTextSize(display.Text, display.TextSize,
+            display.Font, Vector2.new(10000, displayHeight))
+        local displayWidth = math.max(displayMinWidth, displayHeight, math.ceil(textBounds.X) + 12)
+        display.Size = UDim2.fromOffset(displayWidth, displayHeight)
+        local reserve = math.max(requestedReserve, displayWidth + displayRightPadding + 10)
+        title.Size = UDim2.new(1, -(title.Position.X.Offset + reserve), title.Size.Y.Scale, title.Size.Y.Offset)
+        if desc then
+            desc.Size = UDim2.new(1, -(desc.Position.X.Offset + reserve), desc.Size.Y.Scale, desc.Size.Y.Offset)
+        end
+
+        local highlighted = state.Picking or (hovered and not state.Locked)
+        display.BackgroundColor3 = highlighted and (config.KeyHoverColor or theme.SurfaceHover)
+            or (config.KeyBackgroundColor or theme.Surface2)
+        displayStroke.Transparency = highlighted and 0.18 or 0.55
     end
+
+    display.MouseEnter:Connect(function()
+        hovered = true
+        render()
+    end)
+    display.MouseLeave:Connect(function()
+        hovered = false
+        render()
+    end)
 
     function obj:Set(v, fire)
         state.Value = v
