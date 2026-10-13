@@ -4949,6 +4949,16 @@ do
         obj.MouseButton1Click:Connect(callback)
         return obj
     end
+    local function setButtonLabelLayout(button, leftInset, rightInset, textAlignment)
+        if not button then return end
+        local label = button:FindFirstChild("ButtonLabel")
+        if not label then return end
+        leftInset = leftInset or 0
+        rightInset = rightInset or 8
+        label.Position = UDim2.fromOffset(leftInset, 0)
+        label.Size = UDim2.new(1, -(leftInset + rightInset), 1, 0)
+        label.TextXAlignment = textAlignment or Enum.TextXAlignment.Left
+    end
     local function editBox(window,parent,text,position,size,z,callback)
         local box = New("TextBox", { Text = tostring(text or ""), ClearTextOnFocus = false, TextSize = 10, Font = window.Theme.Font,
             TextColor3 = window.Theme.SubText, BackgroundColor3 = window.Theme.Input, BorderSizePixel = 0,
@@ -5364,8 +5374,8 @@ do
             local heading=textButton(self,ui.PaletteList,cat,UDim2.new(),UDim2.new(1,-4,0,28),function()
                 self._bpCategoryCollapsed[cat]=not self._bpCategoryCollapsed[cat]; self:_RenderBlueprintPalette()
             end,false,44)
-            heading.LayoutOrder=order; heading.TextXAlignment=Enum.TextXAlignment.Left
-            Padding(heading,47,5,0,0); heading.TextColor3=COLORS[cat] or COLORS.Other
+            heading.LayoutOrder=order; heading.TextColor3=COLORS[cat] or COLORS.Other
+            setButtonLabelLayout(heading,47,8,Enum.TextXAlignment.Left)
             bpChevron(self,heading,self._bpCategoryCollapsed[cat],9,8,45)
             bpIcon(self,heading,BP_CATEGORY_ICONS[cat] or "box",UDim2.fromOffset(27,7),14,"IconSelected",45)
             if not self._bpCategoryCollapsed[cat] or query~="" then
@@ -5381,7 +5391,8 @@ do
                         ui.Palette.Visible=false; self._bpAddPosition=nil; self:_SelectBlueprintNode(node.Id)
                         self:_BlueprintStatus("Node added: " .. itemDef.Title)
                     end,false,44)
-                    item.LayoutOrder=order; item.BackgroundTransparency=0.7; item.TextXAlignment=Enum.TextXAlignment.Left; Padding(item,35,5,0,0)
+                    item.LayoutOrder=order; item.BackgroundTransparency=0.7
+                    setButtonLabelLayout(item,35,8,Enum.TextXAlignment.Left)
                     bpIcon(self,item,BP_CATEGORY_ICONS[def.Category] or "box",UDim2.fromOffset(12,7),15,"IconSelected",45)
                     self:_BlueprintTooltip(item,def.Description)
                 end
