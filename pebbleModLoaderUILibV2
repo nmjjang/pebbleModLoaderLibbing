@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.5.0-blueprints" }
+local PebbleUI = { Version = "1.6.0-lucide-blueprints" }
 
 --============================================================
 -- Services
@@ -316,7 +316,7 @@ PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
     Title = "Pebble UI",
-    Version = "v1.5.0",
+    Version = "v1.6.0",
     Icon = "sparkles",
 
     Size = UDim2.fromOffset(780, 520),
@@ -4880,6 +4880,29 @@ do
         BindTheme(window,obj,"TextColor3",key or "Text"); BindTheme(window,obj,"Font",font or "Font")
         return obj
     end
+    -- Shared Lucide icon system for the Blueprint workspace.
+    local BP_ICON = {
+        ["+ Node"]="plus", ["▶ Run"]="play", ["■"]="square", ["✓"]="check-check",
+        ["⤢"]="maximize", ["−"]="minus", ["+"]="plus", ["↑"]="upload",
+        ["↓"]="download", ["✎"]="pencil", ["⌫"]="trash-2", ["×"]="x",
+        ["Save"]="save", ["Script"]="file-code-2", ["Blueprint"]="workflow",
+    }
+    local BP_CATEGORY_ICONS = {
+        Logic="git-branch", Values="variable", Services="boxes", GUI="panels-top-left",
+        Sounds="volume-2", Other="box", Events="zap", Math="calculator",
+    }
+    local function bpIcon(window,parent,name,position,size,colorKey,z)
+        local icon = CreateIcon(name,size or 15,window.Theme[colorKey or "Icon"],z or parent.ZIndex+1)
+        icon.Position=position or UDim2.new()
+        icon.Parent=parent
+        BindTheme(window,icon,"ImageColor3",colorKey or "Icon")
+        return icon
+    end
+    local function bpChevron(window,parent,collapsed,x,y,z)
+        local icon=bpIcon(window,parent,collapsed and "chevron-right" or "chevron-down",
+            UDim2.fromOffset(x,y),13,"MutedText",z)
+        return icon
+    end
     local function textButton(window,parent,text,position,size,callback,primary,z)
         local obj = New("TextButton", { Text = text, TextSize = 11, Font = window.Theme.FontMedium,
             TextColor3 = primary and window.Theme.AccentText or window.Theme.Text, BackgroundColor3 = primary and window.Theme.Accent or window.Theme.Surface2,
@@ -4889,6 +4912,23 @@ do
         BindTheme(window,obj,"TextColor3",primary and "AccentText" or "Text"); BindTheme(window,obj,"Font","FontMedium")
         obj.MouseEnter:Connect(function() HoverTween(obj,0.16,{ BackgroundColor3 = primary and window.Theme.AccentHover or window.Theme.SurfaceHover }) end)
         obj.MouseLeave:Connect(function() HoverTween(obj,0.18,{ BackgroundColor3 = primary and window.Theme.Accent or window.Theme.Surface2 }) end)
+        local glyph=BP_ICON[text]
+        if glyph then
+            local iconSize=14
+            local icon=bpIcon(window,obj,glyph,UDim2.new(0.5,-iconSize/2,0.5,-iconSize/2),iconSize,
+                primary and "AccentText" or "IconSelected",obj.ZIndex+1)
+            obj:SetAttribute("LucideIcon",glyph)
+            local isIconOnly = text == "■" or text == "✓" or text == "⤢" or text == "−" or text == "+"
+                or text == "↑" or text == "↓" or text == "✎" or text == "⌫" or text == "×"
+            if isIconOnly then
+                obj.Text=""
+            else
+                icon.Position=UDim2.new(0,11,0.5,-iconSize/2)
+                obj.TextXAlignment=Enum.TextXAlignment.Left
+                local padding= obj:FindFirstChildOfClass("UIPadding")
+                if not padding then padding=Padding(obj,32,7,0,0) end
+            end
+        end
         obj.MouseButton1Click:Connect(callback)
         return obj
     end
@@ -4983,7 +5023,7 @@ do
             local row = New("TextButton", { Text = "", AutoButtonColor = false, BorderSizePixel = 0, BackgroundColor3 = self.Theme.SurfaceHover,
                 BackgroundTransparency = self.ActiveBlueprint == record and 0 or 1, Size = UDim2.new(1,-4,0,29), LayoutOrder = i, ZIndex = 12, Parent = list })
             Corner(row,4)
-            local icon = label(self,row,"◇",UDim2.fromOffset(19,0),UDim2.fromOffset(18,29),"SyntaxBuiltin","Font",17,14)
+            local icon = bpIcon(self,row,"workflow",UDim2.fromOffset(20,7),15,"IconSelected",14)
             label(self,row,record.Name,UDim2.fromOffset(40,0),UDim2.new(1,-54,1,0),self.ActiveBlueprint == record and "Text" or "SubText","FontMedium",11,14)
             if record.Dirty then label(self,row,"•",UDim2.new(1,-13,0,0),UDim2.fromOffset(10,29),"Accent","Font",14,14) end
             if self.ActiveBlueprint == record then
@@ -5105,7 +5145,8 @@ do
                 local stroke = Stroke(frame,def.Color,1,n.Id == self._bpSelection and 0 or 0.55)
                 local header = New("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = def.Color, BackgroundTransparency = 0.85,
                     BorderSizePixel = 0, Size = UDim2.new(1,0,0,36), ZIndex = 25, Parent = frame })
-                label(self,header,def.Title,UDim2.fromOffset(12,0),UDim2.new(1,-60,1,0),"Text","FontMedium",12,26)
+                bpIcon(self,header,BP_CATEGORY_ICONS[def.Category] or "box",UDim2.fromOffset(11,10),16,"IconSelected",26)
+                label(self,header,def.Title,UDim2.fromOffset(35,0),UDim2.new(1,-83,1,0),"Text","FontMedium",12,26)
                 local close = textButton(self,header,"×",UDim2.new(1,-30,0,6),UDim2.fromOffset(24,24),function() self:DeleteBlueprintNode(r,n.Id) end,false,27)
                 close.BackgroundTransparency = 1
                 self:_BlueprintTooltip(header,def.Description .. (def.Disabled and ("\n" .. def.Disabled) or ""))
@@ -5139,7 +5180,7 @@ do
                 local nodeUI = { Frame = frame, Stroke = stroke, Scroll = scroll, Endpoints = {} }; self._bpNodeUI[n.Id] = nodeUI
                 local function dot(p,direction,rowFrame)
                     local color = p.Type == "Exec" and self.Theme.Text or def.Color
-                    local button = New("TextButton", { Name = direction .. ":" .. p.Name, Text = p.Type == "Exec" and "›" or "", TextColor3 = self.Theme.Surface,
+                    local button = New("TextButton", { Name = direction .. ":" .. p.Name, Text = "", TextColor3 = self.Theme.Surface,
                         TextSize = 10, Font = self.Theme.FontBold, AutoButtonColor = false, BorderSizePixel = 0, BackgroundColor3 = color,
                         Position = direction == "in" and UDim2.fromOffset(7,10) or UDim2.new(1,-19,0,10), Size = UDim2.fromOffset(12,12), ZIndex = 28, Parent = rowFrame })
                     Corner(button,p.Type == "Exec" and 2 or 20)
@@ -5303,10 +5344,13 @@ do
             local cat=category; local defs=groups[cat]
             table.sort(defs,function(a,b) return a.Title<b.Title end)
             order=order+1
-            local heading=textButton(self,ui.PaletteList,(self._bpCategoryCollapsed[cat] and "▸ " or "▾ ") .. cat,UDim2.new(),UDim2.new(1,-4,0,28),function()
+            local heading=textButton(self,ui.PaletteList,cat,UDim2.new(),UDim2.new(1,-4,0,28),function()
                 self._bpCategoryCollapsed[cat]=not self._bpCategoryCollapsed[cat]; self:_RenderBlueprintPalette()
             end,false,44)
-            heading.LayoutOrder=order; heading.TextXAlignment=Enum.TextXAlignment.Left; Padding(heading,10,5,0,0); heading.TextColor3=COLORS[cat] or COLORS.Other
+            heading.LayoutOrder=order; heading.TextXAlignment=Enum.TextXAlignment.Left
+            Padding(heading,47,5,0,0); heading.TextColor3=COLORS[cat] or COLORS.Other
+            bpChevron(self,heading,self._bpCategoryCollapsed[cat],9,8,45)
+            bpIcon(self,heading,BP_CATEGORY_ICONS[cat] or "box",UDim2.fromOffset(27,7),14,"IconSelected",45)
             if not self._bpCategoryCollapsed[cat] or query~="" then
                 for _,def in ipairs(defs) do
                     local itemDef=def; order=order+1
@@ -5320,8 +5364,8 @@ do
                         ui.Palette.Visible=false; self._bpAddPosition=nil; self:_SelectBlueprintNode(node.Id)
                         self:_BlueprintStatus("Node added: " .. itemDef.Title)
                     end,false,44)
-                    item.LayoutOrder=order; item.BackgroundTransparency=0.7; item.TextXAlignment=Enum.TextXAlignment.Left; Padding(item,20,5,0,0)
-                    New("Frame",{ BackgroundColor3=def.Color,BorderSizePixel=0,Position=UDim2.fromOffset(8,10),Size=UDim2.fromOffset(3,9),ZIndex=45,Parent=item })
+                    item.LayoutOrder=order; item.BackgroundTransparency=0.7; item.TextXAlignment=Enum.TextXAlignment.Left; Padding(item,35,5,0,0)
+                    bpIcon(self,item,BP_CATEGORY_ICONS[def.Category] or "box",UDim2.fromOffset(12,7),15,"IconSelected",45)
                     self:_BlueprintTooltip(item,def.Description)
                 end
             end
@@ -5370,7 +5414,7 @@ do
         local scale=New("UIScale",{ Scale=0.85,Parent=nodeLayer })
         local status=label(self,editor,"",UDim2.new(0,10,1,-29),UDim2.new(1,-82,0,28),"MutedText","Font",10,31)
         local zoom=label(self,editor,"85%",UDim2.new(1,-68,1,-29),UDim2.fromOffset(58,28),"DimText","Font",10,31); zoom.TextXAlignment=Enum.TextXAlignment.Right
-        local empty=label(self,board,"Empty board\nClick + Node to start",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(260,70),"MutedText","Font",12,29)
+        local empty=label(self,board,"Empty board\nClick Add Node to start",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(260,70),"MutedText","Font",12,29)
         empty.AnchorPoint=Vector2.new(0.5,0.5); empty.TextXAlignment=Enum.TextXAlignment.Center; empty.TextWrapped=true
         local palette=New("Frame",{ Name="NodePalette",BackgroundColor3=self.Theme.Popup,BorderSizePixel=0,Position=UDim2.fromOffset(10,76),Size=UDim2.new(0,244,1,-116),Visible=false,ClipsDescendants=true,ZIndex=40,Parent=editor })
         Corner(palette,6); BindTheme(self,palette,"BackgroundColor3","Popup"); Stroke(palette,self.Theme.Border,1,0.1)
@@ -5383,22 +5427,22 @@ do
         local tooltip=New("TextLabel",{ BackgroundColor3=self.Theme.Popup,BackgroundTransparency=0.04,BorderSizePixel=0,Text="",TextWrapped=true,TextSize=11,Font=self.Theme.Font,TextColor3=self.Theme.Text,Size=UDim2.fromOffset(280,80),Visible=false,ZIndex=6800,Parent=self.ScreenGui })
         Corner(tooltip,6); Padding(tooltip,10,10,8,8); Stroke(tooltip,self.Theme.Border,1,0.2); BindTheme(self,tooltip,"BackgroundColor3","Popup"); BindTheme(self,tooltip,"TextColor3","Text")
         self.BlueprintUI={ Title=title,Board=board,Grid=grid,WireLayer=wireLayer,NodeLayer=nodeLayer,Scale=scale,Status=status,Zoom=zoom,Empty=empty,Palette=palette,Search=search,PaletteList=paletteList,Tooltip=tooltip }
-        local add=textButton(self,toolbar,"+ Node",UDim2.fromOffset(0,0),UDim2.fromOffset(65,27),function() if palette.Visible then palette.Visible=false else self:_OpenBlueprintPalette() end end,false,33)
-        local run=textButton(self,toolbar,"▶ Run",UDim2.fromOffset(71,0),UDim2.fromOffset(66,27),function() self:RunBlueprint() end,true,33)
-        local stop=textButton(self,toolbar,"■",UDim2.fromOffset(143,0),UDim2.fromOffset(29,27),function() self:StopBlueprint() end,false,33)
-        local validate=textButton(self,toolbar,"✓",UDim2.fromOffset(178,0),UDim2.fromOffset(29,27),function()
+        local add=textButton(self,toolbar,"+ Node",UDim2.fromOffset(0,0),UDim2.fromOffset(92,27),function() if palette.Visible then palette.Visible=false else self:_OpenBlueprintPalette() end end,false,33)
+        local run=textButton(self,toolbar,"▶ Run",UDim2.fromOffset(98,0),UDim2.fromOffset(84,27),function() self:RunBlueprint() end,true,33)
+        local stop=textButton(self,toolbar,"■",UDim2.fromOffset(188,0),UDim2.fromOffset(29,27),function() self:StopBlueprint() end,false,33)
+        local validate=textButton(self,toolbar,"✓",UDim2.fromOffset(223,0),UDim2.fromOffset(29,27),function()
             local ok,errors,invalid=self:ValidateBlueprint(self.ActiveBlueprint); self.ActiveBlueprint.Invalid=invalid
             self:_BuildBlueprintBoard(); self:_BlueprintNotice(ok and "Valid graph" or errors[1],not ok)
         end,false,33)
-        local frame=textButton(self,toolbar,"⤢",UDim2.fromOffset(213,0),UDim2.fromOffset(29,27),function() self:_FrameBlueprint() end,false,33)
-        textButton(self,toolbar,"−",UDim2.fromOffset(248,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1/1.15) end,false,33)
-        textButton(self,toolbar,"+",UDim2.fromOffset(281,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1.15) end,false,33)
+        local frame=textButton(self,toolbar,"⤢",UDim2.fromOffset(258,0),UDim2.fromOffset(29,27),function() self:_FrameBlueprint() end,false,33)
+        textButton(self,toolbar,"−",UDim2.fromOffset(293,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1/1.15) end,false,33)
+        textButton(self,toolbar,"+",UDim2.fromOffset(326,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1.15) end,false,33)
         self:_BlueprintTooltip(add,"Add node · right-click on the board also opens the catalog")
         self:_BlueprintTooltip(run,"Validates and runs the graph on the client. Running again removes the previous execution.")
         self:_BlueprintTooltip(stop,"Cancels and undoes the changes and objects created by this blueprint.")
         self:_BlueprintTooltip(validate,"Check ports, required values and cycles")
         self:_BlueprintTooltip(frame,"Frame all nodes · shortcut F")
-        textButton(self,editor,"Save",UDim2.new(1,-243,0,6),UDim2.fromOffset(49,25),function() self:SaveBlueprints() end,false,33)
+        textButton(self,editor,"Save",UDim2.new(1,-259,0,6),UDim2.fromOffset(65,25),function() self:SaveBlueprints() end,false,33)
         local export=textButton(self,editor,"↑",UDim2.new(1,-188,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(false) end,false,33)
         local import=textButton(self,editor,"↓",UDim2.new(1,-155,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(true) end,false,33)
         local rename=textButton(self,editor,"✎",UDim2.new(1,-122,0,6),UDim2.fromOffset(27,25),function() self:OpenBlueprintNamePopup(self.ActiveBlueprint) end,false,33)
@@ -5568,15 +5612,15 @@ do
         if not self.ScriptExplorer or self.Config.CustomBlueprints==false then return end
         self.CustomBlueprints={}; self._blueprintsById={}; self._blueprintCounter=0; self._blueprintConnections={}; self._bpCategoryCollapsed={}
         local folder=New("TextButton",{ Name="CustomBlueprintsFolder",Text="",AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(1,-16,0,24),ZIndex=12,Parent=self.ScriptExplorer })
-        local arrow=label(self,folder,"▾",UDim2.fromOffset(2,0),UDim2.fromOffset(12,24),"MutedText","Font",13,14)
-        label(self,folder,"◇",UDim2.fromOffset(20,0),UDim2.fromOffset(16,24),"SyntaxBuiltin","Font",16,14)
+        local arrow=bpChevron(self,folder,false,2,5,14)
+        bpIcon(self,folder,"workflow",UDim2.fromOffset(20,4),16,"IconSelected",14)
         label(self,folder,"Custom Blueprints",UDim2.fromOffset(42,0),UDim2.new(1,-46,1,0),"SubText","FontMedium",11,14)
         local list=StyleScrollBar(New("ScrollingFrame",{ BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ElasticBehavior=Enum.ElasticBehavior.Never,ClipsDescendants=true,ZIndex=11,Parent=self.ScriptExplorer }),{ Thickness=2,Color=self.Theme.Scrollbar,Transparency=0.6 })
         List(list,2)
         local empty=New("TextButton",{ Text="No blueprints yet.\nClick + to create one.",AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,TextColor3=self.Theme.MutedText,TextSize=11,Font=self.Theme.Font,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,Size=UDim2.new(1,-36,0,50),ZIndex=12,Parent=self.ScriptExplorer })
         BindTheme(self,empty,"TextColor3","MutedText"); empty.MouseButton1Click:Connect(function() self:OpenBlueprintNamePopup() end)
         self.BlueprintExplorerUI={ Folder=folder,Arrow=arrow,List=list,Empty=empty }
-        folder.MouseButton1Click:Connect(function() self._blueprintsCollapsed=not self._blueprintsCollapsed; arrow.Text=self._blueprintsCollapsed and "▸" or "▾"; self:_LayoutBlueprintExplorer() end)
+        folder.MouseButton1Click:Connect(function() self._blueprintsCollapsed=not self._blueprintsCollapsed; arrow.Image=GetIcon(self._blueprintsCollapsed and "chevron-right" or "chevron-down"); self:_LayoutBlueprintExplorer() end)
         self:_CreateBlueprintEditor(); self:_LayoutBlueprintExplorer()
         local payload,err
         self._blueprintStorageFile=self.Config.BlueprintsFile
