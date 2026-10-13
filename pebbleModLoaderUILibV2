@@ -4904,31 +4904,48 @@ do
         return icon
     end
     local function textButton(window,parent,text,position,size,callback,primary,z)
-        local obj = New("TextButton", { Text = text, TextSize = 11, Font = window.Theme.FontMedium,
-            TextColor3 = primary and window.Theme.AccentText or window.Theme.Text, BackgroundColor3 = primary and window.Theme.Accent or window.Theme.Surface2,
+        local baseTextColor = primary and window.Theme.AccentText or window.Theme.Text
+        local glyph = BP_ICON[text]
+        local displayText = text
+        if text == "+ Node" then displayText = "Node"
+        elseif text == "▶ Run" then displayText = "Run" end
+        local isIconOnly = text == "■" or text == "✓" or text == "⤢" or text == "−" or text == "+"
+            or text == "↑" or text == "↓" or text == "✎" or text == "⌫" or text == "×"
+        local obj = New("TextButton", { Text = "", TextSize = 11, Font = window.Theme.FontMedium,
+            TextColor3 = baseTextColor, BackgroundColor3 = primary and window.Theme.Accent or window.Theme.Surface2,
             AutoButtonColor = false, BorderSizePixel = 0, Position = position, Size = size, ZIndex = z or parent.ZIndex+2, Parent = parent })
         Corner(obj,4)
         BindTheme(window,obj,"BackgroundColor3",primary and "Accent" or "Surface2")
-        BindTheme(window,obj,"TextColor3",primary and "AccentText" or "Text"); BindTheme(window,obj,"Font","FontMedium")
+        local icon
+        if glyph then
+            local iconSize = 14
+            local iconX = isIconOnly and 0.5 or 11
+            local anchorX = isIconOnly and 0.5 or 0
+            icon = bpIcon(window,obj,glyph,isIconOnly and UDim2.new(0.5,-iconSize/2,0.5,-iconSize/2) or UDim2.new(0,iconX,0.5,-iconSize/2),iconSize,
+                primary and "AccentText" or "IconSelected",obj.ZIndex+2)
+            icon.AnchorPoint = Vector2.new(anchorX,0)
+            obj:SetAttribute("LucideIcon",glyph)
+        end
+        local labelText = isIconOnly and "" or tostring(displayText or "")
+        local labelOffset = glyph and (isIconOnly and 0 or 31) or 0
+        local label = New("TextLabel", {
+            Name = "ButtonLabel",
+            BackgroundTransparency = 1,
+            Text = labelText,
+            TextColor3 = baseTextColor,
+            TextSize = 11,
+            Font = window.Theme.FontMedium,
+            TextXAlignment = glyph and not isIconOnly and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
+            TextYAlignment = Enum.TextYAlignment.Center,
+            Position = UDim2.fromOffset(labelOffset,0),
+            Size = UDim2.new(1, -(labelOffset + 8), 1, 0),
+            ZIndex = obj.ZIndex + 1,
+            Parent = obj,
+        })
+        BindTheme(window,label,"TextColor3",primary and "AccentText" or "Text")
+        BindTheme(window,label,"Font","FontMedium")
         obj.MouseEnter:Connect(function() HoverTween(obj,0.16,{ BackgroundColor3 = primary and window.Theme.AccentHover or window.Theme.SurfaceHover }) end)
         obj.MouseLeave:Connect(function() HoverTween(obj,0.18,{ BackgroundColor3 = primary and window.Theme.Accent or window.Theme.Surface2 }) end)
-        local glyph=BP_ICON[text]
-        if glyph then
-            local iconSize=14
-            local icon=bpIcon(window,obj,glyph,UDim2.new(0.5,-iconSize/2,0.5,-iconSize/2),iconSize,
-                primary and "AccentText" or "IconSelected",obj.ZIndex+1)
-            obj:SetAttribute("LucideIcon",glyph)
-            local isIconOnly = text == "■" or text == "✓" or text == "⤢" or text == "−" or text == "+"
-                or text == "↑" or text == "↓" or text == "✎" or text == "⌫" or text == "×"
-            if isIconOnly then
-                obj.Text=""
-            else
-                icon.Position=UDim2.new(0,11,0.5,-iconSize/2)
-                obj.TextXAlignment=Enum.TextXAlignment.Left
-                local padding= obj:FindFirstChildOfClass("UIPadding")
-                if not padding then padding=Padding(obj,32,7,0,0) end
-            end
-        end
         obj.MouseButton1Click:Connect(callback)
         return obj
     end
@@ -5442,8 +5459,8 @@ do
         self:_BlueprintTooltip(stop,"Cancels and undoes the changes and objects created by this blueprint.")
         self:_BlueprintTooltip(validate,"Check ports, required values and cycles")
         self:_BlueprintTooltip(frame,"Frame all nodes · shortcut F")
-        textButton(self,editor,"Save",UDim2.new(1,-259,0,6),UDim2.fromOffset(65,25),function() self:SaveBlueprints() end,false,33)
-        local export=textButton(self,editor,"↑",UDim2.new(1,-188,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(false) end,false,33)
+        textButton(self,editor,"Save",UDim2.new(1,-271,0,6),UDim2.fromOffset(78,25),function() self:SaveBlueprints() end,false,33)
+        local export=textButton(self,editor,"↑",UDim2.new(1,-187,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(false) end,false,33)
         local import=textButton(self,editor,"↓",UDim2.new(1,-155,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(true) end,false,33)
         local rename=textButton(self,editor,"✎",UDim2.new(1,-122,0,6),UDim2.fromOffset(27,25),function() self:OpenBlueprintNamePopup(self.ActiveBlueprint) end,false,33)
         local delete=textButton(self,editor,"⌫",UDim2.new(1,-89,0,6),UDim2.fromOffset(27,25),function()
