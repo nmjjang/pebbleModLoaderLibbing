@@ -1,4 +1,61 @@
-local PebbleUI = { Version = "1.4.0-dark" }
+--[[
+PebbleUI 1.5.0 — Custom Blueprints (cliente)
+
+INSTALAÇÃO
+Substitua sua biblioteca PebbleUI por este arquivo completo. Ele retorna PebbleUI.
+No Studio: salve como ModuleScript e dê require a partir de um LocalScript.
+
+    local PebbleUI = require(caminho.PebbleUI)
+    local hub = PebbleUI:CreateWindow({ Title = "Minha Hub" })
+    local tab = hub:Tab({ Title = "Início" })
+    tab:Section({ Title = "Bem-vindo" }):Paragraph({ Content = "Abra o + do Explorer." })
+
+USO
+Clique no + do Explorer > Blueprint > escolha um nome.
+O primeiro grafo vem com Iniciar -> Notificação, pronto para testar.
++ Node ou botão direito no board abre o catálogo com busca e categorias.
+Arraste o cabeçalho para mover um node; arraste o fundo para mover o board.
+Roda do mouse no fundo dá zoom; dentro do node, percorre suas propriedades.
+Arraste entre pontos ou clique em uma saída e depois em uma entrada.
+Botão direito em uma entrada remove sua conexão. Esc cancela a conexão.
+F enquadra o grafo; Delete remove a seleção; Ctrl+D duplica; Ctrl+S salva.
+↑ exporta JSON; ↓ importa JSON; ▶ Rodar valida e executa; ■ Parar desfaz.
+
+EXEMPLO DE OBJETO VISÍVEL
+Adicione Workspace (Services), Part (Parts), Vector3 e Color3 (Values).
+Conecte Workspace.Object -> Part.Parent, Vector3.Value -> Part.Position
+e Color3.Value -> Part.Color. Marque Anchored = true na Part e clique Rodar.
+
+COMPORTAMENTO
+O grafo inteiro executa em ordem de dependências ao clicar Rodar.
+Exec estabelece ordem adicional. Uma entrada aceita uma conexão; saídas
+podem alimentar várias entradas. Não há ciclos nem listeners automáticos.
+Propriedades somente leitura têm apenas saída. Em classes suportadas,
+ReflectionService amplia as portas às propriedades acessíveis no cliente;
+sem esse serviço, usa-se o conjunto de propriedades comuns embutido.
+Ler/Definir propriedade permite nomear outras propriedades explicitamente.
+FindChild retorna Instance: use Verificar classe para portas de classe exata.
+Valores RGB usam 0–255; vetores usam vírgulas; enums usam Enum.Tipo.Item.
+Classes indisponíveis são recusadas; erros deixam os nodes esmaecidos.
+Blueprints não usam loadstring nem chamadas de servidor/remotes.
+LocalScript/ModuleScript criados são contêineres vazios, sem edição de Source.
+Rodar novamente e editar o grafo removem a execução anterior. Fechar a hub
+também cancela e limpa os objetos que seus blueprints criaram.
+
+PERSISTÊNCIA
+No Studio, os gráficos ficam nesta janela. Use exportar/importar JSON para
+guardar entre sessões, ou implemente SaveBlueprints(snapshot, window) e
+LoadBlueprints(window) em CreateWindow. Em ambientes com funções de arquivo,
+BlueprintsFile recebe o caminho JSON. Também aceita Blueprints = {...}.
+Script de texto mantém OnRunScript e as opções originais. O Studio não
+executa strings de código em LocalScript: o botão depende desse callback
+ou de loadstring disponível no ambiente. O editor visual funciona nativamente.
+
+VALIDAÇÃO
+Sintaxe e motor verificados com harness local; não executado no Roblox Studio.
+]]
+
+local PebbleUI = { Version = "1.5.0-blueprints" }
 
 --============================================================
 -- Services
@@ -12,7 +69,9 @@ local TextService = game:GetService("TextService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 
+assert(RunService:IsClient(), "PebbleUI precisa ser carregada no cliente.")
 local LocalPlayer = Players.LocalPlayer
+assert(LocalPlayer, "Jogador local indisponível.")
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 --============================================================
@@ -116,8 +175,8 @@ local function List(parent, gap, fill)
     })
 end
 
--- ============ SUBTLE SCROLLBAR ============
--- Applies a thin, gray scrollbar style to a ScrollingFrame
+-- ============ SCROLLBAR DISCRETA ============
+-- Aplica estilo "fino e cinza" numa ScrollingFrame
 local function StyleScrollBar(sf, opts)
     opts = opts or {}
     sf.ScrollBarThickness        = opts.Thickness or 2
@@ -314,7 +373,7 @@ PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
     Title = "Pebble UI",
-    Version = "v1.4.0",
+    Version = "v1.5.0",
     Icon = "sparkles",
 
     Size = UDim2.fromOffset(780, 520),
@@ -2311,7 +2370,8 @@ end
 --============================================================
 
 function Window:_setActiveTab(tab)
-    if not tab or (self.ActiveTab == tab and not self.ActiveScript) then return end
+    if not tab or (self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint) then return end
+    if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
     if self.ActiveScript then self:_LeaveScriptEditor() end
 
     if self.ActiveDropdown then self.ActiveDropdown:Close() end
@@ -2600,7 +2660,7 @@ function Window:Tab(config)
     BindTheme(self, label, "Font", "FontMedium")
     BindTheme(self, accent, "BackgroundColor3", "Accent", config.AccentColor)
     WatchTheme(self, button, function()
-        local selected = self.ActiveTab == tab and not self.ActiveScript
+        local selected = self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint
         label.TextColor3 = selected and theme.Accent or theme.SubText
         if icon then icon.ImageColor3 = selected and theme.Accent or (config.IconColor or theme.Icon) end
         button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Sidebar
@@ -2611,7 +2671,7 @@ function Window:Tab(config)
     table.insert(self.Tabs, tab)
 
     button.MouseEnter:Connect(function()
-        if self.ActiveTab ~= tab or self.ActiveScript then
+        if self.ActiveTab ~= tab or self.ActiveScript or self.ActiveBlueprint then
             Tween(button, 0.2, { BackgroundTransparency = 0.5 }, EASE_SOFT, Enum.EasingDirection.Out)
             HoverTween(label, 0.2, { TextColor3 = theme.Accent })
             if icon then HoverTween(icon, 0.2, { ImageColor3 = theme.Accent }) end
@@ -2619,7 +2679,7 @@ function Window:Tab(config)
         end
     end)
     button.MouseLeave:Connect(function()
-        if self.ActiveTab ~= tab or self.ActiveScript then
+        if self.ActiveTab ~= tab or self.ActiveScript or self.ActiveBlueprint then
             Tween(button, 0.24, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
             HoverTween(label, 0.24, { TextColor3 = theme.SubText })
             if icon then HoverTween(icon, 0.24, { ImageColor3 = theme.Icon }) end
@@ -2682,6 +2742,11 @@ function Window:ToggleVisibility()
         if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
         if self.ActiveDropdown then self.ActiveDropdown:Close() end
         if self._scriptModal then self._scriptModal:Close() end
+        self:_CloseCreationMenu()
+        self._bpPending, self._bpDrag = nil, nil
+        if self.BlueprintUI then self.BlueprintUI.Palette.Visible = false; self.BlueprintUI.Tooltip.Visible = false end
+        local focused = UserInputService:GetFocusedTextBox()
+        if focused and self.BlueprintEditor and focused:IsDescendantOf(self.BlueprintEditor) then focused:ReleaseFocus() end
         if self.ScriptEditorElements and self.ScriptEditorElements.Input:IsFocused() then
             self.ScriptEditorElements.Input:ReleaseFocus()
         end
@@ -2691,6 +2756,7 @@ end
 
 function Window:Close()
     if self.Destroyed then return end
+    self:_DisposeBlueprints()
     self:_DisposeScripts()
     self.Destroyed = true
     if self.ActiveDropdown then self.ActiveDropdown:Close(); self.ActiveDropdown = nil end
@@ -3190,7 +3256,7 @@ function Window:_ScriptsChanged()
     self:_RenderScriptRows()
     if self._importingScripts or self._loadingScripts then return end
     local revision = self._scriptSaveRevision
-    self:_ScriptStatus("Saving...")
+    self:_ScriptStatus("Salvando...")
     task.delay(0.45, function()
         if not self.Destroyed and self._scriptSaveRevision == revision then self:SaveScripts() end
     end)
@@ -3344,6 +3410,8 @@ function Window:CloseScriptEditor()
 end
 
 function Window:OpenScript(idOrName)
+    if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
+    self:_CloseCreationMenu()
     local record = self:GetScript(idOrName)
     if not record or self.Destroyed then return nil, "Script not found." end
     if self.ActiveDropdown then self.ActiveDropdown:Close() end
@@ -3387,11 +3455,13 @@ function Window:RunScript(idOrName)
     if type(runner) ~= "function" then
         if type(loadstring) ~= "function" then
             self:_ScriptStatus("This environment does not support script execution.", true)
+            self:Notify({ Content = "Execução de texto indisponível neste cliente. Configure OnRunScript. Blueprints usam execução nativa.", Icon = "triangle-alert", Duration = 6 })
             return false, "Use OnRunScript to integrate script execution in this environment."
         end
         local ok, compiled, err = pcall(loadstring, record.Source, "@" .. record.Name)
         if not ok or not compiled then
             self:_ScriptStatus(tostring(err or compiled), true)
+            self:Notify({ Content = "Erro no script: " .. tostring(err or compiled), Icon = "triangle-alert", IconColor = self.Theme.Danger, Duration = 6 })
             return false, err or compiled
         end
         runner = function() return compiled() end
@@ -3402,6 +3472,9 @@ function Window:RunScript(idOrName)
         local ok, err = pcall(runner, source, record, self)
         if not self.Destroyed and self.ActiveScript == record then
             self:_ScriptStatus(ok and ("Completed: " .. name) or tostring(err), not ok)
+        end
+        if not self.Destroyed then
+            self:Notify({ Content = ok and ("Script executado: " .. name) or ("Erro no script: " .. tostring(err)), Icon = ok and "check" or "triangle-alert", IconColor = ok and self.Theme.Success or self.Theme.Danger, Duration = ok and 3 or 6 })
         end
         if not ok then safeCallback(self.Config.OnScriptError, err, record, self) end
     end)
@@ -3424,6 +3497,11 @@ function Window:_UpdateScriptLayout()
     self.ScriptEditor.Position = self.ContentHost.Position
     self.ScriptEditor.Size = self.ContentHost.Size
     self.CloseButton.Position = UDim2.new(1, -(12 + self._scriptRightInset), 0, 13)
+    if self.BlueprintEditor then
+        self.BlueprintEditor.Position = self.ContentHost.Position
+        self.BlueprintEditor.Size = self.ContentHost.Size
+        self:_LayoutBlueprintExplorer()
+    end
 end
 
 function Window:_CreateScriptRow(record)
@@ -3488,6 +3566,7 @@ function Window:_RenderScriptRows()
     self.ScriptExplorerElements.Empty.Visible = count == 0 and not self._scriptsCollapsed
     self.ScriptExplorerElements.Storage.Text = self._hasScriptStorage
         and (type(self.Config.SaveScripts) == "function" and "Saved" or "Local") or "Memory"
+    if self.BlueprintExplorerUI then self:_LayoutBlueprintExplorer() end
 end
 
 function Window:_EditorMeasure(text)
@@ -3604,7 +3683,7 @@ function Window:_HandleScriptTextChanged()
         self._settingScriptText = true
         ui.Input.Text = oldSource
         self._settingScriptText = false
-        self:_ScriptStatus("This script has reached the editor size limit.", true)
+        self:_ScriptStatus("Este script atingiu o limite de tamanho do editor.", true)
         return
     end
     local correctedPosition
@@ -3660,16 +3739,16 @@ function Window:InsertScriptText(text)
     return true
 end
 
-function Window:OpenScriptNamePopup(idOrName)
+function Window:OpenScriptNamePopup(idOrName, blueprint)
     if self.Destroyed or not self.ScriptExplorer then return nil end
     if self._scriptModal then self._scriptModal:Close() end
     if self.ActiveDropdown then self.ActiveDropdown:Close() end
     if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
-    local record = idOrName and self:GetScript(idOrName) or nil
-    if idOrName and not record then return nil, "Script not found." end
+    local record = idOrName and (blueprint and self:GetBlueprint(idOrName) or self:GetScript(idOrName)) or nil
+    if idOrName and not record then return nil, "Arquivo não encontrado." end
     local theme = self.Theme
     local overlay = New("TextButton", {
-        Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 1,
+        Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 0.4,
         BorderSizePixel = 0, Text = "", AutoButtonColor = false, Active = true,
         Size = UDim2.fromScale(1, 1), ZIndex = 7000, Parent = self.ScreenGui,
     })
@@ -3688,20 +3767,20 @@ function Window:OpenScriptNamePopup(idOrName)
     icon.Parent = panel
     BindTheme(self, icon, "ImageColor3", "Accent")
     local title = New("TextLabel", {
-        BackgroundTransparency = 1, Text = record and "Rename script" or "New script",
+        BackgroundTransparency = 1, Text = blueprint and (record and "Renomear blueprint" or "Novo blueprint") or (record and "Renomear script" or "Novo script"),
         Font = theme.FontBold, TextSize = 15, TextColor3 = theme.Text,
         TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(50, 14),
         Size = UDim2.new(1, -90, 0, 28), ZIndex = 7003, Parent = panel,
     })
     local subtitle = New("TextLabel", {
-        BackgroundTransparency = 1, Text = record and "Choose a new name for the script." or "Give your script a name to get started.",
+        BackgroundTransparency = 1, Text = blueprint and "Dê um nome ao seu blueprint visual." or "Dê um nome ao seu script.",
         Font = theme.Font, TextSize = 11, TextColor3 = theme.SubText,
         TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(18, 49),
         Size = UDim2.new(1, -36, 0, 24), ZIndex = 7003, Parent = panel,
     })
     local input = New("TextBox", {
         Name = "ScriptName", ClearTextOnFocus = false, MultiLine = false,
-        Text = record and record.Name:sub(1, -5) or "", PlaceholderText = "MyScript",
+        Text = record and record.Name:gsub(blueprint and "%.blueprint$" or "%.lua$", "") or "", PlaceholderText = blueprint and "MeuBlueprint" or "MeuScript",
         Font = theme.FontMedium, TextSize = 12, TextColor3 = theme.Text, PlaceholderColor3 = theme.DimText,
         TextXAlignment = Enum.TextXAlignment.Left, BackgroundColor3 = theme.Input, BorderSizePixel = 0,
         Position = UDim2.fromOffset(18, 82), Size = UDim2.new(1, -36, 0, 34), ZIndex = 7003, Parent = panel,
@@ -3736,7 +3815,10 @@ function Window:OpenScriptNamePopup(idOrName)
     function modal:Confirm()
         if self.Closed then return nil end
         local created, err
-        if record then created, err = window:RenameScript(record, input.Text)
+        if blueprint then
+            if record then created, err = window:RenameBlueprint(record, input.Text)
+            else created, err = window:CreateBlueprint({ Name = input.Text, Open = false }) end
+        elseif record then created, err = window:RenameScript(record, input.Text)
         else created, err = window:CreateScript({ Name = input.Text, Open = false }) end
         if not created then
             errorLabel.Text = err or "Could not create the script."
@@ -3745,7 +3827,7 @@ function Window:OpenScriptNamePopup(idOrName)
             return nil, err
         end
         self:Close()
-        window:OpenScript(created)
+        if blueprint then window:OpenBlueprint(created) else window:OpenScript(created) end
         return created
     end
     local function action(titleText, lucide, x, primary, callback)
@@ -3903,7 +3985,7 @@ function Window:_CreateScriptEditor()
         local record = self.ActiveScript
         if not record then return end
         if input:IsFocused() then input:ReleaseFocus() end
-        self:Dialog({ Title = "Delete script?", Content = 'The script "' .. record.Name .. '" will be removed from the explorer.',
+        self:Dialog({ Title = "Delete script?", Content = 'O script "' .. record.Name .. '" will be removed from the explorer.',
             Buttons = { { Title = "Cancel" }, { Title = "Delete", Color = self.Theme.Danger,
                 TextColor = self.Theme.AccentText, Callback = function() self:DeleteScript(record) end } } })
     end)
@@ -3992,7 +4074,10 @@ function Window:_CreateScriptExplorer()
     })
     BindTheme(self, title, "TextColor3", "Text")
     BindTheme(self, title, "Font", "FontMedium")
-    local plus = ScriptIconButton(self, frame, "plus", UDim2.new(1, -34, 0, 10), function() self:OpenScriptNamePopup() end)
+    local plus = ScriptIconButton(self, frame, "plus", UDim2.new(1, -34, 0, 10), function() self:OpenCreationMenu() end)
+    if GetIcon("plus") == "" then
+        New("TextLabel", { BackgroundTransparency = 1, Text = "+", Font = theme.Font, TextSize = 21, TextColor3 = theme.Text, Size = UDim2.fromScale(1, 1), ZIndex = plus.ZIndex + 1, Parent = plus })
+    end
     local headerLine = New("Frame", {
         BackgroundColor3 = theme.Border, BorderSizePixel = 0, BackgroundTransparency = 0.3,
         Position = UDim2.fromOffset(8, 44), Size = UDim2.new(1, -16, 0, 1), ZIndex = 11, Parent = frame,
@@ -4028,7 +4113,7 @@ function Window:_CreateScriptExplorer()
     List(list, 2)
     local empty = New("TextButton", {
         Name = "EmptyScripts", BackgroundTransparency = 1, BorderSizePixel = 0, AutoButtonColor = false,
-        Text = "No scripts yet.\nClick + to create one.", Font = theme.Font, TextSize = 11,
+        Text = "Nenhum script ainda.\nClique no + para criar.", Font = theme.Font, TextSize = 11,
         TextColor3 = theme.MutedText, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
         Position = UDim2.fromOffset(18, 90), Size = UDim2.new(1, -36, 0, 55), ZIndex = 12, Parent = frame,
     })
@@ -4121,6 +4206,1465 @@ function Window:_DisposeScripts()
 end
 
 
+-- PebbleUI Custom Blueprints, client graph engine + native Roblox UI.
+-- This block is inserted before PebbleUI:CreateWindow in the complete file.
+do
+    local Catalog, Categories, ClassMeta = {}, {}, {}
+    local COLORS = {
+        Services = Color3.fromRGB(118, 160, 248), GUI = Color3.fromRGB(101, 204, 164),
+        Parts = Color3.fromRGB(104, 184, 234), Avatar = Color3.fromRGB(216, 162, 109),
+        Constraints = Color3.fromRGB(163, 151, 221), Effects = Color3.fromRGB(117, 211, 222),
+        Environment = Color3.fromRGB(144, 196, 140), Sounds = Color3.fromRGB(231, 163, 104),
+        Values = Color3.fromRGB(220, 171, 108), Logic = Color3.fromRGB(204, 136, 196),
+        Animations = Color3.fromRGB(173, 154, 234), Input = Color3.fromRGB(218, 132, 159),
+        Other = Color3.fromRGB(149, 166, 186),
+    }
+    local function port(name, kind, default, description, required)
+        return { Name = name, Type = kind, Default = default, Description = description or name, Required = required == true }
+    end
+    local function register(def)
+        def.Color = COLORS[def.Category] or COLORS.Other
+        def.Inputs, def.Outputs = def.Inputs or {}, def.Outputs or {}
+        Catalog[def.Id] = def
+        Categories[def.Category] = true
+        return def
+    end
+    local function fieldType(value)
+        local t = typeof(value)
+        if t == "EnumItem" then return tostring(value.EnumType) end
+        if t == "Instance" then return "Instance" end
+        return t
+    end
+    local function encodeValue(value)
+        local t = typeof(value)
+        if t == "Vector2" then return value.X .. ", " .. value.Y end
+        if t == "Vector3" then return value.X .. ", " .. value.Y .. ", " .. value.Z end
+        if t == "Color3" then return math.floor(value.R * 255 + 0.5) .. ", " .. math.floor(value.G * 255 + 0.5) .. ", " .. math.floor(value.B * 255 + 0.5) end
+        if t == "UDim" then return value.Scale .. ", " .. value.Offset end
+        if t == "UDim2" then return value.X.Scale .. ", " .. value.X.Offset .. ", " .. value.Y.Scale .. ", " .. value.Y.Offset end
+        if t == "CFrame" then return table.concat({ value:GetComponents() }, ", ") end
+        if t == "EnumItem" then return tostring(value) end
+        if t == "NumberRange" then return value.Min .. ", " .. value.Max end
+        if t == "BrickColor" then return value.Name end
+        if t == "string" or t == "number" or t == "boolean" then return tostring(value) end
+        return ""
+    end
+    local function parseValue(text, kind)
+        text = tostring(text or "")
+        if kind == "string" or kind == "any" then return text end
+        if kind == "Instance" or kind:match("^Class:") then
+            if text == "" then return nil end
+            error("Conecte uma porta de objeto; referências não são texto.", 0)
+        end
+        if kind == "Exec" then return true end
+        if kind == "BrickColor" then
+            local value = BrickColor.new(tonumber(text) or text)
+            assert(tonumber(text) or value.Name:lower() == text:lower(), "BrickColor inválido: " .. text)
+            return value
+        end
+        if kind == "boolean" then
+            if text == "true" then return true end
+            if text == "false" then return false end
+            error("Use true ou false.", 0)
+        end
+        if kind == "number" then
+            local n = tonumber(text)
+            assert(n and n == n and math.abs(n) < math.huge, "Número inválido: " .. text)
+            return n
+        end
+        if kind:match("^Enum%.") then
+            local enumName = kind:sub(6)
+            local itemName = text:match("([%w_]+)$")
+            local enum = Enum[enumName]
+            assert(enum and itemName and enum[itemName], "Enum inválido: " .. kind .. "." .. tostring(itemName))
+            return enum[itemName]
+        end
+        local numbers = {}
+        for part in text:gmatch("[^,]+") do
+            local n = tonumber(part:match("^%s*(.-)%s*$"))
+            assert(n and n == n and math.abs(n) < math.huge, "Componente numérico inválido: " .. part)
+            table.insert(numbers, n)
+        end
+        local counts = { Vector2 = 2, Vector3 = 3, Color3 = 3, UDim = 2, UDim2 = 4, CFrame = 3, NumberRange = 2 }
+        if counts[kind] then
+            assert(#numbers == counts[kind] or (kind == "CFrame" and #numbers == 12), "Formato inválido para " .. kind)
+            if kind == "Color3" then
+                for _, n in ipairs(numbers) do assert(n >= 0 and n <= 255, "RGB deve estar entre 0 e 255.") end
+                return Color3.fromRGB(table.unpack(numbers))
+            end
+            if kind == "Vector2" then return Vector2.new(table.unpack(numbers)) end
+            if kind == "Vector3" then return Vector3.new(table.unpack(numbers)) end
+            if kind == "UDim" then return UDim.new(table.unpack(numbers)) end
+            if kind == "UDim2" then return UDim2.new(table.unpack(numbers)) end
+            if kind == "CFrame" then return CFrame.new(table.unpack(numbers)) end
+            if kind == "NumberRange" then return NumberRange.new(table.unpack(numbers)) end
+        end
+        if text == "" then return nil end
+        error("Para " .. kind .. ", conecte uma porta do mesmo tipo.", 0)
+    end
+    local function acceptsLiteral(kind)
+        return kind == "string" or kind == "any" or kind == "number" or kind == "boolean" or kind == "BrickColor"
+            or kind == "Vector2" or kind == "Vector3" or kind == "Color3" or kind == "UDim" or kind == "UDim2"
+            or kind == "CFrame" or kind == "NumberRange" or kind:match("^Enum%.") ~= nil
+    end
+    local function safeInstance(obj)
+        assert(typeof(obj) == "Instance", "Uma referência de objeto é necessária.")
+        assert(not obj:IsA("Script") and not obj:IsA("RemoteEvent")
+            and not obj:IsA("RemoteFunction") and not obj:IsA("UnreliableRemoteEvent"), "Objeto indisponível no editor local.")
+        assert(not obj:IsA("ServerStorage") and not obj:IsA("ServerScriptService"), "Serviço exclusivo do servidor.")
+        local parent = obj
+        while parent do
+            assert(parent.Name ~= "ServerStorage" and parent.Name ~= "ServerScriptService", "Objeto exclusivo do servidor.")
+            parent = parent.Parent
+        end
+        return obj
+    end
+    local BASIC = { "Name", "Parent" }
+    local PROPERTIES = {
+        BasePart = { "Anchored", "CanCollide", "CanTouch", "CanQuery", "CastShadow", "Color", "Material", "Transparency", "Reflectance", "Size", "Position", "Orientation", "CFrame", "AssemblyLinearVelocity" },
+        GuiObject = { "Position", "Size", "AnchorPoint", "BackgroundColor3", "BackgroundTransparency", "BorderSizePixel", "Visible", "Rotation", "ZIndex", "LayoutOrder", "AutomaticSize", "ClipsDescendants", "Active" },
+        TextLabel = { "Text", "TextColor3", "TextSize", "TextTransparency", "TextWrapped", "TextScaled", "Font", "TextXAlignment", "TextYAlignment" },
+        ImageLabel = { "Image", "ImageColor3", "ImageTransparency", "ScaleType" },
+        LayerCollector = { "Enabled", "ResetOnSpawn", "ZIndexBehavior" },
+        Sound = { "SoundId", "Volume", "PlaybackSpeed", "Looped", "TimePosition" },
+        Light = { "Brightness", "Color", "Enabled", "Shadows" },
+        Constraint = { "Enabled", "Attachment0", "Attachment1", "Visible" },
+        Attachment = { "Position", "Orientation", "CFrame", "Visible" },
+        ValueBase = { "Value" },
+        ParticleEmitter = { "Enabled", "Texture", "Rate", "Lifetime", "Speed", "SpreadAngle", "LightEmission", "Color", "Transparency", "Size" },
+        PostEffect = { "Enabled" },
+        Model = { "PrimaryPart" },
+        Camera = { "CameraType", "CameraSubject", "CFrame", "Focus", "FieldOfView" },
+        UICorner = { "CornerRadius" }, UIStroke = { "Color", "Thickness", "Transparency", "Enabled", "ApplyStrokeMode" },
+        UIScale = { "Scale" }, UIPadding = { "PaddingLeft", "PaddingRight", "PaddingTop", "PaddingBottom" },
+        UIListLayout = { "Padding", "FillDirection", "SortOrder", "HorizontalAlignment", "VerticalAlignment" },
+        UIGridLayout = { "CellSize", "CellPadding", "SortOrder" },
+        ScreenGui = { "IgnoreGuiInset", "DisplayOrder" }, ScrollingFrame = { "CanvasSize", "AutomaticCanvasSize", "ScrollBarThickness", "CanvasPosition", "ScrollingDirection" },
+        BillboardGui = { "Adornee", "Size", "StudsOffset", "AlwaysOnTop", "MaxDistance" },
+        SurfaceGui = { "Adornee", "Face", "CanvasSize", "AlwaysOnTop", "PixelsPerStud" },
+        ViewportFrame = { "CurrentCamera", "Ambient", "LightColor", "LightDirection" },
+        VideoFrame = { "Video", "Playing", "Looped", "Volume", "TimePosition" },
+        UIGradient = { "Color", "Transparency", "Rotation", "Offset", "Enabled" },
+        Humanoid = { "WalkSpeed", "JumpPower", "JumpHeight", "AutoRotate", "CameraOffset", "DisplayDistanceType" },
+        Player = { "DisplayName", "UserId", "Character", "Team", "TeamColor" },
+        Animation = { "AnimationId" }, PointLight = { "Range" }, SpotLight = { "Range", "Angle", "Face" },
+        BlurEffect = { "Size" }, BloomEffect = { "Intensity", "Size", "Threshold" },
+        ColorCorrectionEffect = { "Brightness", "Contrast", "Saturation", "TintColor" },
+        Atmosphere = { "Density", "Offset", "Color", "Decay", "Glare", "Haze" },
+        Sky = { "SkyboxBk", "SkyboxDn", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp", "StarCount", "CelestialBodiesShown" },
+        Clouds = { "Cover", "Density", "Color", "Enabled" },
+        Beam = { "Attachment0", "Attachment1", "Enabled", "Width0", "Width1", "FaceCamera", "Texture", "Color" },
+        Trail = { "Attachment0", "Attachment1", "Enabled", "Lifetime", "FaceCamera", "Color" },
+        Fire = { "Enabled", "Color", "SecondaryColor", "Heat", "Size" }, Smoke = { "Enabled", "Color", "Opacity", "RiseVelocity", "Size" },
+        Highlight = { "Adornee", "Enabled", "FillColor", "FillTransparency", "OutlineColor", "OutlineTransparency", "DepthMode" },
+        MeshPart = { "TextureID" }, SpecialMesh = { "MeshId", "TextureId", "Scale", "Offset", "MeshType" },
+        Decal = { "Texture", "Transparency", "Color3", "Face" },
+    }
+    local function discoverProperties(class, sample, service)
+        local names, seen, fields = {}, {}, {}
+        local function add(name) if not seen[name] then seen[name] = true; table.insert(names, name) end end
+        for _, name in ipairs(BASIC) do add(name) end
+        do
+            for ancestor, props in pairs(PROPERTIES) do
+                local ok, isA = pcall(function() return sample:IsA(ancestor) end)
+                if ok and (isA or (ancestor == "TextLabel" and (class == "TextButton" or class == "TextBox"))
+                    or (ancestor == "ImageLabel" and class == "ImageButton")) then
+                    for _, name in ipairs(props) do add(name) end
+                end
+            end
+        end
+        if service then
+            for _, name in ipairs(service) do add(name) end
+        end
+        local ok, reflected = pcall(function() return game:GetService("ReflectionService"):GetPropertiesOfClass(class) end)
+        if ok and type(reflected) == "table" then
+            for _, property in ipairs(reflected) do if type(property.Name) == "string" then add(property.Name) end end
+        end
+        table.sort(names, function(a, b)
+            if a == "Name" then return b ~= "Name" end
+            if b == "Name" then return false end
+            if a == "Parent" then return b ~= "Parent" end
+            if b == "Parent" then return false end
+            return a < b
+        end)
+        for _, name in ipairs(names) do
+            if name ~= "Source" and name ~= "ScriptGuid" and name ~= "UniqueId" and name ~= "Capabilities" and name ~= "Sandboxed" then
+                local readOk, value = pcall(function() return sample[name] end)
+                if readOk then
+                    local kind = value == nil and "Instance" or fieldType(value)
+                    local writable = false
+                    if not service then writable = pcall(function() sample[name] = value end) end
+                    if service then
+                        for _, allowed in ipairs(service) do if allowed == name then writable = true end end
+                    end
+                    local p = port(name, kind, encodeValue(value), class .. "." .. name .. " · " .. kind .. (writable and " · leitura/escrita local" or " · somente leitura"))
+                    p.Writable, p.Property = writable, true
+                    -- Unknown complex literals are read-only unless explicitly connected.
+                    fields[#fields + 1] = p
+                end
+            end
+        end
+        return fields
+    end
+    local CLASS_GROUPS = {
+        GUI = "BillboardGui CanvasGroup Frame ImageButton ImageLabel InputActionGui Path2D ScreenGui ScrollingFrame SurfaceGui TextBox TextButton TextLabel UIAspectRatioConstraint UICorner UIDragDetector UIFlexItem UIGradient UIGridLayout UIListLayout UIPadding UIPageLayout UIScale UIShadow UISizeConstraint UIStroke UITableLayout UITextSizeConstraint VideoFrame ViewportFrame",
+        Parts = "CornerWedgePart MeshPart Part TrussPart WedgePart Seat VehicleSeat SpawnLocation Tool BlockMesh CharacterMesh SpecialMesh Decal Texture",
+        Avatar = "Accessory AirController BodyColors BuoyancySensor ClimbController ControllerManager ControllerPartSensor ForceField GroundController Humanoid HumanoidDescription HumanoidRigDescription IKControl Motor6D Pants Shirt ShirtGraphic SwimController AccessoryDescription BodyPartDescription MakeupDescription",
+        Constraints = "AlignOrientation AlignPosition AngularVelocity AnimationConstraint Attachment BallSocketConstraint CylindricalConstraint HingeConstraint LineForce LinearVelocity NoCollisionConstraint PlaneConstraint PrismaticConstraint RigidConstraint RodConstraint RopeConstraint SpringConstraint Torque TorsionSpringConstraint UniversalConstraint VectorForce WeldConstraint Weld",
+        Effects = "Beam Explosion Fire Highlight ParticleEmitter Smoke Sparkles Trail WrapDeformer WrapLayer WrapTarget WrapTextureTransfer Handles ImageHandleAdornment LineHandleAdornment PathfindingLink PathfindingModifier PyramidHandleAdornment SelectionBox SelectionSphere SphereHandleAdornment SurfaceSelection WireframeHandleAdornment",
+        Environment = "Atmosphere Clouds Sky BloomEffect BlurEffect ColorCorrectionEffect ColorGradingEffect DepthOfFieldEffect SunRaysEffect PointLight SpotLight SurfaceLight MaterialVariant",
+        Sounds = "Sound SoundGroup AudioAnalyzer AudioChannelMixer AudioChannelSplitter AudioChorus AudioCompressor AudioDeviceInput AudioDeviceOutput AudioDistortion AudioEcho AudioEmitter AudioEqualizer AudioFader AudioFilter AudioFlanger AudioGate AudioLimiter AudioListener AudioPitchShifter AudioPlayer AudioReverb AudioSpeechToText AudioTextToSpeech AudioTremolo ChorusSoundEffect CompressorSoundEffect DistortionSoundEffect EchoSoundEffect EqualizerSoundEffect FlangeSoundEffect PitchShiftSoundEffect ReverbSoundEffect TremoloSoundEffect Wire",
+        Values = "BoolValue BrickColorValue CFrameValue Color3Value IntValue NumberValue ObjectValue RayValue StringValue Vector3Value",
+        Animations = "Animation AnimationController Animator Bone FaceControls",
+        Input = "InputAction InputBinding InputContext AtmosphereSensor FluidForceSensor",
+        Other = "Folder Configuration Model ProceduralModel WorldModel Camera LocalizationTable Team BindableEvent BindableFunction Actor LocalScript ModuleScript HapticEffect StyleDerive StyleLink StyleQuery StyleRule StyleSheet TextChannel TextChatCommand GeneratedFolder",
+    }
+    local function ensureDefinition(def)
+        if def.Prepared then return def end
+        if def.Ref then
+            local sample
+            if def.Ref == "LocalPlayer" then sample = LocalPlayer
+            elseif def.Ref == "PlayerGui" then sample = PlayerGui
+            elseif def.Ref == "Character" then sample = LocalPlayer.Character
+            elseif def.Ref == "CurrentCamera" then sample = workspace.CurrentCamera
+            else sample = LocalPlayer:FindFirstChild(def.Ref) end
+            if sample then
+                def.Prepared = true; def.Fields = discoverProperties(sample.ClassName, sample, {})
+                for _, p in ipairs(def.Fields) do table.insert(def.Outputs, copyTable(p)) end
+            end
+            return def
+        end
+        def.Prepared = true
+        if not def.Class then return def end
+        local ok, sample = pcall(function() return def.Service and game:GetService(def.Class) or Instance.new(def.Class) end)
+        if not ok or not sample then
+            def.Disabled = "Esta classe não está disponível ou não pode ser criada neste cliente."
+            return def
+        end
+        local fields = discoverProperties(def.Class, sample, def.Service and (def.Writable or {}) or nil)
+        def.Fields = fields
+        def.Inputs = { port("Exec", "Exec", nil, "Ordem de execução (opcional).") }
+        def.Outputs = { port("Exec", "Exec"), port("Object", "Class:" .. def.Class, nil, "Referência " .. def.Class) }
+        for _, p in ipairs(fields) do
+            table.insert(def.Outputs, copyTable(p))
+            if p.Writable then table.insert(def.Inputs, copyTable(p)) end
+        end
+        ClassMeta[def.Class] = sample
+        if not def.Service then sample:Destroy(); ClassMeta[def.Class] = nil end
+        return def
+    end
+    for category, classes in pairs(CLASS_GROUPS) do
+        for class in classes:gmatch("%S+") do
+            register({ Id = "New:" .. class, Class = class, Title = class, Category = category,
+                Description = "Cria " .. class .. " no cliente. Propriedades aparecem como portas de entrada e saída. Classes indisponíveis ficam desativadas." })
+        end
+    end
+    local SERVICES = {
+        Workspace = { "CurrentCamera" }, Players = {}, Lighting = { "ClockTime", "Brightness", "Ambient", "OutdoorAmbient", "FogColor", "FogStart", "FogEnd", "GlobalShadows", "ExposureCompensation" },
+        MaterialService = {}, ReplicatedFirst = {}, ReplicatedStorage = {}, StarterGui = {}, StarterPack = {}, StarterPlayer = {}, Teams = {}, SoundService = { "Volume", "AmbientReverb" }, TextChatService = {},
+    }
+    for name, writable in pairs(SERVICES) do
+        register({ Id = "Service:" .. name, Class = name, Service = true, Writable = writable, Title = name,
+            Category = "Services", Description = "Referência local a " .. name .. ". StarterGui/StarterPack/StarterPlayer são templates; use PlayerGui/Backpack/PlayerScripts para o jogador atual." })
+    end
+    for _, name in ipairs({ "LocalPlayer", "PlayerGui", "Backpack", "PlayerScripts", "Character", "CurrentCamera" }) do
+        local class = ({ LocalPlayer = "Player", PlayerGui = "PlayerGui", Backpack = "Backpack", PlayerScripts = "PlayerScripts", Character = "Model", CurrentCamera = "Camera" })[name]
+        register({ Id = "Client:" .. name, Title = name, Category = "Services", Description = "Referência do jogador local: " .. name .. ".", Ref = name,
+            Outputs = { port("Object", "Class:" .. class) } })
+    end
+    register({ Id = "Start", Title = "Iniciar", Category = "Logic", Description = "Ponto de partida. O grafo executa ao clicar em Rodar.", Outputs = { port("Exec", "Exec") } })
+    for _, kind in ipairs({ "string", "number", "boolean", "Vector2", "Vector3", "Color3", "BrickColor", "UDim", "UDim2", "CFrame", "NumberRange" }) do
+        local default = ({ string = "Olá, blueprint!", number = "1", boolean = "true", Vector2 = "0, 0", Vector3 = "0, 5, 0", Color3 = "110, 170, 255", BrickColor = "Medium stone grey", UDim = "0, 8", UDim2 = "0, 200, 0, 50", CFrame = "0, 5, 0", NumberRange = "0, 1" })[kind]
+        register({ Id = "Literal:" .. kind, Title = kind, Category = "Values", Literal = kind, Description = "Valor " .. kind .. ". Edite na entrada ou conecte outro valor.",
+            Inputs = { port("Value", kind, default) }, Outputs = { port("Value", kind) } })
+    end
+    register({ Id = "FindChild", Title = "Encontrar objeto", Category = "Services", Description = "Busca um descendente já existente no cliente.",
+        Inputs = { port("Parent", "Instance", nil, nil, true), port("Name", "string", "Part"), port("Recursive", "boolean", "true") }, Outputs = { port("Object", "Instance") } })
+    register({ Id = "GetProperty", Title = "Ler propriedade", Category = "Logic", Description = "Lê uma propriedade. Defina o nome e o tipo no node.",
+        Inputs = { port("Object", "Instance", nil, nil, true) }, Outputs = { port("Value", "any") }, Dynamic = true })
+    register({ Id = "SetProperty", Title = "Definir propriedade", Category = "Logic", Description = "Altera uma propriedade local de um objeto. Validação ocorre antes de aplicar.",
+        Inputs = { port("Exec", "Exec"), port("Object", "Instance", nil, nil, true), port("Value", "any", "") }, Outputs = { port("Exec", "Exec"), port("Object", "Instance") }, Dynamic = true })
+    register({ Id = "Cast", Title = "Verificar classe", Category = "Services", Description = "Verifica uma referência existente (ex.: FindChild) antes de conectá-la a uma porta específica. Informe Part, Sound, Frame etc.",
+        Inputs = { port("Object", "Instance", nil, nil, true) }, Outputs = { port("Object", "Class:Part") }, Dynamic = true })
+    register({ Id = "Print", Title = "Print / Output", Category = "Logic", Description = "Escreve um valor no Output do cliente.", Inputs = { port("Exec", "Exec"), port("Message", "any", "Olá, blueprint!") }, Outputs = { port("Exec", "Exec") } })
+    register({ Id = "Notify", Title = "Notificação", Category = "GUI", Description = "Mostra uma notificação no estilo da hub.", Inputs = { port("Exec", "Exec"), port("Message", "string", "Funcionou!") }, Outputs = { port("Exec", "Exec") } })
+    register({ Id = "Wait", Title = "Aguardar", Category = "Logic", Description = "Espera alguns segundos antes dos nodes seguintes; Parar cancela a execução.", Inputs = { port("Exec", "Exec"), port("Seconds", "number", "0.5") }, Outputs = { port("Exec", "Exec") } })
+    register({ Id = "Add", Title = "Somar", Category = "Logic", Description = "Soma dois números.", Inputs = { port("A", "number", "0"), port("B", "number", "1") }, Outputs = { port("Result", "number") } })
+    register({ Id = "Multiply", Title = "Multiplicar", Category = "Logic", Description = "Multiplica dois números.", Inputs = { port("A", "number", "1"), port("B", "number", "1") }, Outputs = { port("Result", "number") } })
+    register({ Id = "PlaySound", Title = "Tocar som", Category = "Sounds", Description = "Toca um Sound local.", Inputs = { port("Exec", "Exec"), port("Sound", "Class:Sound", nil, nil, true) }, Outputs = { port("Exec", "Exec") } })
+    register({ Id = "MakeVector3", Title = "Compor Vector3", Category = "Values", Description = "Combina números separados em X, Y e Z.",
+        Inputs = { port("X","number","0"),port("Y","number","5"),port("Z","number","0") }, Outputs = { port("Value","Vector3") } })
+    register({ Id = "MakeColor3", Title = "Compor Color3", Category = "Values", Description = "Combina canais RGB (0–255) em uma cor.",
+        Inputs = { port("R","number","110"),port("G","number","170"),port("B","number","255") }, Outputs = { port("Value","Color3") } })
+    register({ Id = "MakeUDim2", Title = "Compor UDim2", Category = "Values", Description = "Combina escala e deslocamento separados em uma posição/tamanho de GUI.",
+        Inputs = { port("ScaleX","number","0"),port("OffsetX","number","200"),port("ScaleY","number","0"),port("OffsetY","number","50") }, Outputs = { port("Value","UDim2") } })
+    register({ Id = "NumberSequence", Title = "Sequência numérica", Category = "Values", Description = "Cria uma sequência do valor inicial ao final, para particles/gradientes.",
+        Inputs = { port("Start","number","0"),port("End","number","1") }, Outputs = { port("Value","NumberSequence") } })
+    register({ Id = "ColorSequence", Title = "Sequência de cores", Category = "Values", Description = "Cria um gradiente entre duas cores RGB.",
+        Inputs = { port("Start","Color3","110, 170, 255"),port("End","Color3","180, 130, 240") }, Outputs = { port("Value","ColorSequence") } })
+
+    local function definition(node)
+        local base = Catalog[node.Type]
+        if not base then return nil end
+        base = ensureDefinition(base)
+        if not base.Dynamic then return base end
+        local def = copyTable(base)
+        if node.Type == "Cast" then def.Outputs[1].Type = "Class:" .. (node.Settings and node.Settings.Property or "Part"); return def end
+        local kind = node.Settings and node.Settings.ValueType or "string"
+        for _, p in ipairs(def.Inputs) do if p.Name == "Value" then p.Type = kind end end
+        for _, p in ipairs(def.Outputs) do if p.Name == "Value" then p.Type = kind end end
+        return def
+    end
+    local function getPort(node, name, direction)
+        local def = definition(node)
+        if not def then return nil end
+        for _, p in ipairs(def[direction == "in" and "Inputs" or "Outputs"]) do if p.Name == name then return p end end
+    end
+    local function compatible(from, to)
+        if from == "Exec" or to == "Exec" then return from == to end
+        if to == "any" then return true end
+        if from == to then return true end
+        if to == "Instance" then return from == "Instance" or from:match("^Class:") ~= nil end
+        if from:match("^Class:") and to:match("^Class:") then
+            local ok, obj = pcall(Instance.new, from:sub(7))
+            if ok and obj then local yes = obj:IsA(to:sub(7)); obj:Destroy(); return yes end
+            return false
+        end
+        return false
+    end
+    local function nodeById(record, id)
+        for _, node in ipairs(record.Nodes) do if node.Id == id then return node end end
+    end
+    local function incoming(record, id, name)
+        for _, link in ipairs(record.Links) do if link.To == id and link.Input == name then return link end end
+    end
+    local function snapshot(record)
+        return { Id = record.Id, Name = record.Name, Nodes = copyTable(record.Nodes), Links = copyTable(record.Links), View = copyTable(record.View) }
+    end
+    local function validName(name)
+        if type(name) ~= "string" then return nil, "Digite um nome." end
+        name = name:match("^%s*(.-)%s*$"):gsub("%.blueprint$", "")
+        if name == "" or #name > 60 or name:find("[%c/\\]") then return nil, "Use um nome curto, sem barras ou quebras de linha." end
+        return name .. ".blueprint"
+    end
+    function Window:GetBlueprint(id)
+        if type(id) == "table" then return id.Window == self and self._blueprintsById[id.Id] or nil end
+        for _, r in ipairs(self.CustomBlueprints or {}) do if r.Id == id or r.Name == id then return r end end
+    end
+    function Window:GetBlueprints()
+        local out = {}
+        for _, record in ipairs(self.CustomBlueprints or {}) do table.insert(out, snapshot(record)) end
+        return out
+    end
+    function Window:GetBlueprintCatalog()
+        local out = {}
+        for _, def in pairs(Catalog) do table.insert(out, { Id = def.Id, Title = def.Title, Category = def.Category, Description = def.Description }) end
+        table.sort(out, function(a,b) return a.Title < b.Title end)
+        return out
+    end
+    function Window:ExportBlueprints()
+        return HttpService:JSONEncode({ Version = 1, Blueprints = self:GetBlueprints() })
+    end
+    function Window:SaveBlueprints()
+        if not self._blueprintsDirty then return true end
+        if self._blueprintStorageBlocked then return false, "Falha no carregamento anterior; exporte uma cópia antes de salvar." end
+        local ok, result = true, nil
+        if type(self.Config.SaveBlueprints) == "function" then ok, result = pcall(self.Config.SaveBlueprints, self:GetBlueprints(), self)
+        elseif self._blueprintStorageFile and type(writefile) == "function" then ok, result = pcall(writefile, self._blueprintStorageFile, self:ExportBlueprints()) end
+        if not ok or result == false then self:_BlueprintNotice("Não foi possível salvar: " .. tostring(result), true); return false, result end
+        self._blueprintsDirty = false
+        for _, r in ipairs(self.CustomBlueprints) do r.Dirty = false end
+        self:_RenderBlueprintRows()
+        self:_BlueprintStatus(self._hasBlueprintStorage and "Salvo" or "Salvo nesta janela · exporte para guardar")
+        safeCallback(self.Config.OnBlueprintsChanged, self:GetBlueprints(), self)
+        return true
+    end
+    function Window:_BlueprintChanged(record, saveOnly)
+        if not record then return end
+        record.Dirty = true
+        if not saveOnly then
+            record.Revision = (record.Revision or 0) + 1
+            if record.Runtime then self:StopBlueprint(record, true) end
+            local _, _, invalid = self:ValidateBlueprint(record)
+            record.Invalid = invalid
+        end
+        self._blueprintsDirty = true
+        self._blueprintSaveRevision = (self._blueprintSaveRevision or 0) + 1
+        self:_RenderBlueprintRows()
+        if self._loadingBlueprints then return end
+        local revision = self._blueprintSaveRevision
+        task.delay(0.6, function()
+            if not self.Destroyed and self._blueprintSaveRevision == revision then self:SaveBlueprints() end
+        end)
+    end
+    function Window:CreateBlueprint(config)
+        if self.Destroyed or not self.BlueprintEditor then return nil, "Editor indisponível." end
+        config = type(config) == "string" and { Name = config } or (config or {})
+        local name, err = validName(config.Name or "Blueprint")
+        if not name then return nil, err end
+        for _, r in ipairs(self.CustomBlueprints) do if r.Name:lower() == name:lower() then return nil, "Já existe um blueprint com esse nome." end end
+        if #self.CustomBlueprints >= (self.Config.MaxBlueprints or 100) then return nil, "Limite de blueprints atingido." end
+        self._blueprintCounter = self._blueprintCounter + 1
+        local id = "blueprint_" .. self._blueprintCounter
+        while self._blueprintsById[id] do self._blueprintCounter = self._blueprintCounter + 1; id = "blueprint_" .. self._blueprintCounter end
+        local record = { Id = id, Name = name, Window = self, Nodes = {}, Links = {}, View = { X = 30, Y = 30, Zoom = 0.85 }, Revision = 0, Counter = 0 }
+        function record:Open() return self.Window:OpenBlueprint(self) end
+        function record:AddNode(kind, pos, values) return self.Window:AddBlueprintNode(self, kind, pos, values) end
+        function record:Connect(a, output, b, input) return self.Window:ConnectBlueprint(self, a, output, b, input) end
+        function record:Run() return self.Window:RunBlueprint(self) end
+        function record:Stop() return self.Window:StopBlueprint(self) end
+        function record:Delete() return self.Window:DeleteBlueprint(self) end
+        function record:Rename(newName) return self.Window:RenameBlueprint(self, newName) end
+        table.insert(self.CustomBlueprints, record); self._blueprintsById[id] = record
+        if config.Empty ~= true then
+            local start = self:AddBlueprintNode(record, "Start", { X = 0, Y = 40 })
+            local notify = self:AddBlueprintNode(record, "Notify", { X = 320, Y = 40 })
+            self:ConnectBlueprint(record, start.Id, "Exec", notify.Id, "Exec")
+        end
+        self:_BlueprintChanged(record)
+        if config.Open ~= false then self:OpenBlueprint(record) end
+        return record
+    end
+    function Window:RenameBlueprint(id, newName)
+        local r = self:GetBlueprint(id); if not r then return nil, "Blueprint não encontrado." end
+        local name, err = validName(newName); if not name then return nil, err end
+        for _, other in ipairs(self.CustomBlueprints) do if other ~= r and other.Name:lower() == name:lower() then return nil, "Nome já utilizado." end end
+        r.Name = name; self:_BlueprintChanged(r, true)
+        if self.ActiveBlueprint == r then self.BlueprintUI.Title.Text = name end
+        return r
+    end
+    function Window:DeleteBlueprint(id)
+        local r = self:GetBlueprint(id); if not r then return false end
+        self:StopBlueprint(r, true)
+        if self.ActiveBlueprint == r then self:CloseBlueprintEditor() end
+        for i, item in ipairs(self.CustomBlueprints) do if item == r then table.remove(self.CustomBlueprints, i); break end end
+        self._blueprintsById[r.Id] = nil
+        self:_BlueprintChanged(r, true)
+        return true
+    end
+    function Window:AddBlueprintNode(id, kind, position, values)
+        local r = self:GetBlueprint(id)
+        if not r or not Catalog[kind] then return nil, "Node desconhecido." end
+        if #r.Nodes >= (self.Config.MaxBlueprintNodes or 150) then return nil, "Limite de nodes atingido." end
+        r.Counter = r.Counter + 1
+        local node = { Id = "node_" .. r.Counter, Type = kind, X = tonumber(position and position.X) or 0, Y = tonumber(position and position.Y) or 0, Values = copyTable(values or {}), Settings = {} }
+        if Catalog[kind].Dynamic then node.Settings = { Property = kind == "Cast" and "Part" or "Name", ValueType = "string" } end
+        table.insert(r.Nodes, node); self:_BlueprintChanged(r)
+        if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end
+        return node
+    end
+    function Window:DeleteBlueprintNode(id, nodeId)
+        local r = self:GetBlueprint(id); if not r then return false end
+        for i = #r.Nodes, 1, -1 do if r.Nodes[i].Id == nodeId then table.remove(r.Nodes, i) end end
+        for i = #r.Links, 1, -1 do if r.Links[i].From == nodeId or r.Links[i].To == nodeId then table.remove(r.Links, i) end end
+        self._bpSelection = nil; self:_BlueprintChanged(r)
+        if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end
+        return true
+    end
+    function Window:ConnectBlueprint(id, a, output, b, input)
+        local r = self:GetBlueprint(id); if not r then return false, "Blueprint não encontrado." end
+        local source, target = nodeById(r,a), nodeById(r,b)
+        local p, q = source and getPort(source,output,"out"), target and getPort(target,input,"in")
+        if a == b or not p or not q then return false, "Portas inválidas." end
+        if not compatible(p.Type,q.Type) then return false, "Incompatível: " .. p.Type .. " → " .. q.Type end
+        -- Adding a -> b must not find a path from b back to a.
+        local visited = {}
+        local function reaches(id)
+            if id == a then return true end
+            if visited[id] then return false end; visited[id] = true
+            for _, link in ipairs(r.Links) do
+                if link.From == id and not (link.To == b and link.Input == input) and reaches(link.To) then return true end
+            end
+            return false
+        end
+        if reaches(b) then return false, "Esta conexão criaria um ciclo." end
+        for i = #r.Links,1,-1 do if r.Links[i].To == b and r.Links[i].Input == input then table.remove(r.Links,i) end end
+        table.insert(r.Links, { From = a, Output = output, To = b, Input = input })
+        self:_BlueprintChanged(r)
+        if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end
+        return true
+    end
+    function Window:DisconnectBlueprint(id, nodeId, input)
+        local r = self:GetBlueprint(id); if not r then return false end
+        for i = #r.Links,1,-1 do if r.Links[i].To == nodeId and r.Links[i].Input == input then table.remove(r.Links,i) end end
+        self:_BlueprintChanged(r)
+        if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end
+        return true
+    end
+    function Window:ValidateBlueprint(id)
+        local r = self:GetBlueprint(id); if not r then return false, { "Blueprint não encontrado." }, {} end
+        local errors, invalid, seen, targets = {}, {}, {}, {}
+        local function issue(nodeId,msg) invalid[nodeId] = true; table.insert(errors,msg) end
+        for _, n in ipairs(r.Nodes) do
+            local def = definition(n)
+            if seen[n.Id] then issue(n.Id,"Id duplicado: " .. n.Id) end; seen[n.Id] = true
+            if not def then issue(n.Id,"Node desconhecido: " .. n.Type)
+            elseif def.Disabled then issue(n.Id,def.Title .. ": " .. def.Disabled)
+            else
+                for _, p in ipairs(def.Inputs) do
+                    local link = incoming(r,n.Id,p.Name)
+                    if not link and p.Type ~= "Exec" then
+                        local raw = n.Values[p.Name]; if raw == nil then raw = p.Default end
+                        if p.Required and (raw == nil or raw == "") then issue(n.Id,def.Title .. ": conecte " .. p.Name)
+                        elseif (raw ~= nil and (raw ~= "" or acceptsLiteral(p.Type))) or p.Type == "string" or p.Type == "any" then
+                            local ok, err = pcall(parseValue,raw,p.Type)
+                            if not ok then issue(n.Id,def.Title .. "." .. p.Name .. ": " .. tostring(err)) end
+                        end
+                    end
+                end
+                if def.Dynamic and (not n.Settings or type(n.Settings.Property) ~= "string" or not n.Settings.Property:match("^[%w_]+$")) then issue(n.Id,"Nome de propriedade inválido.") end
+            end
+        end
+        for _, l in ipairs(r.Links) do
+            local a,b = nodeById(r,l.From),nodeById(r,l.To)
+            local p,q = a and getPort(a,l.Output,"out"), b and getPort(b,l.Input,"in")
+            local key = l.To .. ":" .. l.Input
+            if targets[key] then issue(l.To,"Entrada com mais de uma conexão: " .. key) end; targets[key] = true
+            if not p or not q or not compatible(p.Type,q.Type) then issue(l.To,"Conexão inválida: " .. l.Output .. " → " .. l.Input) end
+        end
+        local state = {}
+        local function visit(id)
+            if state[id] == 1 then issue(id,"Ciclo encontrado no grafo."); return end
+            if state[id] == 2 then return end
+            state[id] = 1
+            for _, l in ipairs(r.Links) do if l.To == id and seen[l.From] then visit(l.From) end end
+            state[id] = 2
+        end
+        for _, n in ipairs(r.Nodes) do visit(n.Id) end
+        return #errors == 0, errors, invalid
+    end
+    function Window:StopBlueprint(id, quiet)
+        local r = self:GetBlueprint(id or self.ActiveBlueprint); if not r or not r.Runtime then return true end
+        local runtime = r.Runtime; runtime.Cancelled = true
+        if runtime.Thread and coroutine.status(runtime.Thread) ~= "dead" and runtime.Thread ~= coroutine.running() then pcall(task.cancel,runtime.Thread) end
+        for i = #runtime.Undo,1,-1 do pcall(runtime.Undo[i]) end
+        for i = #runtime.Created,1,-1 do pcall(function() runtime.Created[i]:Destroy() end) end
+        r.Runtime = nil
+        if not quiet then self:_BlueprintStatus("Parado · objetos criados e alterações locais removidos") end
+        return true
+    end
+    function Window:RunBlueprint(id)
+        local r = self:GetBlueprint(id or self.ActiveBlueprint); if not r then return false,"Blueprint não encontrado." end
+        if self.ActiveBlueprint == r and self._bpPending then self:_BlueprintNotice("Finalize a conexão pendente ou pressione Esc antes de rodar.",true); return false,"Conexão pendente." end
+        if self.Config.AllowBlueprintExecution == false then self:_BlueprintNotice("Execução desativada.",true); return false,"Execução desativada." end
+        local valid, errors, invalid = self:ValidateBlueprint(r)
+        r.Invalid = invalid
+        if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end
+        if not valid then self:_BlueprintNotice(errors[1],true); return false,errors end
+        self:StopBlueprint(r,true)
+        local rt = { Created = {}, Undo = {}, Values = {}, Projected = {}, Assigned = {}, Cancelled = false, Revision = r.Revision }
+        r.Runtime = rt
+        self:_BlueprintStatus("Validando propriedades...")
+        -- Preflight creates objects detached; all data and property checks run before any commit.
+        rt.Thread = task.spawn(function()
+            local operations, parents = {}, {}
+            local currentNode
+            local function check() assert(not rt.Cancelled and not self.Destroyed and rt.Revision == r.Revision,"Execução cancelada.") end
+            local function plannedValue(obj,name)
+                if rt.Assigned[obj] and rt.Assigned[obj][name] then return rt.Projected[obj][name] end
+                return obj[name]
+            end
+            local eval
+            local function resolve(node,p)
+                local link = incoming(r,node.Id,p.Name)
+                if link then
+                    local value = eval(nodeById(r,link.From))[link.Output]
+                    if p.Required then assert(value ~= nil,"Referência ausente em " .. p.Name) end
+                    if value ~= nil and p.Type:match("^Class:") then assert(typeof(value)=="Instance" and value:IsA(p.Type:sub(7)),"Classe incompatível em " .. p.Name) end
+                    return value
+                end
+                local raw = node.Values[p.Name]; if raw == nil then raw = p.Default end
+                if raw == nil or (raw == "" and not acceptsLiteral(p.Type)) then return nil end
+                return parseValue(raw,p.Type)
+            end
+            local function validateProperty(obj,name,value)
+                safeInstance(obj)
+                assert(name:match("^[%w_]+$") and name ~= "Source" and name ~= "Capabilities" and name ~= "Sandboxed", "Propriedade bloqueada.")
+                local old = obj[name]
+                if old ~= nil and value ~= nil then
+                    local kind = fieldType(old)
+                    assert(compatible(fieldType(value),kind), "Tipo inválido em " .. obj.ClassName .. "." .. name .. ": " .. kind)
+                end
+                if name == "Parent" and value then safeInstance(value) end
+                return old
+            end
+            eval = function(node)
+                check(); assert(node,"Node ausente.")
+                if rt.Values[node.Id] then return rt.Values[node.Id] end
+                currentNode = node.Id
+                local def, values, out = definition(node), {}, { Exec = true }
+                for _, p in ipairs(def.Inputs) do values[p.Name] = resolve(node,p) end
+                currentNode = node.Id
+                if def.Class then
+                    local obj = def.Service and game:GetService(def.Class) or Instance.new(def.Class)
+                    if not def.Service then table.insert(rt.Created,obj) end
+                    safeInstance(obj)
+                    for _, p in ipairs(def.Inputs) do
+                        if p.Property then
+                            local value = values[p.Name]
+                            -- Empty defaults leave complex Roblox properties unchanged.
+                            local supplied = node.Values[p.Name] ~= nil or incoming(r,node.Id,p.Name) ~= nil
+                            if supplied and (value ~= nil or p.Type == "Instance") then
+                                local old = validateProperty(obj,p.Name,value)
+                                rt.Projected[obj] = rt.Projected[obj] or {}; rt.Projected[obj][p.Name] = value
+                                rt.Assigned[obj] = rt.Assigned[obj] or {}; rt.Assigned[obj][p.Name] = true
+                                if not def.Service and p.Name ~= "Parent" then obj[p.Name] = value
+                                else
+                                    local target, name, nextValue, previous = obj,p.Name,value,old
+                                    local op = function()
+                                        check(); target[name] = nextValue
+                                        table.insert(rt.Undo,function() target[name] = previous end)
+                                    end
+                                    if p.Name == "Parent" then table.insert(parents,op) else table.insert(operations,op) end
+                                end
+                            end
+                        end
+                    end
+                    out.Object = obj
+                    for _, p in ipairs(def.Outputs) do if p.Property then
+                        out[p.Name] = plannedValue(obj,p.Name)
+                    end end
+                elseif def.Ref then
+                    local obj
+                    if def.Ref == "LocalPlayer" then obj = LocalPlayer
+                    elseif def.Ref == "PlayerGui" then obj = PlayerGui
+                    elseif def.Ref == "Character" then obj = LocalPlayer.Character
+                    elseif def.Ref == "CurrentCamera" then obj = workspace.CurrentCamera
+                    else obj = LocalPlayer:FindFirstChild(def.Ref) end
+                    assert(obj,"Referência indisponível: " .. def.Ref); out.Object = safeInstance(obj)
+                    for _, p in ipairs(def.Outputs) do if p.Property then out[p.Name] = obj[p.Name] end end
+                elseif def.Literal then out.Value = values.Value
+                elseif node.Type == "FindChild" then
+                    out.Object = safeInstance(values.Parent):FindFirstChild(values.Name,values.Recursive)
+                    assert(out.Object,"Objeto não encontrado: " .. values.Name); safeInstance(out.Object)
+                elseif node.Type == "GetProperty" then
+                    local obj = safeInstance(values.Object)
+                    validateProperty(obj,node.Settings.Property,nil)
+                    out.Value = plannedValue(obj,node.Settings.Property)
+                    assert(compatible(fieldType(out.Value),node.Settings.ValueType),"Tipo de leitura diferente do tipo escolhido.")
+                elseif node.Type == "Cast" then
+                    out.Object = safeInstance(values.Object)
+                    assert(out.Object:IsA(node.Settings.Property),"Objeto não é " .. node.Settings.Property)
+                elseif node.Type == "SetProperty" then
+                    local obj,name,value = safeInstance(values.Object),node.Settings.Property,values.Value
+                    local old = validateProperty(obj,name,value)
+                    rt.Projected[obj] = rt.Projected[obj] or {}; rt.Projected[obj][name] = value
+                    rt.Assigned[obj] = rt.Assigned[obj] or {}; rt.Assigned[obj][name] = true
+                    -- Test on a detached copy when creatable; inaccessible/read-only setters fail here.
+                    local ok, probe = pcall(Instance.new,obj.ClassName)
+                    if ok and probe then
+                        local assignOk, assignErr = pcall(function() probe[name] = value end)
+                        probe:Destroy(); assert(assignOk,assignErr)
+                    else
+                        local defService = Catalog["Service:" .. obj.ClassName]
+                        local allowed = false
+                        for _, propName in ipairs(defService and defService.Writable or {}) do if propName == name then allowed = true end end
+                        assert(allowed,"Esta propriedade não pode ser editada por este node.")
+                    end
+                    table.insert(operations,function()
+                        check(); obj[name] = value
+                        table.insert(rt.Undo,function() obj[name] = old end)
+                    end)
+                    out.Object = obj
+                elseif node.Type == "Add" then out.Result = values.A + values.B
+                elseif node.Type == "Multiply" then out.Result = values.A * values.B
+                elseif node.Type == "MakeVector3" then out.Value = Vector3.new(values.X,values.Y,values.Z)
+                elseif node.Type == "MakeColor3" then
+                    for _,channel in ipairs({values.R,values.G,values.B}) do assert(channel>=0 and channel<=255,"RGB deve estar entre 0 e 255.") end
+                    out.Value = Color3.fromRGB(values.R,values.G,values.B)
+                elseif node.Type == "MakeUDim2" then out.Value = UDim2.new(values.ScaleX,values.OffsetX,values.ScaleY,values.OffsetY)
+                elseif node.Type == "NumberSequence" then out.Value = NumberSequence.new(values.Start,values.End)
+                elseif node.Type == "ColorSequence" then out.Value = ColorSequence.new(values.Start,values.End)
+                elseif node.Type == "Wait" then
+                    assert(values.Seconds >= 0 and values.Seconds <= 60,"A espera deve estar entre 0 e 60 segundos.")
+                    table.insert(operations,function() check(); task.wait(values.Seconds); check() end)
+                elseif node.Type == "Print" then table.insert(operations,function() check(); print("[Blueprint " .. r.Name .. "]",values.Message) end)
+                elseif node.Type == "Notify" then table.insert(operations,function() check(); self:Notify({ Content = values.Message }) end)
+                elseif node.Type == "PlaySound" then
+                    assert(safeInstance(values.Sound):IsA("Sound"),"Conecte um Sound.")
+                    table.insert(operations,function() check(); values.Sound:Play(); table.insert(rt.Undo,function() values.Sound:Stop() end) end)
+                end
+                rt.Values[node.Id] = out
+                for _, value in pairs(out) do if typeof(value) == "number" then assert(value == value and math.abs(value) < math.huge,"Resultado numérico inválido.") end end
+                return out
+            end
+            local ok, err = pcall(function()
+                for _, n in ipairs(r.Nodes) do eval(n) end
+                for obj,properties in pairs(rt.Projected) do
+                    if properties.Parent then
+                        local visited = { [obj] = true }; local ancestor = properties.Parent
+                        while ancestor do
+                            assert(not visited[ancestor],"Ciclo de Parent entre objetos."); visited[ancestor]=true
+                            ancestor = plannedValue(ancestor,"Parent")
+                        end
+                    end
+                end
+                check(); self:_BlueprintStatus("Rodando...")
+                for _, op in ipairs(parents) do op() end
+                for _, op in ipairs(operations) do op() end
+            end)
+            if not ok then
+                if currentNode then r.Invalid = { [currentNode] = true } end
+                self:StopBlueprint(r,true)
+                if not self.Destroyed then self:_BlueprintNotice("Falha: " .. tostring(err),true); if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end end
+                safeCallback(self.Config.OnBlueprintError,err,r,self)
+            elseif not rt.Cancelled and not self.Destroyed then
+                self:_BlueprintNotice("Blueprint executado: " .. r.Name,false)
+                safeCallback(self.Config.OnBlueprintRun,r,self)
+            end
+        end)
+        return true
+    end
+
+    local GuiService = game:GetService("GuiService")
+    local function pointer(input)
+        local p = input and Vector2.new(input.Position.X,input.Position.Y) or UserInputService:GetMouseLocation()
+        if not input or input.UserInputType ~= Enum.UserInputType.Touch then p = UserInputService:GetMouseLocation() end
+        local inset = Vector2.new()
+        local ok, topLeft = pcall(function() return GuiService:GetGuiInset() end)
+        if ok then inset = topLeft end
+        return p - inset
+    end
+    local function inside(gui,p)
+        if not gui or not gui.Visible then return false end
+        local a,b = gui.AbsolutePosition,gui.AbsoluteSize
+        return p.X >= a.X and p.Y >= a.Y and p.X <= a.X+b.X and p.Y <= a.Y+b.Y
+    end
+    local function label(window,parent,text,position,size,key,font,textSize,z)
+        local obj = New("TextLabel", { BackgroundTransparency = 1, Text = text, TextColor3 = window.Theme[key or "Text"],
+            TextSize = textSize or 11, Font = window.Theme[font or "Font"], TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd, Position = position, Size = size, ZIndex = z or parent.ZIndex+1, Parent = parent })
+        BindTheme(window,obj,"TextColor3",key or "Text"); BindTheme(window,obj,"Font",font or "Font")
+        return obj
+    end
+    local function textButton(window,parent,text,position,size,callback,primary,z)
+        local obj = New("TextButton", { Text = text, TextSize = 11, Font = window.Theme.FontMedium,
+            TextColor3 = primary and window.Theme.AccentText or window.Theme.Text, BackgroundColor3 = primary and window.Theme.Accent or window.Theme.Surface2,
+            AutoButtonColor = false, BorderSizePixel = 0, Position = position, Size = size, ZIndex = z or parent.ZIndex+2, Parent = parent })
+        Corner(obj,4)
+        BindTheme(window,obj,"BackgroundColor3",primary and "Accent" or "Surface2")
+        BindTheme(window,obj,"TextColor3",primary and "AccentText" or "Text"); BindTheme(window,obj,"Font","FontMedium")
+        obj.MouseEnter:Connect(function() HoverTween(obj,0.16,{ BackgroundColor3 = primary and window.Theme.AccentHover or window.Theme.SurfaceHover }) end)
+        obj.MouseLeave:Connect(function() HoverTween(obj,0.18,{ BackgroundColor3 = primary and window.Theme.Accent or window.Theme.Surface2 }) end)
+        obj.MouseButton1Click:Connect(callback)
+        return obj
+    end
+    local function editBox(window,parent,text,position,size,z,callback)
+        local box = New("TextBox", { Text = tostring(text or ""), ClearTextOnFocus = false, TextSize = 10, Font = window.Theme.Font,
+            TextColor3 = window.Theme.SubText, BackgroundColor3 = window.Theme.Input, BorderSizePixel = 0,
+            TextXAlignment = Enum.TextXAlignment.Left, Position = position, Size = size, ZIndex = z, Parent = parent })
+        Corner(box,3); Padding(box,6,6,0,0)
+        BindTheme(window,box,"BackgroundColor3","Input"); BindTheme(window,box,"TextColor3","SubText"); BindTheme(window,box,"Font","Font")
+        local stroke = Stroke(box,window.Theme.Border,1,0.6); BindTheme(window,stroke,"Color","Border")
+        box.Focused:Connect(function() HoverTween(stroke,0.15,{ Transparency = 0.1 }) end)
+        box.FocusLost:Connect(function() HoverTween(stroke,0.15,{ Transparency = 0.6 }); callback(box.Text) end)
+        return box
+    end
+    function Window:_BlueprintStatus(text,danger)
+        self._bpStatusText = tostring(text or "")
+        if self.BlueprintUI then self.BlueprintUI.Status.Text = self._bpStatusText; self.BlueprintUI.Status.TextColor3 = danger and self.Theme.Danger or self.Theme.MutedText end
+    end
+    function Window:_BlueprintNotice(text,danger)
+        if self.Destroyed then return end
+        self:_BlueprintStatus(text,danger)
+        self:Notify({ Content = tostring(text), Duration = danger and 6 or 3, Icon = danger and "triangle-alert" or "check", IconColor = danger and self.Theme.Danger or self.Theme.Success })
+    end
+    function Window:_BlueprintTooltip(obj,text)
+        obj.MouseEnter:Connect(function()
+            self._bpTooltipRevision = (self._bpTooltipRevision or 0)+1
+            local revision = self._bpTooltipRevision
+            task.delay(0.35,function()
+                if self.Destroyed or self._bpTooltipRevision ~= revision or not obj.Parent or not self.Visible then return end
+                local tip = self.BlueprintUI and self.BlueprintUI.Tooltip
+                if not tip then return end
+                tip.Text = text; tip.Visible = true
+                local pos = pointer()
+                local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280,720)
+                tip.Position = UDim2.fromOffset(clamp(pos.X+12,4,math.max(4,viewport.X-290)),clamp(pos.Y+18,4,math.max(4,viewport.Y-92)))
+                tip.TextTransparency = 0.4; Tween(tip,0.18,{ TextTransparency = 0 })
+            end)
+        end)
+        obj.MouseLeave:Connect(function()
+            self._bpTooltipRevision = (self._bpTooltipRevision or 0)+1
+            if self.BlueprintUI then self.BlueprintUI.Tooltip.Visible = false end
+        end)
+    end
+    function Window:_CloseCreationMenu()
+        if self._creationMenu then self._creationMenu:Destroy(); self._creationMenu = nil end
+    end
+    function Window:OpenCreationMenu()
+        if self._creationMenu then self:_CloseCreationMenu(); return end
+        if not self.ScriptExplorer then return end
+        local plus = self.ScriptExplorerElements.Plus
+        local relative = plus.AbsolutePosition-self.Main.AbsolutePosition
+        local mainScale = self.Main:FindFirstChildOfClass("UIScale")
+        local scale = mainScale and mainScale.Scale or 1
+        local menu = New("Frame", { Name = "CreateScriptOrBlueprint", BackgroundColor3 = self.Theme.Popup, BorderSizePixel = 0,
+            Position = UDim2.fromOffset(relative.X/scale-116,relative.Y/scale+28), Size = UDim2.fromOffset(140,78), ZIndex = 6500, Parent = self.Main })
+        Corner(menu,6); BindTheme(self,menu,"BackgroundColor3","Popup"); Stroke(menu,self.Theme.Stroke,1,0.2)
+        self._creationMenu = menu
+        textButton(self,menu,"Script",UDim2.fromOffset(6,6),UDim2.new(1,-12,0,30),function() self:_CloseCreationMenu(); self:OpenScriptNamePopup() end,false,6501)
+        local bp = textButton(self,menu,"Blueprint",UDim2.fromOffset(6,42),UDim2.new(1,-12,0,30),function() self:_CloseCreationMenu(); self:OpenBlueprintNamePopup() end,false,6501)
+        bp.Visible = self.Config.CustomBlueprints ~= false
+        if not bp.Visible then menu.Size = UDim2.fromOffset(140,42) end
+        PopIn(menu)
+    end
+    function Window:OpenBlueprintNamePopup(id) return self:OpenScriptNamePopup(id,true) end
+    function Window:_LayoutBlueprintExplorer()
+        if not self.BlueprintExplorerUI then return end
+        local ui, scripts = self.BlueprintExplorerUI,self.ScriptExplorerElements
+        local height = self.ScriptExplorer.AbsoluteSize.Y
+        local room = math.max(160,height-114)
+        local scriptsHeight = self._scriptsCollapsed and 0 or math.floor(room*0.46)
+        local y = 80+scriptsHeight+8
+        scripts.List.Size = UDim2.new(1,-16,0,scriptsHeight)
+        scripts.Empty.Position = UDim2.fromOffset(18,83)
+        scripts.Empty.Size = UDim2.new(1,-36,0,math.min(50,scriptsHeight))
+        scripts.Empty.Visible = #self.CustomScripts == 0 and not self._scriptsCollapsed
+        ui.Folder.Position = UDim2.fromOffset(8,y)
+        ui.List.Position = UDim2.fromOffset(8,y+29)
+        ui.List.Size = UDim2.new(1,-16,1,-(y+64))
+        ui.List.Visible = not self._blueprintsCollapsed
+        ui.Empty.Position = UDim2.fromOffset(18,y+33)
+        ui.Empty.Visible = #self.CustomBlueprints == 0 and not self._blueprintsCollapsed
+        scripts.Count.Text = #self.CustomScripts .. " scripts · " .. #self.CustomBlueprints .. " BP"
+        scripts.Count.Size = UDim2.new(1,-24,0,24)
+        scripts.Storage.Visible = false
+    end
+    function Window:_RenderBlueprintRows()
+        if not self.BlueprintExplorerUI then return end
+        local list = self.BlueprintExplorerUI.List
+        for _, child in ipairs(list:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
+        for i,r in ipairs(self.CustomBlueprints) do
+            local record = r
+            local row = New("TextButton", { Text = "", AutoButtonColor = false, BorderSizePixel = 0, BackgroundColor3 = self.Theme.SurfaceHover,
+                BackgroundTransparency = self.ActiveBlueprint == record and 0 or 1, Size = UDim2.new(1,-4,0,29), LayoutOrder = i, ZIndex = 12, Parent = list })
+            Corner(row,4)
+            local icon = label(self,row,"◇",UDim2.fromOffset(19,0),UDim2.fromOffset(18,29),"SyntaxBuiltin","Font",17,14)
+            label(self,row,record.Name,UDim2.fromOffset(40,0),UDim2.new(1,-54,1,0),self.ActiveBlueprint == record and "Text" or "SubText","FontMedium",11,14)
+            if record.Dirty then label(self,row,"•",UDim2.new(1,-13,0,0),UDim2.fromOffset(10,29),"Accent","Font",14,14) end
+            if self.ActiveBlueprint == record then
+                New("Frame", { BackgroundColor3 = self.Theme.Accent, BorderSizePixel = 0, Position = UDim2.fromOffset(7,9), Size = UDim2.fromOffset(2,11), ZIndex = 14, Parent = row })
+            end
+            row.MouseEnter:Connect(function() if self.ActiveBlueprint ~= record then HoverTween(row,0.15,{ BackgroundTransparency = 0.5 }) end end)
+            row.MouseLeave:Connect(function() if self.ActiveBlueprint ~= record then HoverTween(row,0.18,{ BackgroundTransparency = 1 }) end end)
+            row.MouseButton1Click:Connect(function() self:OpenBlueprint(record) end)
+            self:_BlueprintTooltip(icon,"Blueprint visual · " .. #record.Nodes .. " nodes · " .. #record.Links .. " conexões")
+        end
+        self:_LayoutBlueprintExplorer()
+    end
+    function Window:_LeaveBlueprintEditor()
+        if not self.ActiveBlueprint then return end
+        self.ActiveBlueprint = nil; self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil
+        self.BlueprintEditor.Visible = false; self.ContentHost.Visible = true
+        self.BlueprintUI.Palette.Visible = false; self.BlueprintUI.Tooltip.Visible = false
+        self:_RenderBlueprintRows()
+    end
+    function Window:CloseBlueprintEditor()
+        self:SaveBlueprints(); self:_LeaveBlueprintEditor()
+        if self.ActiveTab then self:_setActiveTab(self.ActiveTab) end
+        return self
+    end
+    function Window:OpenBlueprint(id)
+        local record = self:GetBlueprint(id); if not record or self.Destroyed then return nil,"Blueprint não encontrado." end
+        if self.ActiveScript then self:_LeaveScriptEditor() end
+        if self.ActiveDropdown then self.ActiveDropdown:Close() end
+        if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
+        self:_CloseCreationMenu()
+        self.ActiveBlueprint = record; self._blueprintsCollapsed = false; self._bpSelection = nil; self._bpPending = nil
+        self.ContentHost.Visible = false; self.ScriptEditor.Visible = false; self.BlueprintEditor.Visible = true
+        self.BlueprintUI.Title.Text = record.Name
+        for _, tab in ipairs(self.Tabs) do
+            tab.Button.BackgroundTransparency = 1; tab.ButtonLabel.TextColor3 = self.Theme.SubText
+            if tab.ButtonIcon then tab.ButtonIcon.ImageColor3 = self.Theme.Icon end
+            if tab.Accent then tab.Accent.BackgroundTransparency = 1 end
+        end
+        self:_BuildBlueprintBoard(); self:_RenderScriptRows(); self:_RenderBlueprintRows()
+        self:_BlueprintStatus("Arraste os nodes · conecte os pontos · Rodar para executar")
+        PopIn(self.BlueprintEditor)
+        safeCallback(self.Config.OnBlueprintOpened,record,self)
+        return record
+    end
+    function Window:_SelectBlueprintNode(id)
+        self._bpSelection = id
+        for nodeId,ui in pairs(self._bpNodeUI or {}) do
+            HoverTween(ui.Stroke,0.16,{ Transparency = nodeId == id and 0 or 0.55, Thickness = nodeId == id and 1.5 or 1 })
+        end
+    end
+    function Window:_RefreshBlueprintCompatibility()
+        local r = self.ActiveBlueprint; if not r then return end
+        local pending = self._bpPending
+        for id,ui in pairs(self._bpNodeUI or {}) do
+            local node, anyCompatible = nodeById(r,id),false
+            for _, endpoint in ipairs(ui.Endpoints) do
+                local allowed = true
+                if pending then
+                    if endpoint.Direction == pending.Direction or endpoint.Node == pending.Node then allowed = false
+                    else
+                        local from,to = pending.Port,endpoint.Port
+                        if pending.Direction == "in" then from,to = endpoint.Port,pending.Port end
+                        allowed = compatible(from.Type,to.Type)
+                        if allowed then anyCompatible = true end
+                    end
+                end
+                HoverTween(endpoint.Button,0.16,{ BackgroundTransparency = allowed and 0 or 0.82 })
+            end
+            local def = definition(node)
+            local faded = def.Disabled or (r.Invalid and r.Invalid[id]) or self._bpRejectedTarget == id or (pending and id ~= pending.Node and not anyCompatible)
+            HoverTween(ui.Frame,0.18,{ GroupTransparency = faded and 0.74 or 0 })
+        end
+        self._bpWireDirty = true
+    end
+    function Window:_BlueprintPortPressed(endpoint,input)
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        local r = self.ActiveBlueprint; if not r then return end
+        local pending = self._bpPending
+        if pending and pending.Node == endpoint.Node and pending.Direction == endpoint.Direction and pending.Port.Name == endpoint.Port.Name then
+            self._bpPending = nil; self._bpRejectedTarget = nil; self:_RefreshBlueprintCompatibility(); return
+        end
+        if pending and pending.Direction ~= endpoint.Direction then
+            local source,target = pending,endpoint
+            if source.Direction == "in" then source,target = endpoint,pending end
+            local ok,err = self:ConnectBlueprint(r,source.Node,source.Port.Name,target.Node,target.Port.Name)
+            if not ok then
+                self._bpPending = source; self._bpRejectedTarget = target.Node
+                self:_BlueprintNotice(err,true)
+            else self._bpPending = nil; self._bpRejectedTarget = nil; self:_BlueprintStatus("Conexão criada") end
+            self:_RefreshBlueprintCompatibility()
+        else
+            self._bpPending = endpoint; self._bpRejectedTarget = nil; self._bpPendingStart = pointer(input)
+            self:_BlueprintStatus(endpoint.Port.Name .. " · " .. endpoint.Port.Type .. " · selecione uma porta compatível")
+            self:_RefreshBlueprintCompatibility()
+        end
+    end
+    function Window:_BuildBlueprintBoard()
+        local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r or not ui then return end
+        if self._bpBuilding then return end
+        self._bpBuilding = true
+        self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil; self._bpTooltipRevision = (self._bpTooltipRevision or 0)+1; ui.Tooltip.Visible = false
+        for _,child in ipairs(ui.NodeLayer:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
+        self._bpNodeUI,self._bpEndpoints = {},{}
+        for _,node in ipairs(r.Nodes) do
+            local n,def = node,definition(node)
+            if def then
+                local rows,byName = {},{}
+                for _,p in ipairs(def.Inputs) do local row = { Name = p.Name, Input = p }; table.insert(rows,row); byName[p.Name] = row end
+                for _,p in ipairs(def.Outputs) do
+                    local row = byName[p.Name]
+                    if row then row.Output = p else row = { Name = p.Name, Output = p }; table.insert(rows,row); byName[p.Name] = row end
+                end
+                local dynamicHeight = def.Dynamic and (n.Type == "Cast" and 25 or 50) or 0
+                local height = 42+dynamicHeight+math.min(9,#rows)*32+18
+                local frame = New("CanvasGroup", { Name = n.Id, BackgroundColor3 = self.Theme.Surface, BorderSizePixel = 0,
+                    Position = UDim2.fromOffset(n.X,n.Y), Size = UDim2.fromOffset(258,height), GroupTransparency = (def.Disabled or (r.Invalid and r.Invalid[n.Id])) and 0.74 or 0,
+                    ZIndex = 24, Parent = ui.NodeLayer })
+                Corner(frame,6); BindTheme(self,frame,"BackgroundColor3","Surface")
+                local stroke = Stroke(frame,def.Color,1,n.Id == self._bpSelection and 0 or 0.55)
+                local header = New("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = def.Color, BackgroundTransparency = 0.85,
+                    BorderSizePixel = 0, Size = UDim2.new(1,0,0,36), ZIndex = 25, Parent = frame })
+                label(self,header,def.Title,UDim2.fromOffset(12,0),UDim2.new(1,-60,1,0),"Text","FontMedium",12,26)
+                local close = textButton(self,header,"×",UDim2.new(1,-30,0,6),UDim2.fromOffset(24,24),function() self:DeleteBlueprintNode(r,n.Id) end,false,27)
+                close.BackgroundTransparency = 1
+                self:_BlueprintTooltip(header,def.Description .. (def.Disabled and ("\n" .. def.Disabled) or ""))
+                header.InputBegan:Connect(function(input)
+                    if self._bpBuilding then return end
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        self:_SelectBlueprintNode(n.Id)
+                        self._bpDrag = { Mode = "node", Node = n, Frame = frame, Start = pointer(input), X = n.X, Y = n.Y, Input = input }
+                    end
+                end)
+                if def.Dynamic then
+                    label(self,frame,n.Type == "Cast" and "Classe" or "Propriedade",UDim2.fromOffset(12,39),UDim2.fromOffset(84,20),"MutedText","Font",10,26)
+                    editBox(self,frame,n.Settings.Property,UDim2.fromOffset(96,40),UDim2.fromOffset(147,20),27,function(value)
+                        n.Settings.Property = value; self:_BlueprintChanged(r)
+                        if n.Type == "Cast" then self:_BuildBlueprintBoard() end
+                    end)
+                    if n.Type ~= "Cast" then
+                    label(self,frame,"Tipo",UDim2.fromOffset(12,64),UDim2.fromOffset(84,20),"MutedText","Font",10,26)
+                    local typeBox = editBox(self,frame,n.Settings.ValueType,UDim2.fromOffset(96,65),UDim2.fromOffset(147,20),27,function(value)
+                        local allowed = { string=true,number=true,boolean=true,Vector2=true,Vector3=true,Color3=true,UDim=true,UDim2=true,CFrame=true,Instance=true,NumberRange=true }
+                        if allowed[value] or value:match("^Enum%.[%w_]+$") then
+                            n.Settings.ValueType = value; self:_BlueprintChanged(r); self:_BuildBlueprintBoard()
+                        else self:_BlueprintNotice("Tipo desconhecido; use string, number, boolean, Vector3, Color3, UDim2, Instance ou Enum.<tipo>.",true) end
+                    end)
+                    self:_BlueprintTooltip(typeBox,"Tipo exato da propriedade. Referências usam Instance; enums usam Enum.Material, Enum.Font etc.")
+                    end
+                end
+                local scroll = StyleScrollBar(New("ScrollingFrame", { Name = "Properties", BackgroundTransparency = 1, BorderSizePixel = 0,
+                    Position = UDim2.fromOffset(0,39+dynamicHeight), Size = UDim2.new(1,0,1,-(51+dynamicHeight)), CanvasSize = UDim2.fromOffset(0,#rows*32),
+                    ScrollingDirection = Enum.ScrollingDirection.Y, ElasticBehavior = Enum.ElasticBehavior.Never, ScrollBarThickness = 2, ZIndex = 25, Parent = frame }),{ Thickness = 2,Color = self.Theme.Scrollbar,Transparency = 0.65 })
+                local nodeUI = { Frame = frame, Stroke = stroke, Scroll = scroll, Endpoints = {} }; self._bpNodeUI[n.Id] = nodeUI
+                local function dot(p,direction,rowFrame)
+                    local color = p.Type == "Exec" and self.Theme.Text or def.Color
+                    local button = New("TextButton", { Name = direction .. ":" .. p.Name, Text = p.Type == "Exec" and "›" or "", TextColor3 = self.Theme.Surface,
+                        TextSize = 10, Font = self.Theme.FontBold, AutoButtonColor = false, BorderSizePixel = 0, BackgroundColor3 = color,
+                        Position = direction == "in" and UDim2.fromOffset(7,10) or UDim2.new(1,-19,0,10), Size = UDim2.fromOffset(12,12), ZIndex = 28, Parent = rowFrame })
+                    Corner(button,p.Type == "Exec" and 2 or 20)
+                    local endpoint = { Node = n.Id, Port = p, Direction = direction, Button = button, Scroll = scroll }
+                    table.insert(nodeUI.Endpoints,endpoint); table.insert(self._bpEndpoints,endpoint)
+                    self:_BlueprintTooltip(button,p.Description .. "\n" .. p.Type .. (direction == "in" and " · entrada · botão direito desconecta" or " · saída"))
+                    button.InputBegan:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton2 and direction == "in" then self:DisconnectBlueprint(r,n.Id,p.Name)
+                        else self:_BlueprintPortPressed(endpoint,input) end
+                    end)
+                end
+                for i,row in ipairs(rows) do
+                    local rowData = row
+                    local holder = New("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(0,(i-1)*32), Size = UDim2.new(1,0,0,32), ZIndex = 26, Parent = scroll })
+                    if row.Input then dot(row.Input,"in",holder) end
+                    if row.Output then dot(row.Output,"out",holder) end
+                    local title = label(self,holder,row.Name,UDim2.fromOffset(27,0),UDim2.fromOffset(100,32),"SubText","Font",10,27)
+                    self:_BlueprintTooltip(title,(row.Input or row.Output).Description)
+                    local p = row.Input
+                    if p and p.Type ~= "Exec" and p.Type ~= "Instance" and not p.Type:match("^Class:") then
+                        local link = incoming(r,n.Id,p.Name)
+                        local raw = n.Values[p.Name]; if raw == nil then raw = p.Default end
+                        if link then
+                            label(self,holder,"↔ " .. p.Type,UDim2.fromOffset(132,0),UDim2.fromOffset(99,32),"SyntaxBuiltin","Font",9,27)
+                        else
+                            local box = editBox(self,holder,raw,UDim2.fromOffset(130,5),UDim2.fromOffset(100,22),27,function(value)
+                                if not frame.Parent then return end
+                                n.Values[rowData.Name] = value; self:_BlueprintChanged(r)
+                                local ok,err = pcall(parseValue,value,p.Type)
+                                if not ok then r.Invalid = r.Invalid or {}; r.Invalid[n.Id] = true; self:_BlueprintNotice(tostring(err),true) else self:_BlueprintStatus("Propriedade atualizada") end
+                                self:_RefreshBlueprintCompatibility()
+                            end)
+                            self:_BlueprintTooltip(box,p.Type .. "\nVector3: x, y, z · Color3: R, G, B (0–255) · UDim2: escalaX, pxX, escalaY, pxY")
+                        end
+                    else
+                        label(self,holder,(row.Output or p).Type,UDim2.fromOffset(130,0),UDim2.fromOffset(101,32),"DimText","Font",9,27)
+                    end
+                end
+                scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function() self._bpWireDirty = true end)
+                label(self,frame,def.Category .. " · " .. #rows .. " portas",UDim2.new(0,12,1,-14),UDim2.new(1,-24,0,12),"DimText","Font",9,26)
+            end
+        end
+        self._bpBuilding = false
+        self:_ApplyBlueprintView(); self:_RefreshBlueprintCompatibility()
+        ui.Empty.Visible = #r.Nodes == 0
+    end
+    function Window:_ApplyBlueprintView(animated)
+        local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r or not ui then return end
+        r.View.Zoom = clamp(r.View.Zoom or 0.85,0.35,1.6)
+        if animated then
+            if self._bpPanTween then self._bpPanTween:Cancel() end
+            if self._bpZoomTween then self._bpZoomTween:Cancel() end
+            self._bpPanTween = Tween(ui.NodeLayer,0.15,{ Position = UDim2.fromOffset(r.View.X,r.View.Y) })
+            self._bpZoomTween = Tween(ui.Scale,0.15,{ Scale = r.View.Zoom })
+        else ui.NodeLayer.Position = UDim2.fromOffset(r.View.X,r.View.Y); ui.Scale.Scale = r.View.Zoom end
+        ui.Zoom.Text = math.floor(r.View.Zoom*100+0.5) .. "%"
+        self._bpWireDirty = true
+    end
+    function Window:_ZoomBlueprint(factor,screenPoint)
+        local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r then return end
+        local old = r.View.Zoom
+        local zoom = clamp(old*factor,0.35,1.6)
+        local pivot = (screenPoint or (ui.Board.AbsolutePosition+ui.Board.AbsoluteSize/2))-ui.Board.AbsolutePosition
+        local logical = (pivot-Vector2.new(r.View.X,r.View.Y))/old
+        r.View.X,r.View.Y,r.View.Zoom = pivot.X-logical.X*zoom,pivot.Y-logical.Y*zoom,zoom
+        self:_ApplyBlueprintView(true); self:_BlueprintChanged(r,true)
+    end
+    function Window:_FrameBlueprint()
+        local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r then return end
+        local minX,minY,maxX,maxY = math.huge,math.huge,-math.huge,-math.huge
+        for _,n in ipairs(r.Nodes) do
+            local nodeUI = self._bpNodeUI[n.Id]
+            if nodeUI then
+                minX,minY = math.min(minX,n.X),math.min(minY,n.Y)
+                maxX,maxY = math.max(maxX,n.X+258),math.max(maxY,n.Y+nodeUI.Frame.Size.Y.Offset)
+            end
+        end
+        if minX == math.huge then r.View = { X = 30,Y = 30,Zoom = 0.85 }
+        else
+            local size = ui.Board.AbsoluteSize
+            local zoom = clamp(math.min((size.X-60)/(maxX-minX),(size.Y-60)/(maxY-minY)),0.35,1.2)
+            r.View.Zoom = zoom; r.View.X = (size.X-(maxX-minX)*zoom)/2-minX*zoom; r.View.Y = (size.Y-(maxY-minY)*zoom)/2-minY*zoom
+        end
+        self:_ApplyBlueprintView(true); self:_BlueprintChanged(r,true)
+    end
+    function Window:_DrawBlueprintWires()
+        local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r or not ui then return end
+        local pool = self._bpWirePool or {}; self._bpWirePool = pool
+        local used = 0
+        local function segment(a,b,color,transparency)
+            local delta = b-a; local length = delta.Magnitude
+            if length < 0.01 then return end
+            used = used+1
+            local line = pool[used]
+            if not line then
+                line = New("Frame", { AnchorPoint = Vector2.new(0.5,0.5), BorderSizePixel = 0, ZIndex = 23, Parent = ui.WireLayer })
+                pool[used] = line
+            end
+            local middle = (a+b)/2
+            line.Visible = true; line.Position = UDim2.fromOffset(middle.X,middle.Y); line.Size = UDim2.fromOffset(length+1,2)
+            line.Rotation = math.deg(math.atan2(delta.Y,delta.X)); line.BackgroundColor3 = color; line.BackgroundTransparency = transparency or 0.1
+        end
+        local function point(endpoint)
+            if not endpoint or not endpoint.Button.Parent then return nil end
+            local p = endpoint.Button.AbsolutePosition+endpoint.Button.AbsoluteSize/2
+            if not inside(endpoint.Scroll,p) then return nil end
+            return p-ui.Board.AbsolutePosition
+        end
+        local function curve(a,b,color,transparency)
+            if not a or not b then return end
+            local offset = math.max(55,math.abs(b.X-a.X)*0.45)
+            local c1,c2 = a+Vector2.new(offset,0),b-Vector2.new(offset,0)
+            local previous = a
+            for i=1,20 do
+                local t=i/20; local u=1-t
+                local p=a*(u*u*u)+c1*(3*u*u*t)+c2*(3*u*t*t)+b*(t*t*t)
+                segment(previous,p,color,transparency); previous=p
+            end
+        end
+        local endpoints = {}
+        for _,e in ipairs(self._bpEndpoints or {}) do endpoints[e.Node .. ":" .. e.Direction .. ":" .. e.Port.Name] = e end
+        for _,link in ipairs(r.Links) do
+            local a = endpoints[link.From .. ":out:" .. link.Output]
+            local b = endpoints[link.To .. ":in:" .. link.Input]
+            local node = nodeById(r,link.From)
+            local color = node and definition(node).Color or self.Theme.SubText
+            curve(point(a),point(b),color,(r.Invalid and (r.Invalid[link.From] or r.Invalid[link.To])) and 0.75 or 0.12)
+        end
+        if self._bpPending then
+            local p = point(self._bpPending)
+            local mouse = pointer()-ui.Board.AbsolutePosition
+            if self._bpPending.Direction == "out" then curve(p,mouse,self.Theme.Accent,0.25) else curve(mouse,p,self.Theme.Accent,0.25) end
+        end
+        for i=used+1,#pool do pool[i].Visible = false end
+        -- Grid follows pan and zoom, with a fixed count of reusable line frames.
+        local grid = self._bpGridPool or {}; self._bpGridPool=grid
+        local spacing = math.max(16,32*r.View.Zoom)
+        local size=ui.Board.AbsoluteSize; local index=0
+        local function gridLine(x,y,width,height)
+            index=index+1; local line=grid[index]
+            if not line then line=New("Frame",{ BorderSizePixel=0,BackgroundTransparency=0.82,ZIndex=21,Parent=ui.Grid }); grid[index]=line end
+            line.BackgroundColor3=self.Theme.Border; line.Position=UDim2.fromOffset(x,y); line.Size=UDim2.fromOffset(width,height); line.Visible=true
+        end
+        for x=r.View.X%spacing,size.X,spacing do gridLine(x,0,1,size.Y) end
+        for y=r.View.Y%spacing,size.Y,spacing do gridLine(0,y,size.X,1) end
+        for i=index+1,#grid do grid[i].Visible=false end
+        self._bpWireDirty=false
+    end
+    function Window:_RenderBlueprintPalette()
+        local ui = self.BlueprintUI; if not ui then return end
+        for _,child in ipairs(ui.PaletteList:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
+        local query=ui.Search.Text:lower(); local groups={}
+        for _,def in pairs(Catalog) do
+            if query=="" or (def.Title .. " " .. def.Category .. " " .. def.Description):lower():find(query,1,true) then
+                groups[def.Category]=groups[def.Category] or {}; table.insert(groups[def.Category],def)
+            end
+        end
+        local names={}; for name in pairs(groups) do table.insert(names,name) end; table.sort(names)
+        local order=0
+        for _,category in ipairs(names) do
+            local cat=category; local defs=groups[cat]
+            table.sort(defs,function(a,b) return a.Title<b.Title end)
+            order=order+1
+            local heading=textButton(self,ui.PaletteList,(self._bpCategoryCollapsed[cat] and "▸ " or "▾ ") .. cat,UDim2.new(),UDim2.new(1,-4,0,28),function()
+                self._bpCategoryCollapsed[cat]=not self._bpCategoryCollapsed[cat]; self:_RenderBlueprintPalette()
+            end,false,44)
+            heading.LayoutOrder=order; heading.TextXAlignment=Enum.TextXAlignment.Left; Padding(heading,10,5,0,0); heading.TextColor3=COLORS[cat] or COLORS.Other
+            if not self._bpCategoryCollapsed[cat] or query~="" then
+                for _,def in ipairs(defs) do
+                    local itemDef=def; order=order+1
+                    local item=textButton(self,ui.PaletteList,def.Title,UDim2.new(),UDim2.new(1,-4,0,29),function()
+                        local r=self.ActiveBlueprint; if not r then return end
+                        ensureDefinition(itemDef)
+                        if itemDef.Disabled then self:_BlueprintNotice(itemDef.Disabled,true); return end
+                        local pos=self._bpAddPosition or ((ui.Board.AbsoluteSize/2-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom)
+                        local node,err=self:AddBlueprintNode(r,itemDef.Id,{ X=pos.X,Y=pos.Y })
+                        if not node then self:_BlueprintNotice(err,true); return end
+                        ui.Palette.Visible=false; self._bpAddPosition=nil; self:_SelectBlueprintNode(node.Id)
+                        self:_BlueprintStatus("Node adicionado: " .. itemDef.Title)
+                    end,false,44)
+                    item.LayoutOrder=order; item.BackgroundTransparency=0.7; item.TextXAlignment=Enum.TextXAlignment.Left; Padding(item,20,5,0,0)
+                    New("Frame",{ BackgroundColor3=def.Color,BorderSizePixel=0,Position=UDim2.fromOffset(8,10),Size=UDim2.fromOffset(3,9),ZIndex=45,Parent=item })
+                    self:_BlueprintTooltip(item,def.Description)
+                end
+            end
+        end
+    end
+    function Window:_OpenBlueprintPalette(position)
+        if not self.ActiveBlueprint then return end
+        local ui=self.BlueprintUI
+        self._bpAddPosition=position; ui.Palette.Visible=true
+        self:_RenderBlueprintPalette(); PopIn(ui.Palette)
+        ui.Search:CaptureFocus()
+    end
+    function Window:_BlueprintTransferPopup(importing)
+        if not self.ActiveBlueprint then return end
+        if self._scriptModal then self._scriptModal:Close() end
+        local overlay=New("TextButton",{ Text="",AutoButtonColor=false,BackgroundColor3=self.Theme.Overlay,BackgroundTransparency=0.4,BorderSizePixel=0,Size=UDim2.fromScale(1,1),ZIndex=7000,Parent=self.ScreenGui })
+        local panel=New("Frame",{ BackgroundColor3=self.Theme.Popup,BorderSizePixel=0,AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),Size=UDim2.fromOffset(440,330),ZIndex=7001,Parent=overlay })
+        Corner(panel,7); Stroke(panel,self.Theme.Border,1,0.1)
+        label(self,panel,importing and "Importar blueprints (JSON)" or "Exportar blueprints (JSON)",UDim2.fromOffset(16,12),UDim2.new(1,-32,0,26),"Text","FontBold",14,7002)
+        local box=New("TextBox",{ Text=importing and "" or self:ExportBlueprints(),ClearTextOnFocus=false,MultiLine=true,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,Font=Enum.Font.Code,TextSize=11,TextColor3=self.Theme.SubText,
+            BackgroundColor3=self.Theme.Input,BorderSizePixel=0,Position=UDim2.fromOffset(16,48),Size=UDim2.new(1,-32,1,-106),ZIndex=7002,Parent=panel })
+        Corner(box,4); Padding(box,8,8,8,8)
+        local window=self; local modal={ Closed=false }
+        function modal:Close() if self.Closed then return end; self.Closed=true; box:ReleaseFocus(); overlay:Destroy(); if window._scriptModal==self then window._scriptModal=nil end end
+        self._scriptModal=modal
+        local action=textButton(self,panel,importing and "Importar" or "Selecionar tudo",UDim2.new(1,-154,1,-42),UDim2.fromOffset(138,28),function()
+            if importing then local ok,err=window:ImportBlueprints(box.Text,false); if ok then modal:Close(); window:_BlueprintNotice("Blueprints importados",false) else window:_BlueprintNotice(tostring(err),true) end
+            else box:CaptureFocus(); box.SelectionStart=1; box.CursorPosition=#box.Text+1 end
+        end,true,7003)
+        textButton(self,panel,"Fechar",UDim2.fromOffset(16,288),UDim2.fromOffset(90,28),function() modal:Close() end,false,7003)
+        overlay.MouseButton1Click:Connect(function() modal:Close() end)
+        PopIn(panel); box:CaptureFocus()
+        if not importing then box.SelectionStart=1; box.CursorPosition=#box.Text+1 end
+        return action
+    end
+    function Window:_CreateBlueprintEditor()
+        local editor=New("Frame",{ Name="BlueprintEditor",BackgroundColor3=self.Theme.CodeBackground,BorderSizePixel=0,Position=self.ContentHost.Position,Size=self.ContentHost.Size,Visible=false,ClipsDescendants=true,ZIndex=20,Parent=self.Main })
+        self.BlueprintEditor=editor; Corner(editor,5); BindTheme(self,editor,"BackgroundColor3","CodeBackground"); Stroke(editor,self.Theme.Border,1,0.2)
+        local title=label(self,editor,"Custom Blueprints",UDim2.fromOffset(12,0),UDim2.new(1,-260,0,36),"Text","FontMedium",12,31)
+        local toolbar=New("Frame",{ BackgroundTransparency=1,Position=UDim2.fromOffset(8,38),Size=UDim2.new(1,-16,0,28),ZIndex=31,Parent=editor })
+        local board=New("Frame",{ Name="Board",Active=true,BackgroundColor3=self.Theme.CodeBackground,BorderSizePixel=0,Position=UDim2.fromOffset(1,73),Size=UDim2.new(1,-2,1,-104),ClipsDescendants=true,ZIndex=21,Parent=editor })
+        BindTheme(self,board,"BackgroundColor3","CodeBackground")
+        local grid=New("Frame",{ BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=21,Parent=board })
+        local wireLayer=New("Frame",{ BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=22,Parent=board })
+        local nodeLayer=New("Frame",{ BackgroundTransparency=1,Size=UDim2.fromOffset(0,0),ZIndex=24,Parent=board })
+        local scale=New("UIScale",{ Scale=0.85,Parent=nodeLayer })
+        local status=label(self,editor,"",UDim2.new(0,10,1,-29),UDim2.new(1,-82,0,28),"MutedText","Font",10,31)
+        local zoom=label(self,editor,"85%",UDim2.new(1,-68,1,-29),UDim2.fromOffset(58,28),"DimText","Font",10,31); zoom.TextXAlignment=Enum.TextXAlignment.Right
+        local empty=label(self,board,"Board vazio\nClique em + Node para começar",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(260,70),"MutedText","Font",12,29)
+        empty.AnchorPoint=Vector2.new(0.5,0.5); empty.TextXAlignment=Enum.TextXAlignment.Center; empty.TextWrapped=true
+        local palette=New("Frame",{ Name="NodePalette",BackgroundColor3=self.Theme.Popup,BorderSizePixel=0,Position=UDim2.fromOffset(10,76),Size=UDim2.new(0,244,1,-116),Visible=false,ClipsDescendants=true,ZIndex=40,Parent=editor })
+        Corner(palette,6); BindTheme(self,palette,"BackgroundColor3","Popup"); Stroke(palette,self.Theme.Border,1,0.1)
+        label(self,palette,"Catálogo de nodes",UDim2.fromOffset(12,4),UDim2.new(1,-46,0,28),"Text","FontMedium",12,42)
+        textButton(self,palette,"×",UDim2.new(1,-31,0,6),UDim2.fromOffset(24,24),function() palette.Visible=false end,false,44)
+        local search=editBox(self,palette,"",UDim2.fromOffset(10,38),UDim2.new(1,-20,0,28),44,function() end)
+        search.PlaceholderText="Buscar classe, serviço ou categoria..."; search.PlaceholderColor3=self.Theme.DimText
+        local paletteList=StyleScrollBar(New("ScrollingFrame",{ BackgroundTransparency=1,BorderSizePixel=0,Position=UDim2.fromOffset(8,76),Size=UDim2.new(1,-16,1,-85),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ZIndex=42,Parent=palette }),{ Thickness=2,Color=self.Theme.Scrollbar,Transparency=0.6 })
+        List(paletteList,2)
+        local tooltip=New("TextLabel",{ BackgroundColor3=self.Theme.Popup,BackgroundTransparency=0.04,BorderSizePixel=0,Text="",TextWrapped=true,TextSize=11,Font=self.Theme.Font,TextColor3=self.Theme.Text,Size=UDim2.fromOffset(280,80),Visible=false,ZIndex=6800,Parent=self.ScreenGui })
+        Corner(tooltip,6); Padding(tooltip,10,10,8,8); Stroke(tooltip,self.Theme.Border,1,0.2); BindTheme(self,tooltip,"BackgroundColor3","Popup"); BindTheme(self,tooltip,"TextColor3","Text")
+        self.BlueprintUI={ Title=title,Board=board,Grid=grid,WireLayer=wireLayer,NodeLayer=nodeLayer,Scale=scale,Status=status,Zoom=zoom,Empty=empty,Palette=palette,Search=search,PaletteList=paletteList,Tooltip=tooltip }
+        local add=textButton(self,toolbar,"+ Node",UDim2.fromOffset(0,0),UDim2.fromOffset(65,27),function() if palette.Visible then palette.Visible=false else self:_OpenBlueprintPalette() end end,false,33)
+        local run=textButton(self,toolbar,"▶ Rodar",UDim2.fromOffset(71,0),UDim2.fromOffset(66,27),function() self:RunBlueprint() end,true,33)
+        local stop=textButton(self,toolbar,"■",UDim2.fromOffset(143,0),UDim2.fromOffset(29,27),function() self:StopBlueprint() end,false,33)
+        local validate=textButton(self,toolbar,"✓",UDim2.fromOffset(178,0),UDim2.fromOffset(29,27),function()
+            local ok,errors,invalid=self:ValidateBlueprint(self.ActiveBlueprint); self.ActiveBlueprint.Invalid=invalid
+            self:_BuildBlueprintBoard(); self:_BlueprintNotice(ok and "Grafo válido" or errors[1],not ok)
+        end,false,33)
+        local frame=textButton(self,toolbar,"⤢",UDim2.fromOffset(213,0),UDim2.fromOffset(29,27),function() self:_FrameBlueprint() end,false,33)
+        textButton(self,toolbar,"−",UDim2.fromOffset(248,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1/1.15) end,false,33)
+        textButton(self,toolbar,"+",UDim2.fromOffset(281,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1.15) end,false,33)
+        self:_BlueprintTooltip(add,"Adicionar node · botão direito no board também abre o catálogo")
+        self:_BlueprintTooltip(run,"Valida e executa o grafo no cliente. Rodar novamente remove a execução anterior.")
+        self:_BlueprintTooltip(stop,"Cancela e desfaz as alterações e os objetos criados por este blueprint.")
+        self:_BlueprintTooltip(validate,"Verificar portas, valores obrigatórios e ciclos")
+        self:_BlueprintTooltip(frame,"Enquadrar todos os nodes · atalho F")
+        textButton(self,editor,"Salvar",UDim2.new(1,-243,0,6),UDim2.fromOffset(49,25),function() self:SaveBlueprints() end,false,33)
+        local export=textButton(self,editor,"↑",UDim2.new(1,-188,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(false) end,false,33)
+        local import=textButton(self,editor,"↓",UDim2.new(1,-155,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(true) end,false,33)
+        local rename=textButton(self,editor,"✎",UDim2.new(1,-122,0,6),UDim2.fromOffset(27,25),function() self:OpenBlueprintNamePopup(self.ActiveBlueprint) end,false,33)
+        local delete=textButton(self,editor,"⌫",UDim2.new(1,-89,0,6),UDim2.fromOffset(27,25),function()
+            local record=self.ActiveBlueprint; if not record then return end
+            self:Dialog({ Title="Excluir blueprint?",Content=record.Name,Buttons={{ Title="Cancelar" },{ Title="Excluir",Color=self.Theme.Danger,Callback=function() self:DeleteBlueprint(record) end }} })
+        end,false,33)
+        textButton(self,editor,"×",UDim2.new(1,-38,0,6),UDim2.fromOffset(27,25),function() self:CloseBlueprintEditor() end,false,33)
+        self:_BlueprintTooltip(export,"Exportar todos os blueprints para JSON"); self:_BlueprintTooltip(import,"Importar blueprints de JSON"); self:_BlueprintTooltip(rename,"Renomear"); self:_BlueprintTooltip(delete,"Excluir blueprint")
+        board.InputBegan:Connect(function(input)
+            if not self.ActiveBlueprint or self._bpBuilding or palette.Visible then return end
+            local p=pointer(input)
+            for _,nodeUI in pairs(self._bpNodeUI or {}) do if inside(nodeUI.Frame,p) then return end end
+            if input.UserInputType==Enum.UserInputType.MouseButton2 then
+                local r=self.ActiveBlueprint; self:_OpenBlueprintPalette((p-board.AbsolutePosition-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom)
+            elseif input.UserInputType==Enum.UserInputType.MouseButton3 or input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+                self:_SelectBlueprintNode(nil); self._bpPending=nil; self._bpRejectedTarget=nil; self:_RefreshBlueprintCompatibility()
+                local r=self.ActiveBlueprint; self._bpDrag={ Mode="pan",Start=p,X=r.View.X,Y=r.View.Y,Input=input }
+            end
+        end)
+        search:GetPropertyChangedSignal("Text"):Connect(function()
+            self._bpSearchRevision=(self._bpSearchRevision or 0)+1; local revision=self._bpSearchRevision
+            task.delay(0.12,function() if not self.Destroyed and self._bpSearchRevision==revision and palette.Visible then self:_RenderBlueprintPalette() end end)
+        end)
+        nodeLayer:GetPropertyChangedSignal("Position"):Connect(function() self._bpWireDirty=true end)
+        scale:GetPropertyChangedSignal("Scale"):Connect(function() self._bpWireDirty=true end)
+        board:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self._bpWireDirty=true end)
+        board:GetPropertyChangedSignal("AbsolutePosition"):Connect(function() self._bpWireDirty=true end)
+        local function track(connection) table.insert(self._blueprintConnections,connection) end
+        track(UserInputService.InputChanged:Connect(function(input)
+            if not self.Visible or not self.ActiveBlueprint or not self.BlueprintEditor.Visible then return end
+            local p=pointer(input)
+            if input.UserInputType==Enum.UserInputType.MouseWheel and inside(board,p) and not palette.Visible then
+                for _,nodeUI in pairs(self._bpNodeUI or {}) do if inside(nodeUI.Scroll,p) then return end end
+                self:_ZoomBlueprint(input.Position.Z>0 and 1.1 or 1/1.1,p); return
+            end
+            local drag=self._bpDrag
+            if drag and (input.UserInputType==Enum.UserInputType.MouseMovement or input==drag.Input) then
+                local delta=p-drag.Start; local r=self.ActiveBlueprint
+                if drag.Mode=="node" then
+                    drag.Node.X=drag.X+delta.X/r.View.Zoom; drag.Node.Y=drag.Y+delta.Y/r.View.Zoom
+                    drag.Frame.Position=UDim2.fromOffset(drag.Node.X,drag.Node.Y)
+                else
+                    if self._bpPanTween then self._bpPanTween:Cancel() end
+                    r.View.X=drag.X+delta.X; r.View.Y=drag.Y+delta.Y; self:_ApplyBlueprintView()
+                end
+                self._bpWireDirty=true
+            end
+            if self._bpPending then self._bpWireDirty=true end
+        end))
+        track(UserInputService.InputEnded:Connect(function(input)
+            if not self.ActiveBlueprint then return end
+            local drag=self._bpDrag
+            if drag and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.MouseButton3 or input==drag.Input) then
+                self._bpDrag=nil; self:_BlueprintChanged(self.ActiveBlueprint,drag.Mode=="pan")
+            end
+            if self._bpPending and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch) then
+                local p=pointer(input); local selected
+                for _,e in ipairs(self._bpEndpoints or {}) do
+                    if e.Direction~=self._bpPending.Direction and inside(e.Button,p) and inside(e.Scroll,p) then selected=e; break end
+                end
+                if selected then self:_BlueprintPortPressed(selected,input)
+                elseif self._bpPendingStart and (p-self._bpPendingStart).Magnitude>8 then self._bpPending=nil; self._bpRejectedTarget=nil; self:_RefreshBlueprintCompatibility() end
+            end
+        end))
+        track(UserInputService.InputBegan:Connect(function(input)
+            if self.Destroyed then return end
+            if self._creationMenu and input.UserInputType==Enum.UserInputType.MouseButton1 and not inside(self._creationMenu,pointer(input)) and not inside(self.ScriptExplorerElements.Plus,pointer(input)) then self:_CloseCreationMenu() end
+            if not self.Visible or not self.ActiveBlueprint or self._scriptModal or UserInputService:GetFocusedTextBox() then return end
+            local ctrl=UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+            if input.KeyCode==Enum.KeyCode.Escape then self._bpPending=nil; self._bpRejectedTarget=nil; palette.Visible=false; self:_CloseCreationMenu(); self:_RefreshBlueprintCompatibility()
+            elseif input.KeyCode==Enum.KeyCode.Delete or input.KeyCode==Enum.KeyCode.Backspace then if self._bpSelection then self:DeleteBlueprintNode(self.ActiveBlueprint,self._bpSelection) end
+            elseif input.KeyCode==Enum.KeyCode.F then self:_FrameBlueprint()
+            elseif ctrl and input.KeyCode==Enum.KeyCode.S then self:SaveBlueprints()
+            elseif ctrl and input.KeyCode==Enum.KeyCode.D and self._bpSelection then
+                local n=nodeById(self.ActiveBlueprint,self._bpSelection)
+                if n then local clone=self:AddBlueprintNode(self.ActiveBlueprint,n.Type,{ X=n.X+35,Y=n.Y+35 },n.Values); if clone then clone.Settings=copyTable(n.Settings); self:_BuildBlueprintBoard(); self:_SelectBlueprintNode(clone.Id) end end
+            end
+        end))
+        local accumulator=0
+        track(RunService.RenderStepped:Connect(function(dt)
+            accumulator=accumulator+dt
+            if accumulator<1/60 then return end; accumulator=0
+            if not self.Destroyed and self.Visible and self.ActiveBlueprint and self._bpWireDirty then self:_DrawBlueprintWires() end
+        end))
+        WatchTheme(self,editor,function()
+            if self.ActiveBlueprint then self:_BuildBlueprintBoard() end
+            if palette.Visible then self:_RenderBlueprintPalette() end
+            self:_RenderBlueprintRows()
+        end)
+    end
+    function Window:ImportBlueprints(payload,replaceExisting)
+        if self.Destroyed or not self.BlueprintEditor then return false,"Editor indisponível." end
+        if type(payload)=="string" then
+            if #payload>(self.Config.MaxBlueprintImportBytes or 2000000) then return false,"Arquivo muito grande." end
+            local ok,decoded=pcall(function() return HttpService:JSONDecode(payload) end)
+            if not ok then return false,"JSON inválido." end; payload=decoded
+        end
+        if type(payload)=="table" and payload.Version==nil and payload.Blueprints==nil and (#payload>0 or next(payload)==nil) then payload={Version=1,Blueprints=payload} end
+        if type(payload)~="table" or payload.Version~=1 or type(payload.Blueprints)~="table" then return false,"Formato ou versão inválida." end
+        local prepared,names={},{}
+        if not replaceExisting then for _,r in ipairs(self.CustomBlueprints) do names[r.Name:lower()]=true end end
+        local maxCount=self.Config.MaxBlueprints or 100
+        if #payload.Blueprints+(replaceExisting and 0 or #self.CustomBlueprints)>maxCount then return false,"Muitos blueprints." end
+        for _,data in ipairs(payload.Blueprints) do
+            if type(data)~="table" then return false,"Blueprint inválido." end
+            local name,err=validName(data.Name); if not name then return false,err end
+            if names[name:lower()] then return false,"Nome repetido: " .. name end; names[name:lower()]=true
+            if type(data.Nodes)~="table" or type(data.Links)~="table" or #data.Nodes>(self.Config.MaxBlueprintNodes or 150) or #data.Links>2000 then return false,"Grafo inválido ou muito grande." end
+            local nodes,ids,counter={}, {},0
+            for _,n in ipairs(data.Nodes) do
+                if type(n)~="table" or type(n.Id)~="string" or not n.Id:match("^node_%d+$") or ids[n.Id] or not Catalog[n.Type] then return false,"Node desconhecido ou id inválido." end
+                if type(n.X)~="number" or type(n.Y)~="number" or n.X~=n.X or n.Y~=n.Y or math.abs(n.X)>100000 or math.abs(n.Y)>100000 then return false,"Posição inválida." end
+                if n.Values~=nil and type(n.Values)~="table" then return false,"Valores inválidos." end
+                local values={}
+                for key,value in pairs(n.Values or {}) do
+                    if type(key)~="string" or type(value)~="string" or #value>8192 then return false,"Literal inválido." end; values[key]=value
+                end
+                local settings={ Property="Name",ValueType="string" }
+                if Catalog[n.Type].Dynamic then
+                    if type(n.Settings)~="table" or type(n.Settings.Property)~="string" or not n.Settings.Property:match("^[%w_]+$") or type(n.Settings.ValueType)~="string" or #n.Settings.ValueType>80 then return false,"Configuração de propriedade inválida." end
+                    settings={ Property=n.Settings.Property,ValueType=n.Settings.ValueType }
+                end
+                ids[n.Id]=true; counter=math.max(counter,tonumber(n.Id:sub(6)) or 0)
+                table.insert(nodes,{ Id=n.Id,Type=n.Type,X=n.X,Y=n.Y,Values=values,Settings=settings })
+            end
+            local links={}
+            for _,l in ipairs(data.Links) do
+                if type(l)~="table" or not ids[l.From] or not ids[l.To] or type(l.Input)~="string" or type(l.Output)~="string" then return false,"Conexão inválida." end
+                table.insert(links,{ From=l.From,Output=l.Output,To=l.To,Input=l.Input })
+            end
+            local view={ X=30,Y=30,Zoom=0.85 }
+            if type(data.View)=="table" then
+                for _,key in ipairs({"X","Y","Zoom"}) do local v=data.View[key]; if type(v)=="number" and v==v and math.abs(v)<100000 then view[key]=v end end
+                view.Zoom=clamp(view.Zoom,0.35,1.6)
+            end
+            local trial={ Id="__import__",Name=name,Nodes=nodes,Links=links,View=view,Window=self }
+            self._blueprintsById[trial.Id]=trial
+            local valid,errors,invalid=self:ValidateBlueprint(trial)
+            self._blueprintsById[trial.Id]=nil
+            -- Missing required inputs can be saved as an unfinished graph; bad links/cycles cannot.
+            local structural=true
+            for _,l in ipairs(links) do
+                local a,b=nodeById(trial,l.From),nodeById(trial,l.To)
+                local p,q=getPort(a,l.Output,"out"),getPort(b,l.Input,"in")
+                if not p or not q or not compatible(p.Type,q.Type) then structural=false end
+            end
+            for _,message in ipairs(errors) do if message:find("Ciclo",1,true) or message:find("mais de uma",1,true) then structural=false end end
+            if not structural then return false,"Importação contém conexões inválidas ou ciclos." end
+            table.insert(prepared,{ Name=name,Nodes=nodes,Links=links,View=view,Counter=counter,Invalid=valid and nil or invalid })
+        end
+        self._loadingBlueprints=true
+        if replaceExisting then
+            if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
+            for _,r in ipairs(self.CustomBlueprints) do self:StopBlueprint(r,true) end
+            self.CustomBlueprints={}; self._blueprintsById={}
+        end
+        for _,data in ipairs(prepared) do
+            local r=self:CreateBlueprint({ Name=data.Name,Empty=true,Open=false })
+            r.Nodes,r.Links,r.View,r.Counter,r.Invalid=data.Nodes,data.Links,data.View,data.Counter,data.Invalid
+        end
+        self._loadingBlueprints=false; self:_RenderBlueprintRows()
+        if self.CustomBlueprints[1] then self:_BlueprintChanged(self.CustomBlueprints[1],true) end
+        return true
+    end
+    function Window:_CreateCustomBlueprints()
+        if not self.ScriptExplorer or self.Config.CustomBlueprints==false then return end
+        self.CustomBlueprints={}; self._blueprintsById={}; self._blueprintCounter=0; self._blueprintConnections={}; self._bpCategoryCollapsed={}
+        local folder=New("TextButton",{ Name="CustomBlueprintsFolder",Text="",AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(1,-16,0,24),ZIndex=12,Parent=self.ScriptExplorer })
+        local arrow=label(self,folder,"▾",UDim2.fromOffset(2,0),UDim2.fromOffset(12,24),"MutedText","Font",13,14)
+        label(self,folder,"◇",UDim2.fromOffset(20,0),UDim2.fromOffset(16,24),"SyntaxBuiltin","Font",16,14)
+        label(self,folder,"Custom Blueprints",UDim2.fromOffset(42,0),UDim2.new(1,-46,1,0),"SubText","FontMedium",11,14)
+        local list=StyleScrollBar(New("ScrollingFrame",{ BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ElasticBehavior=Enum.ElasticBehavior.Never,ClipsDescendants=true,ZIndex=11,Parent=self.ScriptExplorer }),{ Thickness=2,Color=self.Theme.Scrollbar,Transparency=0.6 })
+        List(list,2)
+        local empty=New("TextButton",{ Text="Nenhum blueprint ainda.\nClique no + para criar.",AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,TextColor3=self.Theme.MutedText,TextSize=11,Font=self.Theme.Font,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,Size=UDim2.new(1,-36,0,50),ZIndex=12,Parent=self.ScriptExplorer })
+        BindTheme(self,empty,"TextColor3","MutedText"); empty.MouseButton1Click:Connect(function() self:OpenBlueprintNamePopup() end)
+        self.BlueprintExplorerUI={ Folder=folder,Arrow=arrow,List=list,Empty=empty }
+        folder.MouseButton1Click:Connect(function() self._blueprintsCollapsed=not self._blueprintsCollapsed; arrow.Text=self._blueprintsCollapsed and "▸" or "▾"; self:_LayoutBlueprintExplorer() end)
+        self:_CreateBlueprintEditor(); self:_LayoutBlueprintExplorer()
+        local payload,err
+        self._blueprintStorageFile=self.Config.BlueprintsFile
+        if self._blueprintStorageFile==nil and type(self._scriptStorageFile)=="string" then self._blueprintStorageFile=self._scriptStorageFile:gsub("%.json$","") .. "_blueprints.json" end
+        if type(self._blueprintStorageFile)~="string" then self._blueprintStorageFile=nil end
+        self._hasBlueprintStorage=type(self.Config.SaveBlueprints)=="function" or (self._blueprintStorageFile~=nil and type(readfile)=="function" and type(writefile)=="function")
+        if type(self.Config.LoadBlueprints)=="function" then
+            local ok,result=pcall(self.Config.LoadBlueprints,self); if ok then payload=result else err=result end
+        elseif self._blueprintStorageFile and type(readfile)=="function" then
+            local existsOk,exists=true,true
+            if type(isfile)=="function" then existsOk,exists=pcall(isfile,self._blueprintStorageFile) end
+            if not existsOk then err=exists elseif exists then local ok,result=pcall(readfile,self._blueprintStorageFile); if ok then payload=result else err=result end end
+        end
+        if payload==nil and err==nil and self.Config.Blueprints then payload={ Version=1,Blueprints=self.Config.Blueprints } end
+        if payload~=nil then local ok,result=self:ImportBlueprints(payload,true); if not ok then err=result end end
+        if err then self._blueprintStorageBlocked=true; self._hasBlueprintStorage=false; self:_BlueprintNotice("Não foi possível carregar blueprints: " .. tostring(err),true) end
+        self._blueprintsDirty=false; self._blueprintSaveRevision=(self._blueprintSaveRevision or 0)+1
+        for _,r in ipairs(self.CustomBlueprints) do r.Dirty=false end
+        self:_RenderBlueprintRows()
+    end
+    function Window:_DisposeBlueprints()
+        if self._blueprintDisposed then return end; self._blueprintDisposed=true
+        if self._blueprintsDirty then self:SaveBlueprints() end
+        self:_CloseCreationMenu()
+        for _,r in ipairs(self.CustomBlueprints or {}) do self:StopBlueprint(r,true) end
+        for _,connection in ipairs(self._blueprintConnections or {}) do connection:Disconnect() end
+        self._blueprintConnections={}
+    end
+end
+
+
 --============================================================
 -- Library creation
 --============================================================
@@ -4149,6 +5693,9 @@ function PebbleUI:CreateWindow(config)
     self._scriptCounter = 0
     self._scriptConnections = {}
     self._scriptSelectionRects = {}
+    self.CustomBlueprints = {}
+    self._blueprintsById = {}
+    self._blueprintConnections = {}
 
     local bgTransparency = config.BackgroundTransparency
     if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
@@ -4167,8 +5714,10 @@ function PebbleUI:CreateWindow(config)
     self.TopbarHeight = topHeight
 
     local guiName = config.Name or ("PebbleUI_" .. tostring(math.random(100000, 999999)))
-    local existing = CoreGui:FindFirstChild(guiName)
-    if existing then existing:Destroy() end
+    local foundCore, existing = pcall(function() return CoreGui:FindFirstChild(guiName) end)
+    if foundCore and existing then existing:Destroy() end
+    local existingPlayerGui = PlayerGui:FindFirstChild(guiName)
+    if existingPlayerGui then existingPlayerGui:Destroy() end
 
     local screen = New("ScreenGui", {
         Name = guiName,
@@ -4415,6 +5964,7 @@ function PebbleUI:CreateWindow(config)
     })
     self.ContentHost = contentHost
 
+    -- The profile card follows the same auto-fit rules as tabs, so long display names stay readable.
     self:_fitSidebarText(displayName, 12, self.Theme.FontDisplay or self.Theme.FontBold, true, 12)
 
     local notifHolder = New("Frame", {
@@ -4429,6 +5979,7 @@ function PebbleUI:CreateWindow(config)
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
 
+    -- Soft launch animation for the entire window.
     main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
     local mainScale = EnsureScale(main)
     mainScale.Scale = 0.99
@@ -4447,6 +5998,7 @@ function PebbleUI:CreateWindow(config)
         end
     end)
 
+    table.insert(self._scriptConnections, inputConn)
     if config.Draggable ~= false then
         local dragging, dragStart, startPos, dragInput
 
@@ -4469,7 +6021,7 @@ function PebbleUI:CreateWindow(config)
                 dragInput = input
             end
         end)
-        UserInputService.InputChanged:Connect(function(input)
+        local windowDragConnection = UserInputService.InputChanged:Connect(function(input)
             if dragging and input == dragInput then
                 local delta = input.Position - dragStart
                 main.Position = UDim2.new(
@@ -4478,9 +6030,12 @@ function PebbleUI:CreateWindow(config)
                 )
             end
         end)
+        table.insert(self._scriptConnections, windowDragConnection)
     end
     self:_CreateScriptExplorer()
+    self:_CreateCustomBlueprints()
     screen.Destroying:Connect(function()
+        self:_DisposeBlueprints()
         self:_DisposeScripts()
         self.Destroyed = true
     end)
