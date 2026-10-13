@@ -3075,18 +3075,18 @@ local function NormalizeSource(source)
 end
 
 local function ScriptName(window, name, exceptId, names)
-    if type(name) ~= "string" then return nil, "Digite um nome para o script." end
+    if type(name) ~= "string" then return nil, "Enter a script name." end
     name = name:match("^%s*(.-)%s*$")
     if name:lower():sub(-4) == ".lua" then name = name:sub(1, -5):match("^%s*(.-)%s*$") end
-    if name == "" or name == "." or name == ".." then return nil, "Digite um nome para o script." end
-    if #name > 60 or name:find("[%c/\\]") then return nil, "Use um nome curto, sem barras ou quebras de linha." end
+    if name == "" or name == "." or name == ".." then return nil, "Enter a script name." end
+    if #name > 60 or name:find("[%c/\\]") then return nil, "Use a short name without slashes or line breaks." end
     name = name .. ".lua"
     if names then
-        if names[name:lower()] then return nil, "Já existe um script com esse nome." end
+        if names[name:lower()] then return nil, "A script with that name already exists." end
     else
         for _, record in ipairs(window.CustomScripts) do
             if record.Id ~= exceptId and record.Name:lower() == name:lower() then
-                return nil, "Já existe um script com esse nome."
+                return nil, "A script with that name already exists."
             end
         end
     end
@@ -3156,11 +3156,11 @@ function Window:ExportScripts()
 end
 
 function Window:SaveScripts()
-    if not self.CustomScripts then return false, "Explorer indisponível." end
+    if not self.CustomScripts then return false, "Explorer unavailable." end
     local snapshot = self:GetScripts()
     local ok, result
     if self._scriptStorageBlocked then
-        local message = "Os scripts salvos não puderam ser carregados. As alterações ficam nesta janela."
+        local message = "Saved scripts could not be loaded. Changes will remain in this window."
         self:_ScriptStatus(message, true)
         return false, message
     elseif not self._scriptsDirty then
@@ -3173,13 +3173,13 @@ function Window:SaveScripts()
         ok = true
     end
     if not ok or result == false then
-        self:_ScriptStatus("Não foi possível salvar. O código continua no editor.", true)
+        self:_ScriptStatus("Could not save. Your code is still in the editor.", true)
         return false, tostring(result)
     end
     self._scriptsDirty = false
     for _, record in ipairs(self.CustomScripts) do record.Dirty = false end
     self:_RenderScriptRows()
-    self:_ScriptStatus(self._hasScriptStorage and "Salvo" or "Salvo nesta janela")
+    self:_ScriptStatus(self._hasScriptStorage and "Saved" or "Saved in this window")
     safeCallback(self.Config.OnScriptsChanged, snapshot, self)
     return true
 end
@@ -3197,17 +3197,17 @@ function Window:_ScriptsChanged()
 end
 
 function Window:CreateScript(config)
-    if self.Destroyed or not self.ScriptExplorer then return nil, "Explorer indisponível." end
+    if self.Destroyed or not self.ScriptExplorer then return nil, "Explorer unavailable." end
     config = type(config) == "string" and { Name = config } or (config or {})
-    if type(config) ~= "table" then return nil, "Configuração inválida." end
-    if #self.CustomScripts >= (self.Config.MaxCustomScripts or 100) then return nil, "O explorer está cheio." end
+    if type(config) ~= "table" then return nil, "Invalid configuration." end
+    if #self.CustomScripts >= (self.Config.MaxCustomScripts or 100) then return nil, "The explorer is full." end
     local name, err = ScriptName(self, config.Name or config.Title)
     if not name then return nil, err end
     local source = config.Source
-    if source == nil then source = self.Config.DefaultScriptSource or '-- Seu script começa aqui.\n\nprint("Hello, world!")\n' end
-    if type(source) ~= "string" then return nil, "O código precisa ser texto." end
+    if source == nil then source = self.Config.DefaultScriptSource or '-- Your script starts here.\n\nprint("Hello, world!")\n' end
+    if type(source) ~= "string" then return nil, "The code must be a string." end
     source = NormalizeSource(source)
-    if #source > (self.Config.MaxScriptBytes or 60000) then return nil, "Este script é grande demais para o editor." end
+    if #source > (self.Config.MaxScriptBytes or 60000) then return nil, "This script is too large for the editor." end
     self._scriptCounter = self._scriptCounter + 1
     local id = "script_" .. tostring(self._scriptCounter)
     if self._importingScripts and type(config.Id) == "string" and #config.Id <= 128
@@ -3235,7 +3235,7 @@ end
 
 function Window:RenameScript(idOrName, newName)
     local record = self:GetScript(idOrName)
-    if not record then return nil, "Script não encontrado." end
+    if not record then return nil, "Script not found." end
     local name, err = ScriptName(self, newName, record.Id)
     if not name then return nil, err end
     record.Name = name
@@ -3248,10 +3248,10 @@ end
 
 function Window:SetScriptSource(idOrName, source)
     local record = self:GetScript(idOrName)
-    if not record then return nil, "Script não encontrado." end
-    if type(source) ~= "string" then return nil, "O código precisa ser texto." end
+    if not record then return nil, "Script not found." end
+    if type(source) ~= "string" then return nil, "The code must be a string." end
     source = NormalizeSource(source)
-    if #source > (self.Config.MaxScriptBytes or 60000) then return nil, "Este script é grande demais para o editor." end
+    if #source > (self.Config.MaxScriptBytes or 60000) then return nil, "This script is too large for the editor." end
     if source == record.Source then return record end
     record.Source, record.Dirty = source, true
     if self.ActiveScript == record then
@@ -3266,7 +3266,7 @@ end
 
 function Window:DeleteScript(idOrName)
     local record = self:GetScript(idOrName)
-    if not record then return false, "Script não encontrado." end
+    if not record then return false, "Script not found." end
     local replacement
     for i, item in ipairs(self.CustomScripts) do
         if item == record then
@@ -3286,32 +3286,32 @@ function Window:DeleteScript(idOrName)
 end
 
 function Window:ImportScripts(payload, replaceExisting)
-    if self.Destroyed or not self.ScriptExplorer then return false, "Explorer indisponível." end
+    if self.Destroyed or not self.ScriptExplorer then return false, "Explorer unavailable." end
     if type(payload) == "string" then
         local ok, decoded = pcall(function() return HttpService:JSONDecode(payload) end)
-        if not ok then return false, "Arquivo de scripts inválido." end
+        if not ok then return false, "Invalid scripts file." end
         payload = decoded
     end
-    if type(payload) ~= "table" then return false, "Arquivo de scripts inválido." end
-    if payload.Version ~= nil and payload.Version ~= 1 then return false, "Versão de scripts incompatível." end
+    if type(payload) ~= "table" then return false, "Invalid scripts file." end
+    if payload.Version ~= nil and payload.Version ~= 1 then return false, "Incompatible scripts version." end
     local records = payload.Scripts or payload
-    if type(records) ~= "table" then return false, "Lista de scripts inválida." end
+    if type(records) ~= "table" then return false, "Invalid scripts list." end
     for key in pairs(records) do
         if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > #records then
-            return false, "Lista de scripts inválida."
+            return false, "Invalid scripts list."
         end
     end
     local existing = replaceExisting and 0 or #self.CustomScripts
-    if #records + existing > (self.Config.MaxCustomScripts or 100) then return false, "Há scripts demais neste arquivo." end
+    if #records + existing > (self.Config.MaxCustomScripts or 100) then return false, "This file contains too many scripts." end
     local names, prepared = {}, {}
     if not replaceExisting then for _, record in ipairs(self.CustomScripts) do names[record.Name:lower()] = true end end
     -- Validate the whole import before touching the existing scripts.
     for _, item in ipairs(records) do
-        if type(item) ~= "table" or type(item.Source) ~= "string" then return false, "Um script do arquivo é inválido." end
+        if type(item) ~= "table" or type(item.Source) ~= "string" then return false, "A script in the file is invalid." end
         local name, err = ScriptName(self, item.Name, nil, names)
         if not name then return false, err end
         local source = NormalizeSource(item.Source)
-        if #source > (self.Config.MaxScriptBytes or 60000) then return false, "Um script do arquivo é grande demais." end
+        if #source > (self.Config.MaxScriptBytes or 60000) then return false, "A script in the file is too large." end
         names[name:lower()] = true
         table.insert(prepared, { Id = item.Id, Name = name, Source = source, Open = false })
     end
@@ -3345,7 +3345,7 @@ end
 
 function Window:OpenScript(idOrName)
     local record = self:GetScript(idOrName)
-    if not record or self.Destroyed then return nil, "Script não encontrado." end
+    if not record or self.Destroyed then return nil, "Script not found." end
     if self.ActiveDropdown then self.ActiveDropdown:Close() end
     if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
     if self.ScriptEditorElements.Input:IsFocused() then self.ScriptEditorElements.Input:ReleaseFocus() end
@@ -3368,7 +3368,7 @@ function Window:OpenScript(idOrName)
     end
     self:_RenderScriptEditor()
     self:_RenderScriptRows()
-    self:_ScriptStatus(record.Dirty and "Alterações pendentes" or (self._hasScriptStorage and "Salvo" or "Salvo nesta janela"))
+    self:_ScriptStatus(record.Dirty and "Unsaved changes" or (self._hasScriptStorage and "Saved" or "Saved in this window"))
     task.defer(function()
         if not self.Destroyed and self.ActiveScript == record and self.Visible then
             self.ScriptEditorElements.Input:CaptureFocus()
@@ -3381,13 +3381,13 @@ end
 
 function Window:RunScript(idOrName)
     local record = self:GetScript(idOrName or self.ActiveScript)
-    if not record then return false, "Script não encontrado." end
-    if self.Config.AllowScriptExecution == false then return false, "Execução desativada." end
+    if not record then return false, "Script not found." end
+    if self.Config.AllowScriptExecution == false then return false, "Script execution disabled." end
     local runner = self.Config.OnRunScript
     if type(runner) ~= "function" then
         if type(loadstring) ~= "function" then
-            self:_ScriptStatus("Este ambiente não permite executar scripts.", true)
-            return false, "Use OnRunScript para integrar a execução neste ambiente."
+            self:_ScriptStatus("This environment does not support script execution.", true)
+            return false, "Use OnRunScript to integrate script execution in this environment."
         end
         local ok, compiled, err = pcall(loadstring, record.Source, "@" .. record.Name)
         if not ok or not compiled then
@@ -3397,11 +3397,11 @@ function Window:RunScript(idOrName)
         runner = function() return compiled() end
     end
     local source, name = record.Source, record.Name
-    self:_ScriptStatus("Executando " .. name .. "...")
+    self:_ScriptStatus("Running " .. name .. "...")
     task.spawn(function()
         local ok, err = pcall(runner, source, record, self)
         if not self.Destroyed and self.ActiveScript == record then
-            self:_ScriptStatus(ok and ("Concluído: " .. name) or tostring(err), not ok)
+            self:_ScriptStatus(ok and ("Completed: " .. name) or tostring(err), not ok)
         end
         if not ok then safeCallback(self.Config.OnScriptError, err, record, self) end
     end)
@@ -3487,7 +3487,7 @@ function Window:_RenderScriptRows()
     self.ScriptExplorerElements.Count.Text = tostring(count) .. (count == 1 and " script" or " scripts")
     self.ScriptExplorerElements.Empty.Visible = count == 0 and not self._scriptsCollapsed
     self.ScriptExplorerElements.Storage.Text = self._hasScriptStorage
-        and (type(self.Config.SaveScripts) == "function" and "Salvo" or "Local") or "Memória"
+        and (type(self.Config.SaveScripts) == "function" and "Saved" or "Local") or "Memory"
 end
 
 function Window:_EditorMeasure(text)
@@ -3521,7 +3521,7 @@ function Window:_RenderScriptEditor()
     ui.Input.TextColor3 = self.Theme.Text
     ui.Caret.BackgroundColor3 = self.Theme.Accent
     ui.ActiveLine.BackgroundColor3 = self.Theme.SurfaceHover
-    ui.LineCount.Text = "Lua · " .. tostring(#lines) .. (#lines == 1 and " linha" or " linhas")
+    ui.LineCount.Text = "Lua · " .. tostring(#lines) .. (#lines == 1 and " line" or " lines")
     self:_UpdateEditorCursor(false)
 end
 
@@ -3666,7 +3666,7 @@ function Window:OpenScriptNamePopup(idOrName)
     if self.ActiveDropdown then self.ActiveDropdown:Close() end
     if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
     local record = idOrName and self:GetScript(idOrName) or nil
-    if idOrName and not record then return nil, "Script não encontrado." end
+    if idOrName and not record then return nil, "Script not found." end
     local theme = self.Theme
     local overlay = New("TextButton", {
         Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 0.4,
@@ -3694,14 +3694,14 @@ function Window:OpenScriptNamePopup(idOrName)
         Size = UDim2.new(1, -90, 0, 28), ZIndex = 7003, Parent = panel,
     })
     local subtitle = New("TextLabel", {
-        BackgroundTransparency = 1, Text = record and "Escolha um novo nome para o script." or "Dê um nome ao seu script para começar.",
+        BackgroundTransparency = 1, Text = record and "Choose a new name for the script." or "Give your script a name to get started.",
         Font = theme.Font, TextSize = 11, TextColor3 = theme.SubText,
         TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(18, 49),
         Size = UDim2.new(1, -36, 0, 24), ZIndex = 7003, Parent = panel,
     })
     local input = New("TextBox", {
         Name = "ScriptName", ClearTextOnFocus = false, MultiLine = false,
-        Text = record and record.Name:sub(1, -5) or "", PlaceholderText = "MeuScript",
+        Text = record and record.Name:sub(1, -5) or "", PlaceholderText = "MyScript",
         Font = theme.FontMedium, TextSize = 12, TextColor3 = theme.Text, PlaceholderColor3 = theme.DimText,
         TextXAlignment = Enum.TextXAlignment.Left, BackgroundColor3 = theme.Input, BorderSizePixel = 0,
         Position = UDim2.fromOffset(18, 82), Size = UDim2.new(1, -36, 0, 34), ZIndex = 7003, Parent = panel,
@@ -3739,7 +3739,7 @@ function Window:OpenScriptNamePopup(idOrName)
         if record then created, err = window:RenameScript(record, input.Text)
         else created, err = window:CreateScript({ Name = input.Text, Open = false }) end
         if not created then
-            errorLabel.Text = err or "Não foi possível criar o script."
+            errorLabel.Text = err or "Could not create the script."
             inputBorder.Color = window.Theme.Danger
             input:CaptureFocus()
             return nil, err
@@ -3903,8 +3903,8 @@ function Window:_CreateScriptEditor()
         local record = self.ActiveScript
         if not record then return end
         if input:IsFocused() then input:ReleaseFocus() end
-        self:Dialog({ Title = "Excluir script?", Content = 'O script "' .. record.Name .. '" será removido do explorer.',
-            Buttons = { { Title = "Cancel" }, { Title = "Excluir", Color = self.Theme.Danger,
+        self:Dialog({ Title = "Delete script?", Content = 'O script "' .. record.Name .. '" will be removed from the explorer.',
+            Buttons = { { Title = "Cancel" }, { Title = "Delete", Color = self.Theme.Danger,
                 TextColor = self.Theme.AccentText, Callback = function() self:DeleteScript(record) end } } })
     end)
     ui.Close = ScriptIconButton(self, toolbar, "x", UDim2.new(1, -30, 0, 6), function() self:CloseScriptEditor() end)
@@ -3964,7 +3964,7 @@ function Window:_LoadCustomScripts()
     if err then
         self._scriptStorageBlocked = true
         self._hasScriptStorage = false
-        self:Notify({ Content = "Não foi possível carregar os scripts salvos. O explorer usará a memória desta janela.", Duration = 6 })
+        self:Notify({ Content = "Could not load saved scripts. The explorer will use this window's memory.", Duration = 6 })
     end
     self._scriptsDirty = false
     self._scriptSaveRevision = (self._scriptSaveRevision or 0) + 1
@@ -4046,7 +4046,7 @@ function Window:_CreateScriptExplorer()
         Position = UDim2.new(0, 12, 1, -28), Size = UDim2.new(0.55, -12, 0, 24), ZIndex = 12, Parent = frame,
     })
     local storage = New("TextLabel", {
-        BackgroundTransparency = 1, Text = "Memória", Font = theme.Font, TextSize = 10,
+        BackgroundTransparency = 1, Text = "Memory", Font = theme.Font, TextSize = 10,
         TextColor3 = theme.MutedText, TextXAlignment = Enum.TextXAlignment.Right,
         Position = UDim2.new(0.55, 0, 1, -28), Size = UDim2.new(0.45, -12, 0, 24), ZIndex = 12, Parent = frame,
     })
