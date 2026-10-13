@@ -116,8 +116,8 @@ local function List(parent, gap, fill)
     })
 end
 
--- ============ SCROLLBAR DISCRETA ============
--- Aplica estilo "fino e cinza" numa ScrollingFrame
+-- ============ SUBTLE SCROLLBAR ============
+-- Applies a thin, gray scrollbar style to a ScrollingFrame
 local function StyleScrollBar(sf, opts)
     opts = opts or {}
     sf.ScrollBarThickness        = opts.Thickness or 2
@@ -3190,7 +3190,7 @@ function Window:_ScriptsChanged()
     self:_RenderScriptRows()
     if self._importingScripts or self._loadingScripts then return end
     local revision = self._scriptSaveRevision
-    self:_ScriptStatus("Salvando...")
+    self:_ScriptStatus("Saving...")
     task.delay(0.45, function()
         if not self.Destroyed and self._scriptSaveRevision == revision then self:SaveScripts() end
     end)
@@ -3604,7 +3604,7 @@ function Window:_HandleScriptTextChanged()
         self._settingScriptText = true
         ui.Input.Text = oldSource
         self._settingScriptText = false
-        self:_ScriptStatus("Este script atingiu o limite de tamanho do editor.", true)
+        self:_ScriptStatus("This script has reached the editor size limit.", true)
         return
     end
     local correctedPosition
@@ -3669,7 +3669,7 @@ function Window:OpenScriptNamePopup(idOrName)
     if idOrName and not record then return nil, "Script not found." end
     local theme = self.Theme
     local overlay = New("TextButton", {
-        Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 0.4,
+        Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 1,
         BorderSizePixel = 0, Text = "", AutoButtonColor = false, Active = true,
         Size = UDim2.fromScale(1, 1), ZIndex = 7000, Parent = self.ScreenGui,
     })
@@ -3903,7 +3903,7 @@ function Window:_CreateScriptEditor()
         local record = self.ActiveScript
         if not record then return end
         if input:IsFocused() then input:ReleaseFocus() end
-        self:Dialog({ Title = "Delete script?", Content = 'O script "' .. record.Name .. '" will be removed from the explorer.',
+        self:Dialog({ Title = "Delete script?", Content = 'The script "' .. record.Name .. '" will be removed from the explorer.',
             Buttons = { { Title = "Cancel" }, { Title = "Delete", Color = self.Theme.Danger,
                 TextColor = self.Theme.AccentText, Callback = function() self:DeleteScript(record) end } } })
     end)
@@ -4028,7 +4028,7 @@ function Window:_CreateScriptExplorer()
     List(list, 2)
     local empty = New("TextButton", {
         Name = "EmptyScripts", BackgroundTransparency = 1, BorderSizePixel = 0, AutoButtonColor = false,
-        Text = "Nenhum script ainda.\nClique no + para criar.", Font = theme.Font, TextSize = 11,
+        Text = "No scripts yet.\nClick + to create one.", Font = theme.Font, TextSize = 11,
         TextColor3 = theme.MutedText, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
         Position = UDim2.fromOffset(18, 90), Size = UDim2.new(1, -36, 0, 55), ZIndex = 12, Parent = frame,
     })
@@ -4415,7 +4415,6 @@ function PebbleUI:CreateWindow(config)
     })
     self.ContentHost = contentHost
 
-    -- The profile card follows the same auto-fit rules as tabs, so long display names stay readable.
     self:_fitSidebarText(displayName, 12, self.Theme.FontDisplay or self.Theme.FontBold, true, 12)
 
     local notifHolder = New("Frame", {
@@ -4430,7 +4429,6 @@ function PebbleUI:CreateWindow(config)
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
 
-    -- Soft launch animation for the entire window.
     main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
     local mainScale = EnsureScale(main)
     mainScale.Scale = 0.99
