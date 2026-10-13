@@ -1,60 +1,3 @@
---[[
-PebbleUI 1.5.0 — Custom Blueprints (cliente)
-
-INSTALAÇÃO
-Substitua sua biblioteca PebbleUI por este arquivo completo. Ele retorna PebbleUI.
-No Studio: salve como ModuleScript e dê require a partir de um LocalScript.
-
-    local PebbleUI = require(caminho.PebbleUI)
-    local hub = PebbleUI:CreateWindow({ Title = "Minha Hub" })
-    local tab = hub:Tab({ Title = "Início" })
-    tab:Section({ Title = "Bem-vindo" }):Paragraph({ Content = "Abra o + do Explorer." })
-
-USO
-Clique no + do Explorer > Blueprint > escolha um nome.
-O primeiro grafo vem com Iniciar -> Notificação, pronto para testar.
-+ Node ou botão direito no board abre o catálogo com busca e categorias.
-Arraste o cabeçalho para mover um node; arraste o fundo para mover o board.
-Roda do mouse no fundo dá zoom; dentro do node, percorre suas propriedades.
-Arraste entre pontos ou clique em uma saída e depois em uma entrada.
-Botão direito em uma entrada remove sua conexão. Esc cancela a conexão.
-F enquadra o grafo; Delete remove a seleção; Ctrl+D duplica; Ctrl+S salva.
-↑ exporta JSON; ↓ importa JSON; ▶ Rodar valida e executa; ■ Parar desfaz.
-
-EXEMPLO DE OBJETO VISÍVEL
-Adicione Workspace (Services), Part (Parts), Vector3 e Color3 (Values).
-Conecte Workspace.Object -> Part.Parent, Vector3.Value -> Part.Position
-e Color3.Value -> Part.Color. Marque Anchored = true na Part e clique Rodar.
-
-COMPORTAMENTO
-O grafo inteiro executa em ordem de dependências ao clicar Rodar.
-Exec estabelece ordem adicional. Uma entrada aceita uma conexão; saídas
-podem alimentar várias entradas. Não há ciclos nem listeners automáticos.
-Propriedades somente leitura têm apenas saída. Em classes suportadas,
-ReflectionService amplia as portas às propriedades acessíveis no cliente;
-sem esse serviço, usa-se o conjunto de propriedades comuns embutido.
-Ler/Definir propriedade permite nomear outras propriedades explicitamente.
-FindChild retorna Instance: use Verificar classe para portas de classe exata.
-Valores RGB usam 0–255; vetores usam vírgulas; enums usam Enum.Tipo.Item.
-Classes indisponíveis são recusadas; erros deixam os nodes esmaecidos.
-Blueprints não usam loadstring nem chamadas de servidor/remotes.
-LocalScript/ModuleScript criados são contêineres vazios, sem edição de Source.
-Rodar novamente e editar o grafo removem a execução anterior. Fechar a hub
-também cancela e limpa os objetos que seus blueprints criaram.
-
-PERSISTÊNCIA
-No Studio, os gráficos ficam nesta janela. Use exportar/importar JSON para
-guardar entre sessões, ou implemente SaveBlueprints(snapshot, window) e
-LoadBlueprints(window) em CreateWindow. Em ambientes com funções de arquivo,
-BlueprintsFile recebe o caminho JSON. Também aceita Blueprints = {...}.
-Script de texto mantém OnRunScript e as opções originais. O Studio não
-executa strings de código em LocalScript: o botão depende desse callback
-ou de loadstring disponível no ambiente. O editor visual funciona nativamente.
-
-VALIDAÇÃO
-Sintaxe e motor verificados com harness local; não executado no Roblox Studio.
-]]
-
 local PebbleUI = { Version = "1.5.0-blueprints" }
 
 --============================================================
@@ -69,9 +12,9 @@ local TextService = game:GetService("TextService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
 
-assert(RunService:IsClient(), "PebbleUI precisa ser carregada no cliente.")
+assert(RunService:IsClient(), "PebbleUI must be loaded on the client.")
 local LocalPlayer = Players.LocalPlayer
-assert(LocalPlayer, "Jogador local indisponível.")
+assert(LocalPlayer, "Local player unavailable.")
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 --============================================================
@@ -175,8 +118,8 @@ local function List(parent, gap, fill)
     })
 end
 
--- ============ SCROLLBAR DISCRETA ============
--- Aplica estilo "fino e cinza" numa ScrollingFrame
+-- ============ DISCREET SCROLLBAR ============
+-- Applies a "thin and gray" style to a ScrollingFrame
 local function StyleScrollBar(sf, opts)
     opts = opts or {}
     sf.ScrollBarThickness        = opts.Thickness or 2
@@ -3256,7 +3199,7 @@ function Window:_ScriptsChanged()
     self:_RenderScriptRows()
     if self._importingScripts or self._loadingScripts then return end
     local revision = self._scriptSaveRevision
-    self:_ScriptStatus("Salvando...")
+    self:_ScriptStatus("Saving...")
     task.delay(0.45, function()
         if not self.Destroyed and self._scriptSaveRevision == revision then self:SaveScripts() end
     end)
@@ -3455,13 +3398,13 @@ function Window:RunScript(idOrName)
     if type(runner) ~= "function" then
         if type(loadstring) ~= "function" then
             self:_ScriptStatus("This environment does not support script execution.", true)
-            self:Notify({ Content = "Execução de texto indisponível neste cliente. Configure OnRunScript. Blueprints usam execução nativa.", Icon = "triangle-alert", Duration = 6 })
+            self:Notify({ Content = "Text execution unavailable on this client. Configure OnRunScript. Blueprints use native execution.", Icon = "triangle-alert", Duration = 6 })
             return false, "Use OnRunScript to integrate script execution in this environment."
         end
         local ok, compiled, err = pcall(loadstring, record.Source, "@" .. record.Name)
         if not ok or not compiled then
             self:_ScriptStatus(tostring(err or compiled), true)
-            self:Notify({ Content = "Erro no script: " .. tostring(err or compiled), Icon = "triangle-alert", IconColor = self.Theme.Danger, Duration = 6 })
+            self:Notify({ Content = "Script error: " .. tostring(err or compiled), Icon = "triangle-alert", IconColor = self.Theme.Danger, Duration = 6 })
             return false, err or compiled
         end
         runner = function() return compiled() end
@@ -3474,7 +3417,7 @@ function Window:RunScript(idOrName)
             self:_ScriptStatus(ok and ("Completed: " .. name) or tostring(err), not ok)
         end
         if not self.Destroyed then
-            self:Notify({ Content = ok and ("Script executado: " .. name) or ("Erro no script: " .. tostring(err)), Icon = ok and "check" or "triangle-alert", IconColor = ok and self.Theme.Success or self.Theme.Danger, Duration = ok and 3 or 6 })
+            self:Notify({ Content = ok and ("Script executed: " .. name) or ("Script error: " .. tostring(err)), Icon = ok and "check" or "triangle-alert", IconColor = ok and self.Theme.Success or self.Theme.Danger, Duration = ok and 3 or 6 })
         end
         if not ok then safeCallback(self.Config.OnScriptError, err, record, self) end
     end)
@@ -3683,7 +3626,7 @@ function Window:_HandleScriptTextChanged()
         self._settingScriptText = true
         ui.Input.Text = oldSource
         self._settingScriptText = false
-        self:_ScriptStatus("Este script atingiu o limite de tamanho do editor.", true)
+        self:_ScriptStatus("This script reached the editor size limit.", true)
         return
     end
     local correctedPosition
@@ -3745,7 +3688,7 @@ function Window:OpenScriptNamePopup(idOrName, blueprint)
     if self.ActiveDropdown then self.ActiveDropdown:Close() end
     if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
     local record = idOrName and (blueprint and self:GetBlueprint(idOrName) or self:GetScript(idOrName)) or nil
-    if idOrName and not record then return nil, "Arquivo não encontrado." end
+    if idOrName and not record then return nil, "File not found." end
     local theme = self.Theme
     local overlay = New("TextButton", {
         Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 0.4,
@@ -3767,20 +3710,20 @@ function Window:OpenScriptNamePopup(idOrName, blueprint)
     icon.Parent = panel
     BindTheme(self, icon, "ImageColor3", "Accent")
     local title = New("TextLabel", {
-        BackgroundTransparency = 1, Text = blueprint and (record and "Renomear blueprint" or "Novo blueprint") or (record and "Renomear script" or "Novo script"),
+        BackgroundTransparency = 1, Text = blueprint and (record and "Rename blueprint" or "New blueprint") or (record and "Rename script" or "New script"),
         Font = theme.FontBold, TextSize = 15, TextColor3 = theme.Text,
         TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(50, 14),
         Size = UDim2.new(1, -90, 0, 28), ZIndex = 7003, Parent = panel,
     })
     local subtitle = New("TextLabel", {
-        BackgroundTransparency = 1, Text = blueprint and "Dê um nome ao seu blueprint visual." or "Dê um nome ao seu script.",
+        BackgroundTransparency = 1, Text = blueprint and "Give your visual blueprint a name." or "Give your script a name.",
         Font = theme.Font, TextSize = 11, TextColor3 = theme.SubText,
         TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(18, 49),
         Size = UDim2.new(1, -36, 0, 24), ZIndex = 7003, Parent = panel,
     })
     local input = New("TextBox", {
         Name = "ScriptName", ClearTextOnFocus = false, MultiLine = false,
-        Text = record and record.Name:gsub(blueprint and "%.blueprint$" or "%.lua$", "") or "", PlaceholderText = blueprint and "MeuBlueprint" or "MeuScript",
+        Text = record and record.Name:gsub(blueprint and "%.blueprint$" or "%.lua$", "") or "", PlaceholderText = blueprint and "MyBlueprint" or "MyScript",
         Font = theme.FontMedium, TextSize = 12, TextColor3 = theme.Text, PlaceholderColor3 = theme.DimText,
         TextXAlignment = Enum.TextXAlignment.Left, BackgroundColor3 = theme.Input, BorderSizePixel = 0,
         Position = UDim2.fromOffset(18, 82), Size = UDim2.new(1, -36, 0, 34), ZIndex = 7003, Parent = panel,
@@ -3985,7 +3928,7 @@ function Window:_CreateScriptEditor()
         local record = self.ActiveScript
         if not record then return end
         if input:IsFocused() then input:ReleaseFocus() end
-        self:Dialog({ Title = "Delete script?", Content = 'O script "' .. record.Name .. '" will be removed from the explorer.',
+        self:Dialog({ Title = "Delete script?", Content = 'The script "' .. record.Name .. '" will be removed from the explorer.',
             Buttons = { { Title = "Cancel" }, { Title = "Delete", Color = self.Theme.Danger,
                 TextColor = self.Theme.AccentText, Callback = function() self:DeleteScript(record) end } } })
     end)
@@ -4113,7 +4056,7 @@ function Window:_CreateScriptExplorer()
     List(list, 2)
     local empty = New("TextButton", {
         Name = "EmptyScripts", BackgroundTransparency = 1, BorderSizePixel = 0, AutoButtonColor = false,
-        Text = "Nenhum script ainda.\nClique no + para criar.", Font = theme.Font, TextSize = 11,
+        Text = "No scripts yet.\nClick + to create one.", Font = theme.Font, TextSize = 11,
         TextColor3 = theme.MutedText, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
         Position = UDim2.fromOffset(18, 90), Size = UDim2.new(1, -36, 0, 55), ZIndex = 12, Parent = frame,
     })
@@ -4254,42 +4197,42 @@ do
         if kind == "string" or kind == "any" then return text end
         if kind == "Instance" or kind:match("^Class:") then
             if text == "" then return nil end
-            error("Conecte uma porta de objeto; referências não são texto.", 0)
+            error("Connect an object port; references are not text.", 0)
         end
         if kind == "Exec" then return true end
         if kind == "BrickColor" then
             local value = BrickColor.new(tonumber(text) or text)
-            assert(tonumber(text) or value.Name:lower() == text:lower(), "BrickColor inválido: " .. text)
+            assert(tonumber(text) or value.Name:lower() == text:lower(), "Invalid BrickColor: " .. text)
             return value
         end
         if kind == "boolean" then
             if text == "true" then return true end
             if text == "false" then return false end
-            error("Use true ou false.", 0)
+            error("Use true or false.", 0)
         end
         if kind == "number" then
             local n = tonumber(text)
-            assert(n and n == n and math.abs(n) < math.huge, "Número inválido: " .. text)
+            assert(n and n == n and math.abs(n) < math.huge, "Invalid number: " .. text)
             return n
         end
         if kind:match("^Enum%.") then
             local enumName = kind:sub(6)
             local itemName = text:match("([%w_]+)$")
             local enum = Enum[enumName]
-            assert(enum and itemName and enum[itemName], "Enum inválido: " .. kind .. "." .. tostring(itemName))
+            assert(enum and itemName and enum[itemName], "Invalid Enum: " .. kind .. "." .. tostring(itemName))
             return enum[itemName]
         end
         local numbers = {}
         for part in text:gmatch("[^,]+") do
             local n = tonumber(part:match("^%s*(.-)%s*$"))
-            assert(n and n == n and math.abs(n) < math.huge, "Componente numérico inválido: " .. part)
+            assert(n and n == n and math.abs(n) < math.huge, "Invalid number component: " .. part)
             table.insert(numbers, n)
         end
         local counts = { Vector2 = 2, Vector3 = 3, Color3 = 3, UDim = 2, UDim2 = 4, CFrame = 3, NumberRange = 2 }
         if counts[kind] then
-            assert(#numbers == counts[kind] or (kind == "CFrame" and #numbers == 12), "Formato inválido para " .. kind)
+            assert(#numbers == counts[kind] or (kind == "CFrame" and #numbers == 12), "Invalid format for " .. kind)
             if kind == "Color3" then
-                for _, n in ipairs(numbers) do assert(n >= 0 and n <= 255, "RGB deve estar entre 0 e 255.") end
+                for _, n in ipairs(numbers) do assert(n >= 0 and n <= 255, "RGB must be between 0 and 255.") end
                 return Color3.fromRGB(table.unpack(numbers))
             end
             if kind == "Vector2" then return Vector2.new(table.unpack(numbers)) end
@@ -4300,7 +4243,7 @@ do
             if kind == "NumberRange" then return NumberRange.new(table.unpack(numbers)) end
         end
         if text == "" then return nil end
-        error("Para " .. kind .. ", conecte uma porta do mesmo tipo.", 0)
+        error("For " .. kind .. ", connect a port of the same type.", 0)
     end
     local function acceptsLiteral(kind)
         return kind == "string" or kind == "any" or kind == "number" or kind == "boolean" or kind == "BrickColor"
@@ -4308,13 +4251,13 @@ do
             or kind == "CFrame" or kind == "NumberRange" or kind:match("^Enum%.") ~= nil
     end
     local function safeInstance(obj)
-        assert(typeof(obj) == "Instance", "Uma referência de objeto é necessária.")
+        assert(typeof(obj) == "Instance", "An object reference is required.")
         assert(not obj:IsA("Script") and not obj:IsA("RemoteEvent")
-            and not obj:IsA("RemoteFunction") and not obj:IsA("UnreliableRemoteEvent"), "Objeto indisponível no editor local.")
-        assert(not obj:IsA("ServerStorage") and not obj:IsA("ServerScriptService"), "Serviço exclusivo do servidor.")
+            and not obj:IsA("RemoteFunction") and not obj:IsA("UnreliableRemoteEvent"), "Object unavailable in the local editor.")
+        assert(not obj:IsA("ServerStorage") and not obj:IsA("ServerScriptService"), "Server-only service.")
         local parent = obj
         while parent do
-            assert(parent.Name ~= "ServerStorage" and parent.Name ~= "ServerScriptService", "Objeto exclusivo do servidor.")
+            assert(parent.Name ~= "ServerStorage" and parent.Name ~= "ServerScriptService", "Server-only object.")
             parent = parent.Parent
         end
         return obj
@@ -4397,7 +4340,7 @@ do
                     if service then
                         for _, allowed in ipairs(service) do if allowed == name then writable = true end end
                     end
-                    local p = port(name, kind, encodeValue(value), class .. "." .. name .. " · " .. kind .. (writable and " · leitura/escrita local" or " · somente leitura"))
+                    local p = port(name, kind, encodeValue(value), class .. "." .. name .. " · " .. kind .. (writable and " · local read/write" or " · read-only"))
                     p.Writable, p.Property = writable, true
                     -- Unknown complex literals are read-only unless explicitly connected.
                     fields[#fields + 1] = p
@@ -4438,13 +4381,13 @@ do
         if not def.Class then return def end
         local ok, sample = pcall(function() return def.Service and game:GetService(def.Class) or Instance.new(def.Class) end)
         if not ok or not sample then
-            def.Disabled = "Esta classe não está disponível ou não pode ser criada neste cliente."
+            def.Disabled = "This class is not available or cannot be created on this client."
             return def
         end
         local fields = discoverProperties(def.Class, sample, def.Service and (def.Writable or {}) or nil)
         def.Fields = fields
-        def.Inputs = { port("Exec", "Exec", nil, "Ordem de execução (opcional).") }
-        def.Outputs = { port("Exec", "Exec"), port("Object", "Class:" .. def.Class, nil, "Referência " .. def.Class) }
+        def.Inputs = { port("Exec", "Exec", nil, "Execution order (optional).") }
+        def.Outputs = { port("Exec", "Exec"), port("Object", "Class:" .. def.Class, nil, "Reference " .. def.Class) }
         for _, p in ipairs(fields) do
             table.insert(def.Outputs, copyTable(p))
             if p.Writable then table.insert(def.Inputs, copyTable(p)) end
@@ -4456,7 +4399,7 @@ do
     for category, classes in pairs(CLASS_GROUPS) do
         for class in classes:gmatch("%S+") do
             register({ Id = "New:" .. class, Class = class, Title = class, Category = category,
-                Description = "Cria " .. class .. " no cliente. Propriedades aparecem como portas de entrada e saída. Classes indisponíveis ficam desativadas." })
+                Description = "Creates " .. class .. " on the client. Properties appear as input and output ports. Unavailable classes are disabled." })
         end
     end
     local SERVICES = {
@@ -4465,42 +4408,42 @@ do
     }
     for name, writable in pairs(SERVICES) do
         register({ Id = "Service:" .. name, Class = name, Service = true, Writable = writable, Title = name,
-            Category = "Services", Description = "Referência local a " .. name .. ". StarterGui/StarterPack/StarterPlayer são templates; use PlayerGui/Backpack/PlayerScripts para o jogador atual." })
+            Category = "Services", Description = "Local reference to " .. name .. ". StarterGui/StarterPack/StarterPlayer are templates; use PlayerGui/Backpack/PlayerScripts for the current player." })
     end
     for _, name in ipairs({ "LocalPlayer", "PlayerGui", "Backpack", "PlayerScripts", "Character", "CurrentCamera" }) do
         local class = ({ LocalPlayer = "Player", PlayerGui = "PlayerGui", Backpack = "Backpack", PlayerScripts = "PlayerScripts", Character = "Model", CurrentCamera = "Camera" })[name]
-        register({ Id = "Client:" .. name, Title = name, Category = "Services", Description = "Referência do jogador local: " .. name .. ".", Ref = name,
+        register({ Id = "Client:" .. name, Title = name, Category = "Services", Description = "Local player reference: " .. name .. ".", Ref = name,
             Outputs = { port("Object", "Class:" .. class) } })
     end
-    register({ Id = "Start", Title = "Iniciar", Category = "Logic", Description = "Ponto de partida. O grafo executa ao clicar em Rodar.", Outputs = { port("Exec", "Exec") } })
+    register({ Id = "Start", Title = "Start", Category = "Logic", Description = "Starting point. The graph runs when you click Run.", Outputs = { port("Exec", "Exec") } })
     for _, kind in ipairs({ "string", "number", "boolean", "Vector2", "Vector3", "Color3", "BrickColor", "UDim", "UDim2", "CFrame", "NumberRange" }) do
-        local default = ({ string = "Olá, blueprint!", number = "1", boolean = "true", Vector2 = "0, 0", Vector3 = "0, 5, 0", Color3 = "110, 170, 255", BrickColor = "Medium stone grey", UDim = "0, 8", UDim2 = "0, 200, 0, 50", CFrame = "0, 5, 0", NumberRange = "0, 1" })[kind]
-        register({ Id = "Literal:" .. kind, Title = kind, Category = "Values", Literal = kind, Description = "Valor " .. kind .. ". Edite na entrada ou conecte outro valor.",
+        local default = ({ string = "Hello, blueprint!", number = "1", boolean = "true", Vector2 = "0, 0", Vector3 = "0, 5, 0", Color3 = "110, 170, 255", BrickColor = "Medium stone grey", UDim = "0, 8", UDim2 = "0, 200, 0, 50", CFrame = "0, 5, 0", NumberRange = "0, 1" })[kind]
+        register({ Id = "Literal:" .. kind, Title = kind, Category = "Values", Literal = kind, Description = kind .. " value. Edit at the input or connect another value.",
             Inputs = { port("Value", kind, default) }, Outputs = { port("Value", kind) } })
     end
-    register({ Id = "FindChild", Title = "Encontrar objeto", Category = "Services", Description = "Busca um descendente já existente no cliente.",
+    register({ Id = "FindChild", Title = "Find object", Category = "Services", Description = "Searches for a descendant that already exists on the client.",
         Inputs = { port("Parent", "Instance", nil, nil, true), port("Name", "string", "Part"), port("Recursive", "boolean", "true") }, Outputs = { port("Object", "Instance") } })
-    register({ Id = "GetProperty", Title = "Ler propriedade", Category = "Logic", Description = "Lê uma propriedade. Defina o nome e o tipo no node.",
+    register({ Id = "GetProperty", Title = "Read property", Category = "Logic", Description = "Reads a property. Set the name and type on the node.",
         Inputs = { port("Object", "Instance", nil, nil, true) }, Outputs = { port("Value", "any") }, Dynamic = true })
-    register({ Id = "SetProperty", Title = "Definir propriedade", Category = "Logic", Description = "Altera uma propriedade local de um objeto. Validação ocorre antes de aplicar.",
+    register({ Id = "SetProperty", Title = "Set property", Category = "Logic", Description = "Changes a local property of an object. Validation occurs before applying.",
         Inputs = { port("Exec", "Exec"), port("Object", "Instance", nil, nil, true), port("Value", "any", "") }, Outputs = { port("Exec", "Exec"), port("Object", "Instance") }, Dynamic = true })
-    register({ Id = "Cast", Title = "Verificar classe", Category = "Services", Description = "Verifica uma referência existente (ex.: FindChild) antes de conectá-la a uma porta específica. Informe Part, Sound, Frame etc.",
+    register({ Id = "Cast", Title = "Check class", Category = "Services", Description = "Checks an existing reference (e.g. FindChild) before connecting it to a specific port. Enter Part, Sound, Frame, etc.",
         Inputs = { port("Object", "Instance", nil, nil, true) }, Outputs = { port("Object", "Class:Part") }, Dynamic = true })
-    register({ Id = "Print", Title = "Print / Output", Category = "Logic", Description = "Escreve um valor no Output do cliente.", Inputs = { port("Exec", "Exec"), port("Message", "any", "Olá, blueprint!") }, Outputs = { port("Exec", "Exec") } })
-    register({ Id = "Notify", Title = "Notificação", Category = "GUI", Description = "Mostra uma notificação no estilo da hub.", Inputs = { port("Exec", "Exec"), port("Message", "string", "Funcionou!") }, Outputs = { port("Exec", "Exec") } })
-    register({ Id = "Wait", Title = "Aguardar", Category = "Logic", Description = "Espera alguns segundos antes dos nodes seguintes; Parar cancela a execução.", Inputs = { port("Exec", "Exec"), port("Seconds", "number", "0.5") }, Outputs = { port("Exec", "Exec") } })
-    register({ Id = "Add", Title = "Somar", Category = "Logic", Description = "Soma dois números.", Inputs = { port("A", "number", "0"), port("B", "number", "1") }, Outputs = { port("Result", "number") } })
-    register({ Id = "Multiply", Title = "Multiplicar", Category = "Logic", Description = "Multiplica dois números.", Inputs = { port("A", "number", "1"), port("B", "number", "1") }, Outputs = { port("Result", "number") } })
-    register({ Id = "PlaySound", Title = "Tocar som", Category = "Sounds", Description = "Toca um Sound local.", Inputs = { port("Exec", "Exec"), port("Sound", "Class:Sound", nil, nil, true) }, Outputs = { port("Exec", "Exec") } })
-    register({ Id = "MakeVector3", Title = "Compor Vector3", Category = "Values", Description = "Combina números separados em X, Y e Z.",
+    register({ Id = "Print", Title = "Print / Output", Category = "Logic", Description = "Writes a value to the client Output.", Inputs = { port("Exec", "Exec"), port("Message", "any", "Hello, blueprint!") }, Outputs = { port("Exec", "Exec") } })
+    register({ Id = "Notify", Title = "Notification", Category = "GUI", Description = "Shows a notification in the hub style.", Inputs = { port("Exec", "Exec"), port("Message", "string", "It worked!") }, Outputs = { port("Exec", "Exec") } })
+    register({ Id = "Wait", Title = "Wait", Category = "Logic", Description = "Waits a few seconds before the next nodes; Stop cancels execution.", Inputs = { port("Exec", "Exec"), port("Seconds", "number", "0.5") }, Outputs = { port("Exec", "Exec") } })
+    register({ Id = "Add", Title = "Add", Category = "Logic", Description = "Adds two numbers.", Inputs = { port("A", "number", "0"), port("B", "number", "1") }, Outputs = { port("Result", "number") } })
+    register({ Id = "Multiply", Title = "Multiply", Category = "Logic", Description = "Multiplies two numbers.", Inputs = { port("A", "number", "1"), port("B", "number", "1") }, Outputs = { port("Result", "number") } })
+    register({ Id = "PlaySound", Title = "Play sound", Category = "Sounds", Description = "Plays a local Sound.", Inputs = { port("Exec", "Exec"), port("Sound", "Class:Sound", nil, nil, true) }, Outputs = { port("Exec", "Exec") } })
+    register({ Id = "MakeVector3", Title = "Compose Vector3", Category = "Values", Description = "Combines separate numbers into X, Y and Z.",
         Inputs = { port("X","number","0"),port("Y","number","5"),port("Z","number","0") }, Outputs = { port("Value","Vector3") } })
-    register({ Id = "MakeColor3", Title = "Compor Color3", Category = "Values", Description = "Combina canais RGB (0–255) em uma cor.",
+    register({ Id = "MakeColor3", Title = "Compose Color3", Category = "Values", Description = "Combines RGB channels (0-255) into a color.",
         Inputs = { port("R","number","110"),port("G","number","170"),port("B","number","255") }, Outputs = { port("Value","Color3") } })
-    register({ Id = "MakeUDim2", Title = "Compor UDim2", Category = "Values", Description = "Combina escala e deslocamento separados em uma posição/tamanho de GUI.",
+    register({ Id = "MakeUDim2", Title = "Compose UDim2", Category = "Values", Description = "Combines separate scale and offset into a GUI position/size.",
         Inputs = { port("ScaleX","number","0"),port("OffsetX","number","200"),port("ScaleY","number","0"),port("OffsetY","number","50") }, Outputs = { port("Value","UDim2") } })
-    register({ Id = "NumberSequence", Title = "Sequência numérica", Category = "Values", Description = "Cria uma sequência do valor inicial ao final, para particles/gradientes.",
+    register({ Id = "NumberSequence", Title = "Number sequence", Category = "Values", Description = "Creates a sequence from the start to the end value, for particles/gradients.",
         Inputs = { port("Start","number","0"),port("End","number","1") }, Outputs = { port("Value","NumberSequence") } })
-    register({ Id = "ColorSequence", Title = "Sequência de cores", Category = "Values", Description = "Cria um gradiente entre duas cores RGB.",
+    register({ Id = "ColorSequence", Title = "Color sequence", Category = "Values", Description = "Creates a gradient between two RGB colors.",
         Inputs = { port("Start","Color3","110, 170, 255"),port("End","Color3","180, 130, 240") }, Outputs = { port("Value","ColorSequence") } })
 
     local function definition(node)
@@ -4542,9 +4485,9 @@ do
         return { Id = record.Id, Name = record.Name, Nodes = copyTable(record.Nodes), Links = copyTable(record.Links), View = copyTable(record.View) }
     end
     local function validName(name)
-        if type(name) ~= "string" then return nil, "Digite um nome." end
+        if type(name) ~= "string" then return nil, "Enter a name." end
         name = name:match("^%s*(.-)%s*$"):gsub("%.blueprint$", "")
-        if name == "" or #name > 60 or name:find("[%c/\\]") then return nil, "Use um nome curto, sem barras ou quebras de linha." end
+        if name == "" or #name > 60 or name:find("[%c/\\]") then return nil, "Use a short name without slashes or line breaks." end
         return name .. ".blueprint"
     end
     function Window:GetBlueprint(id)
@@ -4567,15 +4510,15 @@ do
     end
     function Window:SaveBlueprints()
         if not self._blueprintsDirty then return true end
-        if self._blueprintStorageBlocked then return false, "Falha no carregamento anterior; exporte uma cópia antes de salvar." end
+        if self._blueprintStorageBlocked then return false, "Previous load failed; export a copy before saving." end
         local ok, result = true, nil
         if type(self.Config.SaveBlueprints) == "function" then ok, result = pcall(self.Config.SaveBlueprints, self:GetBlueprints(), self)
         elseif self._blueprintStorageFile and type(writefile) == "function" then ok, result = pcall(writefile, self._blueprintStorageFile, self:ExportBlueprints()) end
-        if not ok or result == false then self:_BlueprintNotice("Não foi possível salvar: " .. tostring(result), true); return false, result end
+        if not ok or result == false then self:_BlueprintNotice("Could not save: " .. tostring(result), true); return false, result end
         self._blueprintsDirty = false
         for _, r in ipairs(self.CustomBlueprints) do r.Dirty = false end
         self:_RenderBlueprintRows()
-        self:_BlueprintStatus(self._hasBlueprintStorage and "Salvo" or "Salvo nesta janela · exporte para guardar")
+        self:_BlueprintStatus(self._hasBlueprintStorage and "Saved" or "Saved in this window · export to keep it")
         safeCallback(self.Config.OnBlueprintsChanged, self:GetBlueprints(), self)
         return true
     end
@@ -4598,12 +4541,12 @@ do
         end)
     end
     function Window:CreateBlueprint(config)
-        if self.Destroyed or not self.BlueprintEditor then return nil, "Editor indisponível." end
+        if self.Destroyed or not self.BlueprintEditor then return nil, "Editor unavailable." end
         config = type(config) == "string" and { Name = config } or (config or {})
         local name, err = validName(config.Name or "Blueprint")
         if not name then return nil, err end
-        for _, r in ipairs(self.CustomBlueprints) do if r.Name:lower() == name:lower() then return nil, "Já existe um blueprint com esse nome." end end
-        if #self.CustomBlueprints >= (self.Config.MaxBlueprints or 100) then return nil, "Limite de blueprints atingido." end
+        for _, r in ipairs(self.CustomBlueprints) do if r.Name:lower() == name:lower() then return nil, "A blueprint with that name already exists." end end
+        if #self.CustomBlueprints >= (self.Config.MaxBlueprints or 100) then return nil, "Blueprint limit reached." end
         self._blueprintCounter = self._blueprintCounter + 1
         local id = "blueprint_" .. self._blueprintCounter
         while self._blueprintsById[id] do self._blueprintCounter = self._blueprintCounter + 1; id = "blueprint_" .. self._blueprintCounter end
@@ -4626,9 +4569,9 @@ do
         return record
     end
     function Window:RenameBlueprint(id, newName)
-        local r = self:GetBlueprint(id); if not r then return nil, "Blueprint não encontrado." end
+        local r = self:GetBlueprint(id); if not r then return nil, "Blueprint not found." end
         local name, err = validName(newName); if not name then return nil, err end
-        for _, other in ipairs(self.CustomBlueprints) do if other ~= r and other.Name:lower() == name:lower() then return nil, "Nome já utilizado." end end
+        for _, other in ipairs(self.CustomBlueprints) do if other ~= r and other.Name:lower() == name:lower() then return nil, "Name already used." end end
         r.Name = name; self:_BlueprintChanged(r, true)
         if self.ActiveBlueprint == r then self.BlueprintUI.Title.Text = name end
         return r
@@ -4644,8 +4587,8 @@ do
     end
     function Window:AddBlueprintNode(id, kind, position, values)
         local r = self:GetBlueprint(id)
-        if not r or not Catalog[kind] then return nil, "Node desconhecido." end
-        if #r.Nodes >= (self.Config.MaxBlueprintNodes or 150) then return nil, "Limite de nodes atingido." end
+        if not r or not Catalog[kind] then return nil, "Unknown node." end
+        if #r.Nodes >= (self.Config.MaxBlueprintNodes or 150) then return nil, "Node limit reached." end
         r.Counter = r.Counter + 1
         local node = { Id = "node_" .. r.Counter, Type = kind, X = tonumber(position and position.X) or 0, Y = tonumber(position and position.Y) or 0, Values = copyTable(values or {}), Settings = {} }
         if Catalog[kind].Dynamic then node.Settings = { Property = kind == "Cast" and "Part" or "Name", ValueType = "string" } end
@@ -4662,11 +4605,11 @@ do
         return true
     end
     function Window:ConnectBlueprint(id, a, output, b, input)
-        local r = self:GetBlueprint(id); if not r then return false, "Blueprint não encontrado." end
+        local r = self:GetBlueprint(id); if not r then return false, "Blueprint not found." end
         local source, target = nodeById(r,a), nodeById(r,b)
         local p, q = source and getPort(source,output,"out"), target and getPort(target,input,"in")
-        if a == b or not p or not q then return false, "Portas inválidas." end
-        if not compatible(p.Type,q.Type) then return false, "Incompatível: " .. p.Type .. " → " .. q.Type end
+        if a == b or not p or not q then return false, "Invalid ports." end
+        if not compatible(p.Type,q.Type) then return false, "Incompatible: " .. p.Type .. " → " .. q.Type end
         -- Adding a -> b must not find a path from b back to a.
         local visited = {}
         local function reaches(id)
@@ -4677,7 +4620,7 @@ do
             end
             return false
         end
-        if reaches(b) then return false, "Esta conexão criaria um ciclo." end
+        if reaches(b) then return false, "This connection would create a cycle." end
         for i = #r.Links,1,-1 do if r.Links[i].To == b and r.Links[i].Input == input then table.remove(r.Links,i) end end
         table.insert(r.Links, { From = a, Output = output, To = b, Input = input })
         self:_BlueprintChanged(r)
@@ -4692,39 +4635,39 @@ do
         return true
     end
     function Window:ValidateBlueprint(id)
-        local r = self:GetBlueprint(id); if not r then return false, { "Blueprint não encontrado." }, {} end
+        local r = self:GetBlueprint(id); if not r then return false, { "Blueprint not found." }, {} end
         local errors, invalid, seen, targets = {}, {}, {}, {}
         local function issue(nodeId,msg) invalid[nodeId] = true; table.insert(errors,msg) end
         for _, n in ipairs(r.Nodes) do
             local def = definition(n)
-            if seen[n.Id] then issue(n.Id,"Id duplicado: " .. n.Id) end; seen[n.Id] = true
-            if not def then issue(n.Id,"Node desconhecido: " .. n.Type)
+            if seen[n.Id] then issue(n.Id,"Duplicate id: " .. n.Id) end; seen[n.Id] = true
+            if not def then issue(n.Id,"Unknown node: " .. n.Type)
             elseif def.Disabled then issue(n.Id,def.Title .. ": " .. def.Disabled)
             else
                 for _, p in ipairs(def.Inputs) do
                     local link = incoming(r,n.Id,p.Name)
                     if not link and p.Type ~= "Exec" then
                         local raw = n.Values[p.Name]; if raw == nil then raw = p.Default end
-                        if p.Required and (raw == nil or raw == "") then issue(n.Id,def.Title .. ": conecte " .. p.Name)
+                        if p.Required and (raw == nil or raw == "") then issue(n.Id,def.Title .. ": connect " .. p.Name)
                         elseif (raw ~= nil and (raw ~= "" or acceptsLiteral(p.Type))) or p.Type == "string" or p.Type == "any" then
                             local ok, err = pcall(parseValue,raw,p.Type)
                             if not ok then issue(n.Id,def.Title .. "." .. p.Name .. ": " .. tostring(err)) end
                         end
                     end
                 end
-                if def.Dynamic and (not n.Settings or type(n.Settings.Property) ~= "string" or not n.Settings.Property:match("^[%w_]+$")) then issue(n.Id,"Nome de propriedade inválido.") end
+                if def.Dynamic and (not n.Settings or type(n.Settings.Property) ~= "string" or not n.Settings.Property:match("^[%w_]+$")) then issue(n.Id,"Invalid property name.") end
             end
         end
         for _, l in ipairs(r.Links) do
             local a,b = nodeById(r,l.From),nodeById(r,l.To)
             local p,q = a and getPort(a,l.Output,"out"), b and getPort(b,l.Input,"in")
             local key = l.To .. ":" .. l.Input
-            if targets[key] then issue(l.To,"Entrada com mais de uma conexão: " .. key) end; targets[key] = true
-            if not p or not q or not compatible(p.Type,q.Type) then issue(l.To,"Conexão inválida: " .. l.Output .. " → " .. l.Input) end
+            if targets[key] then issue(l.To,"Input with more than one connection: " .. key) end; targets[key] = true
+            if not p or not q or not compatible(p.Type,q.Type) then issue(l.To,"Invalid connection: " .. l.Output .. " → " .. l.Input) end
         end
         local state = {}
         local function visit(id)
-            if state[id] == 1 then issue(id,"Ciclo encontrado no grafo."); return end
+            if state[id] == 1 then issue(id,"Cycle found in the graph."); return end
             if state[id] == 2 then return end
             state[id] = 1
             for _, l in ipairs(r.Links) do if l.To == id and seen[l.From] then visit(l.From) end end
@@ -4740,13 +4683,13 @@ do
         for i = #runtime.Undo,1,-1 do pcall(runtime.Undo[i]) end
         for i = #runtime.Created,1,-1 do pcall(function() runtime.Created[i]:Destroy() end) end
         r.Runtime = nil
-        if not quiet then self:_BlueprintStatus("Parado · objetos criados e alterações locais removidos") end
+        if not quiet then self:_BlueprintStatus("Stopped · created objects and local changes removed") end
         return true
     end
     function Window:RunBlueprint(id)
-        local r = self:GetBlueprint(id or self.ActiveBlueprint); if not r then return false,"Blueprint não encontrado." end
-        if self.ActiveBlueprint == r and self._bpPending then self:_BlueprintNotice("Finalize a conexão pendente ou pressione Esc antes de rodar.",true); return false,"Conexão pendente." end
-        if self.Config.AllowBlueprintExecution == false then self:_BlueprintNotice("Execução desativada.",true); return false,"Execução desativada." end
+        local r = self:GetBlueprint(id or self.ActiveBlueprint); if not r then return false,"Blueprint not found." end
+        if self.ActiveBlueprint == r and self._bpPending then self:_BlueprintNotice("Finish the pending connection or press Esc before running.",true); return false,"Pending connection." end
+        if self.Config.AllowBlueprintExecution == false then self:_BlueprintNotice("Execution disabled.",true); return false,"Execution disabled." end
         local valid, errors, invalid = self:ValidateBlueprint(r)
         r.Invalid = invalid
         if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end
@@ -4754,12 +4697,12 @@ do
         self:StopBlueprint(r,true)
         local rt = { Created = {}, Undo = {}, Values = {}, Projected = {}, Assigned = {}, Cancelled = false, Revision = r.Revision }
         r.Runtime = rt
-        self:_BlueprintStatus("Validando propriedades...")
+        self:_BlueprintStatus("Validating properties...")
         -- Preflight creates objects detached; all data and property checks run before any commit.
         rt.Thread = task.spawn(function()
             local operations, parents = {}, {}
             local currentNode
-            local function check() assert(not rt.Cancelled and not self.Destroyed and rt.Revision == r.Revision,"Execução cancelada.") end
+            local function check() assert(not rt.Cancelled and not self.Destroyed and rt.Revision == r.Revision,"Execution cancelled.") end
             local function plannedValue(obj,name)
                 if rt.Assigned[obj] and rt.Assigned[obj][name] then return rt.Projected[obj][name] end
                 return obj[name]
@@ -4769,8 +4712,8 @@ do
                 local link = incoming(r,node.Id,p.Name)
                 if link then
                     local value = eval(nodeById(r,link.From))[link.Output]
-                    if p.Required then assert(value ~= nil,"Referência ausente em " .. p.Name) end
-                    if value ~= nil and p.Type:match("^Class:") then assert(typeof(value)=="Instance" and value:IsA(p.Type:sub(7)),"Classe incompatível em " .. p.Name) end
+                    if p.Required then assert(value ~= nil,"Missing reference on " .. p.Name) end
+                    if value ~= nil and p.Type:match("^Class:") then assert(typeof(value)=="Instance" and value:IsA(p.Type:sub(7)),"Incompatible class on " .. p.Name) end
                     return value
                 end
                 local raw = node.Values[p.Name]; if raw == nil then raw = p.Default end
@@ -4779,17 +4722,17 @@ do
             end
             local function validateProperty(obj,name,value)
                 safeInstance(obj)
-                assert(name:match("^[%w_]+$") and name ~= "Source" and name ~= "Capabilities" and name ~= "Sandboxed", "Propriedade bloqueada.")
+                assert(name:match("^[%w_]+$") and name ~= "Source" and name ~= "Capabilities" and name ~= "Sandboxed", "Property blocked.")
                 local old = obj[name]
                 if old ~= nil and value ~= nil then
                     local kind = fieldType(old)
-                    assert(compatible(fieldType(value),kind), "Tipo inválido em " .. obj.ClassName .. "." .. name .. ": " .. kind)
+                    assert(compatible(fieldType(value),kind), "Invalid type on " .. obj.ClassName .. "." .. name .. ": " .. kind)
                 end
                 if name == "Parent" and value then safeInstance(value) end
                 return old
             end
             eval = function(node)
-                check(); assert(node,"Node ausente.")
+                check(); assert(node,"Missing node.")
                 if rt.Values[node.Id] then return rt.Values[node.Id] end
                 currentNode = node.Id
                 local def, values, out = definition(node), {}, { Exec = true }
@@ -4831,20 +4774,20 @@ do
                     elseif def.Ref == "Character" then obj = LocalPlayer.Character
                     elseif def.Ref == "CurrentCamera" then obj = workspace.CurrentCamera
                     else obj = LocalPlayer:FindFirstChild(def.Ref) end
-                    assert(obj,"Referência indisponível: " .. def.Ref); out.Object = safeInstance(obj)
+                    assert(obj,"Unavailable reference: " .. def.Ref); out.Object = safeInstance(obj)
                     for _, p in ipairs(def.Outputs) do if p.Property then out[p.Name] = obj[p.Name] end end
                 elseif def.Literal then out.Value = values.Value
                 elseif node.Type == "FindChild" then
                     out.Object = safeInstance(values.Parent):FindFirstChild(values.Name,values.Recursive)
-                    assert(out.Object,"Objeto não encontrado: " .. values.Name); safeInstance(out.Object)
+                    assert(out.Object,"Object not found: " .. values.Name); safeInstance(out.Object)
                 elseif node.Type == "GetProperty" then
                     local obj = safeInstance(values.Object)
                     validateProperty(obj,node.Settings.Property,nil)
                     out.Value = plannedValue(obj,node.Settings.Property)
-                    assert(compatible(fieldType(out.Value),node.Settings.ValueType),"Tipo de leitura diferente do tipo escolhido.")
+                    assert(compatible(fieldType(out.Value),node.Settings.ValueType),"Read type differs from the chosen type.")
                 elseif node.Type == "Cast" then
                     out.Object = safeInstance(values.Object)
-                    assert(out.Object:IsA(node.Settings.Property),"Objeto não é " .. node.Settings.Property)
+                    assert(out.Object:IsA(node.Settings.Property),"Object is not " .. node.Settings.Property)
                 elseif node.Type == "SetProperty" then
                     local obj,name,value = safeInstance(values.Object),node.Settings.Property,values.Value
                     local old = validateProperty(obj,name,value)
@@ -4859,7 +4802,7 @@ do
                         local defService = Catalog["Service:" .. obj.ClassName]
                         local allowed = false
                         for _, propName in ipairs(defService and defService.Writable or {}) do if propName == name then allowed = true end end
-                        assert(allowed,"Esta propriedade não pode ser editada por este node.")
+                        assert(allowed,"This property cannot be edited by this node.")
                     end
                     table.insert(operations,function()
                         check(); obj[name] = value
@@ -4870,22 +4813,22 @@ do
                 elseif node.Type == "Multiply" then out.Result = values.A * values.B
                 elseif node.Type == "MakeVector3" then out.Value = Vector3.new(values.X,values.Y,values.Z)
                 elseif node.Type == "MakeColor3" then
-                    for _,channel in ipairs({values.R,values.G,values.B}) do assert(channel>=0 and channel<=255,"RGB deve estar entre 0 e 255.") end
+                    for _,channel in ipairs({values.R,values.G,values.B}) do assert(channel>=0 and channel<=255,"RGB must be between 0 and 255.") end
                     out.Value = Color3.fromRGB(values.R,values.G,values.B)
                 elseif node.Type == "MakeUDim2" then out.Value = UDim2.new(values.ScaleX,values.OffsetX,values.ScaleY,values.OffsetY)
                 elseif node.Type == "NumberSequence" then out.Value = NumberSequence.new(values.Start,values.End)
                 elseif node.Type == "ColorSequence" then out.Value = ColorSequence.new(values.Start,values.End)
                 elseif node.Type == "Wait" then
-                    assert(values.Seconds >= 0 and values.Seconds <= 60,"A espera deve estar entre 0 e 60 segundos.")
+                    assert(values.Seconds >= 0 and values.Seconds <= 60,"The wait must be between 0 and 60 seconds.")
                     table.insert(operations,function() check(); task.wait(values.Seconds); check() end)
                 elseif node.Type == "Print" then table.insert(operations,function() check(); print("[Blueprint " .. r.Name .. "]",values.Message) end)
                 elseif node.Type == "Notify" then table.insert(operations,function() check(); self:Notify({ Content = values.Message }) end)
                 elseif node.Type == "PlaySound" then
-                    assert(safeInstance(values.Sound):IsA("Sound"),"Conecte um Sound.")
+                    assert(safeInstance(values.Sound):IsA("Sound"),"Connect a Sound.")
                     table.insert(operations,function() check(); values.Sound:Play(); table.insert(rt.Undo,function() values.Sound:Stop() end) end)
                 end
                 rt.Values[node.Id] = out
-                for _, value in pairs(out) do if typeof(value) == "number" then assert(value == value and math.abs(value) < math.huge,"Resultado numérico inválido.") end end
+                for _, value in pairs(out) do if typeof(value) == "number" then assert(value == value and math.abs(value) < math.huge,"Invalid numeric result.") end end
                 return out
             end
             local ok, err = pcall(function()
@@ -4894,22 +4837,22 @@ do
                     if properties.Parent then
                         local visited = { [obj] = true }; local ancestor = properties.Parent
                         while ancestor do
-                            assert(not visited[ancestor],"Ciclo de Parent entre objetos."); visited[ancestor]=true
+                            assert(not visited[ancestor],"Parent cycle between objects."); visited[ancestor]=true
                             ancestor = plannedValue(ancestor,"Parent")
                         end
                     end
                 end
-                check(); self:_BlueprintStatus("Rodando...")
+                check(); self:_BlueprintStatus("Running...")
                 for _, op in ipairs(parents) do op() end
                 for _, op in ipairs(operations) do op() end
             end)
             if not ok then
                 if currentNode then r.Invalid = { [currentNode] = true } end
                 self:StopBlueprint(r,true)
-                if not self.Destroyed then self:_BlueprintNotice("Falha: " .. tostring(err),true); if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end end
+                if not self.Destroyed then self:_BlueprintNotice("Failure: " .. tostring(err),true); if self.ActiveBlueprint == r then self:_BuildBlueprintBoard() end end
                 safeCallback(self.Config.OnBlueprintError,err,r,self)
             elseif not rt.Cancelled and not self.Destroyed then
-                self:_BlueprintNotice("Blueprint executado: " .. r.Name,false)
+                self:_BlueprintNotice("Blueprint executed: " .. r.Name,false)
                 safeCallback(self.Config.OnBlueprintRun,r,self)
             end
         end)
@@ -5049,7 +4992,7 @@ do
             row.MouseEnter:Connect(function() if self.ActiveBlueprint ~= record then HoverTween(row,0.15,{ BackgroundTransparency = 0.5 }) end end)
             row.MouseLeave:Connect(function() if self.ActiveBlueprint ~= record then HoverTween(row,0.18,{ BackgroundTransparency = 1 }) end end)
             row.MouseButton1Click:Connect(function() self:OpenBlueprint(record) end)
-            self:_BlueprintTooltip(icon,"Blueprint visual · " .. #record.Nodes .. " nodes · " .. #record.Links .. " conexões")
+            self:_BlueprintTooltip(icon,"Visual blueprint · " .. #record.Nodes .. " nodes · " .. #record.Links .. " connections")
         end
         self:_LayoutBlueprintExplorer()
     end
@@ -5066,7 +5009,7 @@ do
         return self
     end
     function Window:OpenBlueprint(id)
-        local record = self:GetBlueprint(id); if not record or self.Destroyed then return nil,"Blueprint não encontrado." end
+        local record = self:GetBlueprint(id); if not record or self.Destroyed then return nil,"Blueprint not found." end
         if self.ActiveScript then self:_LeaveScriptEditor() end
         if self.ActiveDropdown then self.ActiveDropdown:Close() end
         if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
@@ -5080,7 +5023,7 @@ do
             if tab.Accent then tab.Accent.BackgroundTransparency = 1 end
         end
         self:_BuildBlueprintBoard(); self:_RenderScriptRows(); self:_RenderBlueprintRows()
-        self:_BlueprintStatus("Arraste os nodes · conecte os pontos · Rodar para executar")
+        self:_BlueprintStatus("Drag the nodes · connect the points · Run to execute")
         PopIn(self.BlueprintEditor)
         safeCallback(self.Config.OnBlueprintOpened,record,self)
         return record
@@ -5129,11 +5072,11 @@ do
             if not ok then
                 self._bpPending = source; self._bpRejectedTarget = target.Node
                 self:_BlueprintNotice(err,true)
-            else self._bpPending = nil; self._bpRejectedTarget = nil; self:_BlueprintStatus("Conexão criada") end
+            else self._bpPending = nil; self._bpRejectedTarget = nil; self:_BlueprintStatus("Connection created") end
             self:_RefreshBlueprintCompatibility()
         else
             self._bpPending = endpoint; self._bpRejectedTarget = nil; self._bpPendingStart = pointer(input)
-            self:_BlueprintStatus(endpoint.Port.Name .. " · " .. endpoint.Port.Type .. " · selecione uma porta compatível")
+            self:_BlueprintStatus(endpoint.Port.Name .. " · " .. endpoint.Port.Type .. " · select a compatible port")
             self:_RefreshBlueprintCompatibility()
         end
     end
@@ -5174,20 +5117,20 @@ do
                     end
                 end)
                 if def.Dynamic then
-                    label(self,frame,n.Type == "Cast" and "Classe" or "Propriedade",UDim2.fromOffset(12,39),UDim2.fromOffset(84,20),"MutedText","Font",10,26)
+                    label(self,frame,n.Type == "Cast" and "Class" or "Property",UDim2.fromOffset(12,39),UDim2.fromOffset(84,20),"MutedText","Font",10,26)
                     editBox(self,frame,n.Settings.Property,UDim2.fromOffset(96,40),UDim2.fromOffset(147,20),27,function(value)
                         n.Settings.Property = value; self:_BlueprintChanged(r)
                         if n.Type == "Cast" then self:_BuildBlueprintBoard() end
                     end)
                     if n.Type ~= "Cast" then
-                    label(self,frame,"Tipo",UDim2.fromOffset(12,64),UDim2.fromOffset(84,20),"MutedText","Font",10,26)
+                    label(self,frame,"Type",UDim2.fromOffset(12,64),UDim2.fromOffset(84,20),"MutedText","Font",10,26)
                     local typeBox = editBox(self,frame,n.Settings.ValueType,UDim2.fromOffset(96,65),UDim2.fromOffset(147,20),27,function(value)
                         local allowed = { string=true,number=true,boolean=true,Vector2=true,Vector3=true,Color3=true,UDim=true,UDim2=true,CFrame=true,Instance=true,NumberRange=true }
                         if allowed[value] or value:match("^Enum%.[%w_]+$") then
                             n.Settings.ValueType = value; self:_BlueprintChanged(r); self:_BuildBlueprintBoard()
-                        else self:_BlueprintNotice("Tipo desconhecido; use string, number, boolean, Vector3, Color3, UDim2, Instance ou Enum.<tipo>.",true) end
+                        else self:_BlueprintNotice("Unknown type; use string, number, boolean, Vector3, Color3, UDim2, Instance or Enum.<type>.",true) end
                     end)
-                    self:_BlueprintTooltip(typeBox,"Tipo exato da propriedade. Referências usam Instance; enums usam Enum.Material, Enum.Font etc.")
+                    self:_BlueprintTooltip(typeBox,"Exact property type. References use Instance; enums use Enum.Material, Enum.Font, etc.")
                     end
                 end
                 local scroll = StyleScrollBar(New("ScrollingFrame", { Name = "Properties", BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -5202,7 +5145,7 @@ do
                     Corner(button,p.Type == "Exec" and 2 or 20)
                     local endpoint = { Node = n.Id, Port = p, Direction = direction, Button = button, Scroll = scroll }
                     table.insert(nodeUI.Endpoints,endpoint); table.insert(self._bpEndpoints,endpoint)
-                    self:_BlueprintTooltip(button,p.Description .. "\n" .. p.Type .. (direction == "in" and " · entrada · botão direito desconecta" or " · saída"))
+                    self:_BlueprintTooltip(button,p.Description .. "\n" .. p.Type .. (direction == "in" and " · input · right-click disconnects" or " · output"))
                     button.InputBegan:Connect(function(input)
                         if input.UserInputType == Enum.UserInputType.MouseButton2 and direction == "in" then self:DisconnectBlueprint(r,n.Id,p.Name)
                         else self:_BlueprintPortPressed(endpoint,input) end
@@ -5226,17 +5169,17 @@ do
                                 if not frame.Parent then return end
                                 n.Values[rowData.Name] = value; self:_BlueprintChanged(r)
                                 local ok,err = pcall(parseValue,value,p.Type)
-                                if not ok then r.Invalid = r.Invalid or {}; r.Invalid[n.Id] = true; self:_BlueprintNotice(tostring(err),true) else self:_BlueprintStatus("Propriedade atualizada") end
+                                if not ok then r.Invalid = r.Invalid or {}; r.Invalid[n.Id] = true; self:_BlueprintNotice(tostring(err),true) else self:_BlueprintStatus("Property updated") end
                                 self:_RefreshBlueprintCompatibility()
                             end)
-                            self:_BlueprintTooltip(box,p.Type .. "\nVector3: x, y, z · Color3: R, G, B (0–255) · UDim2: escalaX, pxX, escalaY, pxY")
+                            self:_BlueprintTooltip(box,p.Type .. "\nVector3: x, y, z · Color3: R, G, B (0-255) · UDim2: scaleX, pxX, scaleY, pxY")
                         end
                     else
                         label(self,holder,(row.Output or p).Type,UDim2.fromOffset(130,0),UDim2.fromOffset(101,32),"DimText","Font",9,27)
                     end
                 end
                 scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function() self._bpWireDirty = true end)
-                label(self,frame,def.Category .. " · " .. #rows .. " portas",UDim2.new(0,12,1,-14),UDim2.new(1,-24,0,12),"DimText","Font",9,26)
+                label(self,frame,def.Category .. " · " .. #rows .. " ports",UDim2.new(0,12,1,-14),UDim2.new(1,-24,0,12),"DimText","Font",9,26)
             end
         end
         self._bpBuilding = false
@@ -5375,7 +5318,7 @@ do
                         local node,err=self:AddBlueprintNode(r,itemDef.Id,{ X=pos.X,Y=pos.Y })
                         if not node then self:_BlueprintNotice(err,true); return end
                         ui.Palette.Visible=false; self._bpAddPosition=nil; self:_SelectBlueprintNode(node.Id)
-                        self:_BlueprintStatus("Node adicionado: " .. itemDef.Title)
+                        self:_BlueprintStatus("Node added: " .. itemDef.Title)
                     end,false,44)
                     item.LayoutOrder=order; item.BackgroundTransparency=0.7; item.TextXAlignment=Enum.TextXAlignment.Left; Padding(item,20,5,0,0)
                     New("Frame",{ BackgroundColor3=def.Color,BorderSizePixel=0,Position=UDim2.fromOffset(8,10),Size=UDim2.fromOffset(3,9),ZIndex=45,Parent=item })
@@ -5397,18 +5340,18 @@ do
         local overlay=New("TextButton",{ Text="",AutoButtonColor=false,BackgroundColor3=self.Theme.Overlay,BackgroundTransparency=0.4,BorderSizePixel=0,Size=UDim2.fromScale(1,1),ZIndex=7000,Parent=self.ScreenGui })
         local panel=New("Frame",{ BackgroundColor3=self.Theme.Popup,BorderSizePixel=0,AnchorPoint=Vector2.new(0.5,0.5),Position=UDim2.fromScale(0.5,0.5),Size=UDim2.fromOffset(440,330),ZIndex=7001,Parent=overlay })
         Corner(panel,7); Stroke(panel,self.Theme.Border,1,0.1)
-        label(self,panel,importing and "Importar blueprints (JSON)" or "Exportar blueprints (JSON)",UDim2.fromOffset(16,12),UDim2.new(1,-32,0,26),"Text","FontBold",14,7002)
+        label(self,panel,importing and "Import blueprints (JSON)" or "Export blueprints (JSON)",UDim2.fromOffset(16,12),UDim2.new(1,-32,0,26),"Text","FontBold",14,7002)
         local box=New("TextBox",{ Text=importing and "" or self:ExportBlueprints(),ClearTextOnFocus=false,MultiLine=true,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,Font=Enum.Font.Code,TextSize=11,TextColor3=self.Theme.SubText,
             BackgroundColor3=self.Theme.Input,BorderSizePixel=0,Position=UDim2.fromOffset(16,48),Size=UDim2.new(1,-32,1,-106),ZIndex=7002,Parent=panel })
         Corner(box,4); Padding(box,8,8,8,8)
         local window=self; local modal={ Closed=false }
         function modal:Close() if self.Closed then return end; self.Closed=true; box:ReleaseFocus(); overlay:Destroy(); if window._scriptModal==self then window._scriptModal=nil end end
         self._scriptModal=modal
-        local action=textButton(self,panel,importing and "Importar" or "Selecionar tudo",UDim2.new(1,-154,1,-42),UDim2.fromOffset(138,28),function()
-            if importing then local ok,err=window:ImportBlueprints(box.Text,false); if ok then modal:Close(); window:_BlueprintNotice("Blueprints importados",false) else window:_BlueprintNotice(tostring(err),true) end
+        local action=textButton(self,panel,importing and "Import" or "Select all",UDim2.new(1,-154,1,-42),UDim2.fromOffset(138,28),function()
+            if importing then local ok,err=window:ImportBlueprints(box.Text,false); if ok then modal:Close(); window:_BlueprintNotice("Blueprints imported",false) else window:_BlueprintNotice(tostring(err),true) end
             else box:CaptureFocus(); box.SelectionStart=1; box.CursorPosition=#box.Text+1 end
         end,true,7003)
-        textButton(self,panel,"Fechar",UDim2.fromOffset(16,288),UDim2.fromOffset(90,28),function() modal:Close() end,false,7003)
+        textButton(self,panel,"Close",UDim2.fromOffset(16,288),UDim2.fromOffset(90,28),function() modal:Close() end,false,7003)
         overlay.MouseButton1Click:Connect(function() modal:Close() end)
         PopIn(panel); box:CaptureFocus()
         if not importing then box.SelectionStart=1; box.CursorPosition=#box.Text+1 end
@@ -5427,44 +5370,44 @@ do
         local scale=New("UIScale",{ Scale=0.85,Parent=nodeLayer })
         local status=label(self,editor,"",UDim2.new(0,10,1,-29),UDim2.new(1,-82,0,28),"MutedText","Font",10,31)
         local zoom=label(self,editor,"85%",UDim2.new(1,-68,1,-29),UDim2.fromOffset(58,28),"DimText","Font",10,31); zoom.TextXAlignment=Enum.TextXAlignment.Right
-        local empty=label(self,board,"Board vazio\nClique em + Node para começar",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(260,70),"MutedText","Font",12,29)
+        local empty=label(self,board,"Empty board\nClick + Node to start",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(260,70),"MutedText","Font",12,29)
         empty.AnchorPoint=Vector2.new(0.5,0.5); empty.TextXAlignment=Enum.TextXAlignment.Center; empty.TextWrapped=true
         local palette=New("Frame",{ Name="NodePalette",BackgroundColor3=self.Theme.Popup,BorderSizePixel=0,Position=UDim2.fromOffset(10,76),Size=UDim2.new(0,244,1,-116),Visible=false,ClipsDescendants=true,ZIndex=40,Parent=editor })
         Corner(palette,6); BindTheme(self,palette,"BackgroundColor3","Popup"); Stroke(palette,self.Theme.Border,1,0.1)
-        label(self,palette,"Catálogo de nodes",UDim2.fromOffset(12,4),UDim2.new(1,-46,0,28),"Text","FontMedium",12,42)
+        label(self,palette,"Node catalog",UDim2.fromOffset(12,4),UDim2.new(1,-46,0,28),"Text","FontMedium",12,42)
         textButton(self,palette,"×",UDim2.new(1,-31,0,6),UDim2.fromOffset(24,24),function() palette.Visible=false end,false,44)
         local search=editBox(self,palette,"",UDim2.fromOffset(10,38),UDim2.new(1,-20,0,28),44,function() end)
-        search.PlaceholderText="Buscar classe, serviço ou categoria..."; search.PlaceholderColor3=self.Theme.DimText
+        search.PlaceholderText="Search class, service or category..."; search.PlaceholderColor3=self.Theme.DimText
         local paletteList=StyleScrollBar(New("ScrollingFrame",{ BackgroundTransparency=1,BorderSizePixel=0,Position=UDim2.fromOffset(8,76),Size=UDim2.new(1,-16,1,-85),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ZIndex=42,Parent=palette }),{ Thickness=2,Color=self.Theme.Scrollbar,Transparency=0.6 })
         List(paletteList,2)
         local tooltip=New("TextLabel",{ BackgroundColor3=self.Theme.Popup,BackgroundTransparency=0.04,BorderSizePixel=0,Text="",TextWrapped=true,TextSize=11,Font=self.Theme.Font,TextColor3=self.Theme.Text,Size=UDim2.fromOffset(280,80),Visible=false,ZIndex=6800,Parent=self.ScreenGui })
         Corner(tooltip,6); Padding(tooltip,10,10,8,8); Stroke(tooltip,self.Theme.Border,1,0.2); BindTheme(self,tooltip,"BackgroundColor3","Popup"); BindTheme(self,tooltip,"TextColor3","Text")
         self.BlueprintUI={ Title=title,Board=board,Grid=grid,WireLayer=wireLayer,NodeLayer=nodeLayer,Scale=scale,Status=status,Zoom=zoom,Empty=empty,Palette=palette,Search=search,PaletteList=paletteList,Tooltip=tooltip }
         local add=textButton(self,toolbar,"+ Node",UDim2.fromOffset(0,0),UDim2.fromOffset(65,27),function() if palette.Visible then palette.Visible=false else self:_OpenBlueprintPalette() end end,false,33)
-        local run=textButton(self,toolbar,"▶ Rodar",UDim2.fromOffset(71,0),UDim2.fromOffset(66,27),function() self:RunBlueprint() end,true,33)
+        local run=textButton(self,toolbar,"▶ Run",UDim2.fromOffset(71,0),UDim2.fromOffset(66,27),function() self:RunBlueprint() end,true,33)
         local stop=textButton(self,toolbar,"■",UDim2.fromOffset(143,0),UDim2.fromOffset(29,27),function() self:StopBlueprint() end,false,33)
         local validate=textButton(self,toolbar,"✓",UDim2.fromOffset(178,0),UDim2.fromOffset(29,27),function()
             local ok,errors,invalid=self:ValidateBlueprint(self.ActiveBlueprint); self.ActiveBlueprint.Invalid=invalid
-            self:_BuildBlueprintBoard(); self:_BlueprintNotice(ok and "Grafo válido" or errors[1],not ok)
+            self:_BuildBlueprintBoard(); self:_BlueprintNotice(ok and "Valid graph" or errors[1],not ok)
         end,false,33)
         local frame=textButton(self,toolbar,"⤢",UDim2.fromOffset(213,0),UDim2.fromOffset(29,27),function() self:_FrameBlueprint() end,false,33)
         textButton(self,toolbar,"−",UDim2.fromOffset(248,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1/1.15) end,false,33)
         textButton(self,toolbar,"+",UDim2.fromOffset(281,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1.15) end,false,33)
-        self:_BlueprintTooltip(add,"Adicionar node · botão direito no board também abre o catálogo")
-        self:_BlueprintTooltip(run,"Valida e executa o grafo no cliente. Rodar novamente remove a execução anterior.")
-        self:_BlueprintTooltip(stop,"Cancela e desfaz as alterações e os objetos criados por este blueprint.")
-        self:_BlueprintTooltip(validate,"Verificar portas, valores obrigatórios e ciclos")
-        self:_BlueprintTooltip(frame,"Enquadrar todos os nodes · atalho F")
-        textButton(self,editor,"Salvar",UDim2.new(1,-243,0,6),UDim2.fromOffset(49,25),function() self:SaveBlueprints() end,false,33)
+        self:_BlueprintTooltip(add,"Add node · right-click on the board also opens the catalog")
+        self:_BlueprintTooltip(run,"Validates and runs the graph on the client. Running again removes the previous execution.")
+        self:_BlueprintTooltip(stop,"Cancels and undoes the changes and objects created by this blueprint.")
+        self:_BlueprintTooltip(validate,"Check ports, required values and cycles")
+        self:_BlueprintTooltip(frame,"Frame all nodes · shortcut F")
+        textButton(self,editor,"Save",UDim2.new(1,-243,0,6),UDim2.fromOffset(49,25),function() self:SaveBlueprints() end,false,33)
         local export=textButton(self,editor,"↑",UDim2.new(1,-188,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(false) end,false,33)
         local import=textButton(self,editor,"↓",UDim2.new(1,-155,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(true) end,false,33)
         local rename=textButton(self,editor,"✎",UDim2.new(1,-122,0,6),UDim2.fromOffset(27,25),function() self:OpenBlueprintNamePopup(self.ActiveBlueprint) end,false,33)
         local delete=textButton(self,editor,"⌫",UDim2.new(1,-89,0,6),UDim2.fromOffset(27,25),function()
             local record=self.ActiveBlueprint; if not record then return end
-            self:Dialog({ Title="Excluir blueprint?",Content=record.Name,Buttons={{ Title="Cancelar" },{ Title="Excluir",Color=self.Theme.Danger,Callback=function() self:DeleteBlueprint(record) end }} })
+            self:Dialog({ Title="Delete blueprint?",Content=record.Name,Buttons={{ Title="Cancel" },{ Title="Delete",Color=self.Theme.Danger,Callback=function() self:DeleteBlueprint(record) end }} })
         end,false,33)
         textButton(self,editor,"×",UDim2.new(1,-38,0,6),UDim2.fromOffset(27,25),function() self:CloseBlueprintEditor() end,false,33)
-        self:_BlueprintTooltip(export,"Exportar todos os blueprints para JSON"); self:_BlueprintTooltip(import,"Importar blueprints de JSON"); self:_BlueprintTooltip(rename,"Renomear"); self:_BlueprintTooltip(delete,"Excluir blueprint")
+        self:_BlueprintTooltip(export,"Export all blueprints to JSON"); self:_BlueprintTooltip(import,"Import blueprints from JSON"); self:_BlueprintTooltip(rename,"Rename"); self:_BlueprintTooltip(delete,"Delete blueprint")
         board.InputBegan:Connect(function(input)
             if not self.ActiveBlueprint or self._bpBuilding or palette.Visible then return end
             local p=pointer(input)
@@ -5548,35 +5491,35 @@ do
         end)
     end
     function Window:ImportBlueprints(payload,replaceExisting)
-        if self.Destroyed or not self.BlueprintEditor then return false,"Editor indisponível." end
+        if self.Destroyed or not self.BlueprintEditor then return false,"Editor unavailable." end
         if type(payload)=="string" then
-            if #payload>(self.Config.MaxBlueprintImportBytes or 2000000) then return false,"Arquivo muito grande." end
+            if #payload>(self.Config.MaxBlueprintImportBytes or 2000000) then return false,"File too large." end
             local ok,decoded=pcall(function() return HttpService:JSONDecode(payload) end)
-            if not ok then return false,"JSON inválido." end; payload=decoded
+            if not ok then return false,"Invalid JSON." end; payload=decoded
         end
         if type(payload)=="table" and payload.Version==nil and payload.Blueprints==nil and (#payload>0 or next(payload)==nil) then payload={Version=1,Blueprints=payload} end
-        if type(payload)~="table" or payload.Version~=1 or type(payload.Blueprints)~="table" then return false,"Formato ou versão inválida." end
-        local prepared,names={},{}
+        if type(payload)~="table" or payload.Version~=1 or type(payload.Blueprints)~="table" then return false,"Invalid format or version." end
+        local prepared,names={},{} ,{}
         if not replaceExisting then for _,r in ipairs(self.CustomBlueprints) do names[r.Name:lower()]=true end end
         local maxCount=self.Config.MaxBlueprints or 100
-        if #payload.Blueprints+(replaceExisting and 0 or #self.CustomBlueprints)>maxCount then return false,"Muitos blueprints." end
+        if #payload.Blueprints+(replaceExisting and 0 or #self.CustomBlueprints)>maxCount then return false,"Too many blueprints." end
         for _,data in ipairs(payload.Blueprints) do
-            if type(data)~="table" then return false,"Blueprint inválido." end
+            if type(data)~="table" then return false,"Invalid blueprint." end
             local name,err=validName(data.Name); if not name then return false,err end
-            if names[name:lower()] then return false,"Nome repetido: " .. name end; names[name:lower()]=true
-            if type(data.Nodes)~="table" or type(data.Links)~="table" or #data.Nodes>(self.Config.MaxBlueprintNodes or 150) or #data.Links>2000 then return false,"Grafo inválido ou muito grande." end
+            if names[name:lower()] then return false,"Duplicate name: " .. name end; names[name:lower()]=true
+            if type(data.Nodes)~="table" or type(data.Links)~="table" or #data.Nodes>(self.Config.MaxBlueprintNodes or 150) or #data.Links>2000 then return false,"Invalid or too large graph." end
             local nodes,ids,counter={}, {},0
             for _,n in ipairs(data.Nodes) do
-                if type(n)~="table" or type(n.Id)~="string" or not n.Id:match("^node_%d+$") or ids[n.Id] or not Catalog[n.Type] then return false,"Node desconhecido ou id inválido." end
-                if type(n.X)~="number" or type(n.Y)~="number" or n.X~=n.X or n.Y~=n.Y or math.abs(n.X)>100000 or math.abs(n.Y)>100000 then return false,"Posição inválida." end
-                if n.Values~=nil and type(n.Values)~="table" then return false,"Valores inválidos." end
+                if type(n)~="table" or type(n.Id)~="string" or not n.Id:match("^node_%d+$") or ids[n.Id] or not Catalog[n.Type] then return false,"Unknown node or invalid id." end
+                if type(n.X)~="number" or type(n.Y)~="number" or n.X~=n.X or n.Y~=n.Y or math.abs(n.X)>100000 or math.abs(n.Y)>100000 then return false,"Invalid position." end
+                if n.Values~=nil and type(n.Values)~="table" then return false,"Invalid values." end
                 local values={}
                 for key,value in pairs(n.Values or {}) do
-                    if type(key)~="string" or type(value)~="string" or #value>8192 then return false,"Literal inválido." end; values[key]=value
+                    if type(key)~="string" or type(value)~="string" or #value>8192 then return false,"Invalid literal." end; values[key]=value
                 end
                 local settings={ Property="Name",ValueType="string" }
                 if Catalog[n.Type].Dynamic then
-                    if type(n.Settings)~="table" or type(n.Settings.Property)~="string" or not n.Settings.Property:match("^[%w_]+$") or type(n.Settings.ValueType)~="string" or #n.Settings.ValueType>80 then return false,"Configuração de propriedade inválida." end
+                    if type(n.Settings)~="table" or type(n.Settings.Property)~="string" or not n.Settings.Property:match("^[%w_]+$") or type(n.Settings.ValueType)~="string" or #n.Settings.ValueType>80 then return false,"Invalid property configuration." end
                     settings={ Property=n.Settings.Property,ValueType=n.Settings.ValueType }
                 end
                 ids[n.Id]=true; counter=math.max(counter,tonumber(n.Id:sub(6)) or 0)
@@ -5584,7 +5527,7 @@ do
             end
             local links={}
             for _,l in ipairs(data.Links) do
-                if type(l)~="table" or not ids[l.From] or not ids[l.To] or type(l.Input)~="string" or type(l.Output)~="string" then return false,"Conexão inválida." end
+                if type(l)~="table" or not ids[l.From] or not ids[l.To] or type(l.Input)~="string" or type(l.Output)~="string" then return false,"Invalid connection." end
                 table.insert(links,{ From=l.From,Output=l.Output,To=l.To,Input=l.Input })
             end
             local view={ X=30,Y=30,Zoom=0.85 }
@@ -5603,8 +5546,8 @@ do
                 local p,q=getPort(a,l.Output,"out"),getPort(b,l.Input,"in")
                 if not p or not q or not compatible(p.Type,q.Type) then structural=false end
             end
-            for _,message in ipairs(errors) do if message:find("Ciclo",1,true) or message:find("mais de uma",1,true) then structural=false end end
-            if not structural then return false,"Importação contém conexões inválidas ou ciclos." end
+            for _,message in ipairs(errors) do if message:find("Cycle",1,true) or message:find("more than one",1,true) then structural=false end end
+            if not structural then return false,"Import contains invalid connections or cycles." end
             table.insert(prepared,{ Name=name,Nodes=nodes,Links=links,View=view,Counter=counter,Invalid=valid and nil or invalid })
         end
         self._loadingBlueprints=true
@@ -5630,7 +5573,7 @@ do
         label(self,folder,"Custom Blueprints",UDim2.fromOffset(42,0),UDim2.new(1,-46,1,0),"SubText","FontMedium",11,14)
         local list=StyleScrollBar(New("ScrollingFrame",{ BackgroundTransparency=1,BorderSizePixel=0,CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ElasticBehavior=Enum.ElasticBehavior.Never,ClipsDescendants=true,ZIndex=11,Parent=self.ScriptExplorer }),{ Thickness=2,Color=self.Theme.Scrollbar,Transparency=0.6 })
         List(list,2)
-        local empty=New("TextButton",{ Text="Nenhum blueprint ainda.\nClique no + para criar.",AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,TextColor3=self.Theme.MutedText,TextSize=11,Font=self.Theme.Font,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,Size=UDim2.new(1,-36,0,50),ZIndex=12,Parent=self.ScriptExplorer })
+        local empty=New("TextButton",{ Text="No blueprints yet.\nClick + to create one.",AutoButtonColor=false,BackgroundTransparency=1,BorderSizePixel=0,TextColor3=self.Theme.MutedText,TextSize=11,Font=self.Theme.Font,TextWrapped=true,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,Size=UDim2.new(1,-36,0,50),ZIndex=12,Parent=self.ScriptExplorer })
         BindTheme(self,empty,"TextColor3","MutedText"); empty.MouseButton1Click:Connect(function() self:OpenBlueprintNamePopup() end)
         self.BlueprintExplorerUI={ Folder=folder,Arrow=arrow,List=list,Empty=empty }
         folder.MouseButton1Click:Connect(function() self._blueprintsCollapsed=not self._blueprintsCollapsed; arrow.Text=self._blueprintsCollapsed and "▸" or "▾"; self:_LayoutBlueprintExplorer() end)
@@ -5649,7 +5592,7 @@ do
         end
         if payload==nil and err==nil and self.Config.Blueprints then payload={ Version=1,Blueprints=self.Config.Blueprints } end
         if payload~=nil then local ok,result=self:ImportBlueprints(payload,true); if not ok then err=result end end
-        if err then self._blueprintStorageBlocked=true; self._hasBlueprintStorage=false; self:_BlueprintNotice("Não foi possível carregar blueprints: " .. tostring(err),true) end
+        if err then self._blueprintStorageBlocked=true; self._hasBlueprintStorage=false; self:_BlueprintNotice("Could not load blueprints: " .. tostring(err),true) end
         self._blueprintsDirty=false; self._blueprintSaveRevision=(self._blueprintSaveRevision or 0)+1
         for _,r in ipairs(self.CustomBlueprints) do r.Dirty=false end
         self:_RenderBlueprintRows()
