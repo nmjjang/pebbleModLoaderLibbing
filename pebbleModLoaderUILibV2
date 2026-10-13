@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.3.0-dark" }
+local PebbleUI = { Version = "1.4.0-dark" }
 
 --============================================================
 -- Services
@@ -294,6 +294,14 @@ local DefaultTheme = {
     Paper             = Color3.fromRGB(21, 24, 32),
     Shadow            = Color3.fromRGB(0, 0, 0),
 
+    SyntaxKeyword     = Color3.fromRGB(174, 156, 235),
+    SyntaxString      = Color3.fromRGB(173, 203, 149),
+    SyntaxNumber      = Color3.fromRGB(216, 177, 135),
+    SyntaxComment     = Color3.fromRGB(93, 117, 138),
+    SyntaxBuiltin     = Color3.fromRGB(112, 183, 217),
+    SyntaxFunction    = Color3.fromRGB(144, 207, 222),
+    SyntaxSelection   = Color3.fromRGB(87, 119, 174),
+
     ControlRadius     = 4,
     SectionRadius     = 5,
     PopupRadius       = 6,
@@ -306,7 +314,7 @@ PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
     Title = "Pebble UI",
-    Version = "v1.3.0",
+    Version = "v1.4.0",
     Icon = "sparkles",
 
     Size = UDim2.fromOffset(780, 520),
@@ -2303,7 +2311,8 @@ end
 --============================================================
 
 function Window:_setActiveTab(tab)
-    if not tab or self.ActiveTab == tab then return end
+    if not tab or (self.ActiveTab == tab and not self.ActiveScript) then return end
+    if self.ActiveScript then self:_LeaveScriptEditor() end
 
     if self.ActiveDropdown then self.ActiveDropdown:Close() end
     if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
@@ -2350,9 +2359,9 @@ function Window:_applySidebarWidth(targetWidth, animated)
 
     local sidebarSize = UDim2.new(0, targetWidth - 8, 1, -16)
     local topbarPosition = UDim2.fromOffset(targetWidth + 12, 6)
-    local topbarSize = UDim2.new(1, -(targetWidth + 24), 0, self.TopbarHeight)
+    local topbarSize = UDim2.new(1, -(targetWidth + 24 + (self._scriptRightInset or 0)), 0, self.TopbarHeight)
     local contentPosition = UDim2.fromOffset(targetWidth + 12, self.TopbarHeight + 10)
-    local contentSize = UDim2.new(1, -(targetWidth + 24), 1, -(self.TopbarHeight + 22))
+    local contentSize = UDim2.new(1, -(targetWidth + 24 + (self._scriptRightInset or 0)), 1, -(self.TopbarHeight + 22))
 
     local duration = animated == false and 0 or 0.28
     if duration > 0 then
@@ -2382,6 +2391,7 @@ function Window:_applySidebarWidth(targetWidth, animated)
         end
     end
 
+    if self.ScriptExplorer then self:_UpdateScriptLayout() end
     return self
 end
 
@@ -2590,7 +2600,7 @@ function Window:Tab(config)
     BindTheme(self, label, "Font", "FontMedium")
     BindTheme(self, accent, "BackgroundColor3", "Accent", config.AccentColor)
     WatchTheme(self, button, function()
-        local selected = self.ActiveTab == tab
+        local selected = self.ActiveTab == tab and not self.ActiveScript
         label.TextColor3 = selected and theme.Accent or theme.SubText
         if icon then icon.ImageColor3 = selected and theme.Accent or (config.IconColor or theme.Icon) end
         button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Sidebar
@@ -2601,7 +2611,7 @@ function Window:Tab(config)
     table.insert(self.Tabs, tab)
 
     button.MouseEnter:Connect(function()
-        if self.ActiveTab ~= tab then
+        if self.ActiveTab ~= tab or self.ActiveScript then
             Tween(button, 0.2, { BackgroundTransparency = 0.5 }, EASE_SOFT, Enum.EasingDirection.Out)
             HoverTween(label, 0.2, { TextColor3 = theme.Accent })
             if icon then HoverTween(icon, 0.2, { ImageColor3 = theme.Accent }) end
@@ -2609,7 +2619,7 @@ function Window:Tab(config)
         end
     end)
     button.MouseLeave:Connect(function()
-        if self.ActiveTab ~= tab then
+        if self.ActiveTab ~= tab or self.ActiveScript then
             Tween(button, 0.24, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
             HoverTween(label, 0.24, { TextColor3 = theme.SubText })
             if icon then HoverTween(icon, 0.24, { ImageColor3 = theme.Icon }) end
@@ -2671,11 +2681,17 @@ function Window:ToggleVisibility()
         end)
         if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
         if self.ActiveDropdown then self.ActiveDropdown:Close() end
+        if self._scriptModal then self._scriptModal:Close() end
+        if self.ScriptEditorElements and self.ScriptEditorElements.Input:IsFocused() then
+            self.ScriptEditorElements.Input:ReleaseFocus()
+        end
     end
     return self.Visible
 end
 
 function Window:Close()
+    if self.Destroyed then return end
+    self:_DisposeScripts()
     self.Destroyed = true
     if self.ActiveDropdown then self.ActiveDropdown:Close(); self.ActiveDropdown = nil end
     if self.ActiveColorpicker then self.ActiveColorpicker:Close(); self.ActiveColorpicker = nil end
@@ -2962,6 +2978,1150 @@ function Window:Popup(config)
 end
 
 --============================================================
+-- Custom scripts / Explorer / Lua editor
+--============================================================
+
+local LuaKeywords = {}
+for word in ("and break continue do else elseif end false for function if in local nil not or repeat return then true until while export type"):gmatch("%S+") do
+    LuaKeywords[word] = true
+end
+local LuaBuiltins = {}
+for word in ("assert error ipairs pairs next pcall xpcall print warn tostring tonumber typeof require select unpack setmetatable getmetatable rawget rawset rawequal math string table task coroutine utf8 os debug bit32 game workspace script Enum Instance Color3 Vector2 Vector3 CFrame UDim UDim2 ColorSequence NumberSequence"):gmatch("%S+") do
+    LuaBuiltins[word] = true
+end
+
+local function EscapeRichText(text)
+    return (text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+        :gsub('"', "&quot;"):gsub("'", "&apos;"))
+end
+
+local function ColorHex(color)
+    return string.format("#%02X%02X%02X", math.floor(color.R * 255 + 0.5),
+        math.floor(color.G * 255 + 0.5), math.floor(color.B * 255 + 0.5))
+end
+
+local function HighlightLua(source, theme)
+    -- Never put markup into the TextBox: the RichText layer only displays it.
+    if #source > 20000 then return nil end
+    local parts, i, lastWord = {}, 1, nil
+    local palette = {}
+    for _, key in ipairs({ "SyntaxKeyword", "SyntaxString", "SyntaxNumber", "SyntaxComment", "SyntaxBuiltin", "SyntaxFunction" }) do
+        palette[key] = ColorHex(theme[key])
+    end
+    local function append(token, key)
+        local escaped = EscapeRichText(token)
+        table.insert(parts, key and ('<font color="' .. palette[key] .. '">' .. escaped .. '</font>') or escaped)
+    end
+    local function longEnd(start)
+        local equals = source:sub(start):match("^%[(=*)%[")
+        if equals == nil then return nil end
+        local close = "]" .. equals .. "]"
+        local found = source:find(close, start + #equals + 2, true)
+        return found and (found + #close - 1) or #source
+    end
+    while i <= #source do
+        local char, pair = source:sub(i, i), source:sub(i, i + 1)
+        if pair == "--" then
+            local finish = longEnd(i + 2)
+            if not finish then finish = (source:find("\n", i + 2, true) or (#source + 1)) - 1 end
+            append(source:sub(i, finish), "SyntaxComment")
+            i = finish + 1
+        elseif char == '"' or char == "'" or char == "`" then
+            local finish = i + 1
+            while finish <= #source do
+                local current = source:sub(finish, finish)
+                if current == "\\" then finish = finish + 2
+                elseif current == char then finish = finish + 1; break
+                else finish = finish + 1 end
+            end
+            append(source:sub(i, finish - 1), "SyntaxString")
+            i = finish
+        elseif char == "[" and longEnd(i) then
+            local finish = longEnd(i)
+            append(source:sub(i, finish), "SyntaxString")
+            i = finish + 1
+        elseif char:match("[%a_]") then
+            local word = source:sub(i):match("^[%w_]+")
+            local key
+            if LuaKeywords[word] then key = "SyntaxKeyword"
+            elseif LuaBuiltins[word] then key = "SyntaxBuiltin"
+            elseif lastWord == "function" or source:sub(i + #word):match("^%s*%(") then key = "SyntaxFunction" end
+            append(word, key)
+            lastWord = word
+            i = i + #word
+        elseif char:match("%d") or (char == "." and source:sub(i + 1, i + 1):match("%d")) then
+            local rest = source:sub(i)
+            local number = rest:match("^0[xX][%da-fA-F_]+") or rest:match("^0[bB][01_]+")
+            if not number then
+                if rest:match("^%d[%d_]*%.%.") then number = rest:match("^%d[%d_]*")
+                else number = rest:match("^%d[%d_]*%.?[%d_]*[eE][%+%-]?[%d_]+")
+                    or rest:match("^%d[%d_]*%.?[%d_]*") or rest:match("^%.%d[%d_]*") end
+            end
+            append(number, "SyntaxNumber")
+            i = i + #number
+        else
+            append(char)
+            if not char:match("%s") and char ~= "." and char ~= ":" then lastWord = nil end
+            i = i + 1
+        end
+    end
+    local result = table.concat(parts)
+    if #result > 180000 then return nil end
+    return result
+end
+
+local function NormalizeSource(source)
+    return (source:gsub("\r\n", "\n"):gsub("\r", "\n"))
+end
+
+local function ScriptName(window, name, exceptId, names)
+    if type(name) ~= "string" then return nil, "Digite um nome para o script." end
+    name = name:match("^%s*(.-)%s*$")
+    if name:lower():sub(-4) == ".lua" then name = name:sub(1, -5):match("^%s*(.-)%s*$") end
+    if name == "" or name == "." or name == ".." then return nil, "Digite um nome para o script." end
+    if #name > 60 or name:find("[%c/\\]") then return nil, "Use um nome curto, sem barras ou quebras de linha." end
+    name = name .. ".lua"
+    if names then
+        if names[name:lower()] then return nil, "Já existe um script com esse nome." end
+    else
+        for _, record in ipairs(window.CustomScripts) do
+            if record.Id ~= exceptId and record.Name:lower() == name:lower() then
+                return nil, "Já existe um script com esse nome."
+            end
+        end
+    end
+    return name
+end
+
+local function ScriptIconButton(window, parent, name, position, callback)
+    local button = New("TextButton", {
+        Name = name, Text = "", AutoButtonColor = false, BorderSizePixel = 0,
+        BackgroundColor3 = window.Theme.SurfaceHover, BackgroundTransparency = 1,
+        Position = position, Size = UDim2.fromOffset(24, 24), ZIndex = parent.ZIndex + 3, Parent = parent,
+    })
+    Corner(button, window.Theme.ControlRadius)
+    local icon = CreateIcon(name, 14, window.Theme.Icon, button.ZIndex + 1)
+    icon.AnchorPoint = Vector2.new(0.5, 0.5)
+    icon.Position = UDim2.fromScale(0.5, 0.5)
+    icon.Parent = button
+    BindTheme(window, button, "BackgroundColor3", "SurfaceHover")
+    BindTheme(window, icon, "ImageColor3", "Icon")
+    button.MouseEnter:Connect(function()
+        HoverTween(button, 0.14, { BackgroundTransparency = 0 })
+        HoverTween(icon, 0.14, { ImageColor3 = window.Theme.Text })
+    end)
+    button.MouseLeave:Connect(function()
+        HoverTween(button, 0.18, { BackgroundTransparency = 1 })
+        HoverTween(icon, 0.18, { ImageColor3 = window.Theme.Icon })
+    end)
+    button.MouseButton1Click:Connect(function() safeCallback(callback) end)
+    return button, icon
+end
+
+function Window:_ScriptStatus(text, danger)
+    self._scriptStatusText = tostring(text or "")
+    self._scriptStatusDanger = danger == true
+    if self.ScriptEditorElements then
+        local label = self.ScriptEditorElements.Status
+        label.Text = self._scriptStatusText
+        label.TextColor3 = danger and self.Theme.Danger or self.Theme.MutedText
+    end
+end
+
+function Window:GetScripts()
+    local records = {}
+    for _, record in ipairs(self.CustomScripts or {}) do
+        table.insert(records, { Id = record.Id, Name = record.Name, Source = record.Source })
+    end
+    return records
+end
+
+function Window:GetScript(idOrName)
+    if type(idOrName) == "table" then
+        return idOrName.Window == self and self._scriptsById[idOrName.Id] or nil
+    end
+    if type(idOrName) ~= "string" then return nil end
+    if self._scriptsById[idOrName] then return self._scriptsById[idOrName] end
+    local name = idOrName:lower()
+    if name:sub(-4) ~= ".lua" then name = name .. ".lua" end
+    for _, record in ipairs(self.CustomScripts) do
+        if record.Name:lower() == name then return record end
+    end
+    return nil
+end
+
+function Window:ExportScripts()
+    return HttpService:JSONEncode({ Version = 1, Scripts = self:GetScripts(),
+        ActiveScriptId = self.ActiveScript and self.ActiveScript.Id or nil })
+end
+
+function Window:SaveScripts()
+    if not self.CustomScripts then return false, "Explorer indisponível." end
+    local snapshot = self:GetScripts()
+    local ok, result
+    if self._scriptStorageBlocked then
+        local message = "Os scripts salvos não puderam ser carregados. As alterações ficam nesta janela."
+        self:_ScriptStatus(message, true)
+        return false, message
+    elseif not self._scriptsDirty then
+        return true
+    elseif type(self.Config.SaveScripts) == "function" then
+        ok, result = pcall(self.Config.SaveScripts, snapshot, self)
+    elseif self._scriptStorageFile and type(readfile) == "function" and type(writefile) == "function" then
+        ok, result = pcall(function() writefile(self._scriptStorageFile, self:ExportScripts()) end)
+    else
+        ok = true
+    end
+    if not ok or result == false then
+        self:_ScriptStatus("Não foi possível salvar. O código continua no editor.", true)
+        return false, tostring(result)
+    end
+    self._scriptsDirty = false
+    for _, record in ipairs(self.CustomScripts) do record.Dirty = false end
+    self:_RenderScriptRows()
+    self:_ScriptStatus(self._hasScriptStorage and "Salvo" or "Salvo nesta janela")
+    safeCallback(self.Config.OnScriptsChanged, snapshot, self)
+    return true
+end
+
+function Window:_ScriptsChanged()
+    self._scriptsDirty = true
+    self._scriptSaveRevision = (self._scriptSaveRevision or 0) + 1
+    self:_RenderScriptRows()
+    if self._importingScripts or self._loadingScripts then return end
+    local revision = self._scriptSaveRevision
+    self:_ScriptStatus("Salvando...")
+    task.delay(0.45, function()
+        if not self.Destroyed and self._scriptSaveRevision == revision then self:SaveScripts() end
+    end)
+end
+
+function Window:CreateScript(config)
+    if self.Destroyed or not self.ScriptExplorer then return nil, "Explorer indisponível." end
+    config = type(config) == "string" and { Name = config } or (config or {})
+    if type(config) ~= "table" then return nil, "Configuração inválida." end
+    if #self.CustomScripts >= (self.Config.MaxCustomScripts or 100) then return nil, "O explorer está cheio." end
+    local name, err = ScriptName(self, config.Name or config.Title)
+    if not name then return nil, err end
+    local source = config.Source
+    if source == nil then source = self.Config.DefaultScriptSource or '-- Seu script começa aqui.\n\nprint("Hello, world!")\n' end
+    if type(source) ~= "string" then return nil, "O código precisa ser texto." end
+    source = NormalizeSource(source)
+    if #source > (self.Config.MaxScriptBytes or 60000) then return nil, "Este script é grande demais para o editor." end
+    self._scriptCounter = self._scriptCounter + 1
+    local id = "script_" .. tostring(self._scriptCounter)
+    if self._importingScripts and type(config.Id) == "string" and #config.Id <= 128
+        and config.Id:match("^[%w_-]+$") and not self._scriptsById[config.Id] then
+        id = config.Id
+    end
+    while self._scriptsById[id] do
+        self._scriptCounter = self._scriptCounter + 1
+        id = "script_" .. tostring(self._scriptCounter)
+    end
+    local record = { __type = "CustomScript", Id = id, Name = name, Source = source, Window = self, Dirty = true }
+    function record:Get() return self.Source end
+    function record:Set(text) return self.Window:SetScriptSource(self.Id, text) end
+    function record:Open() return self.Window:OpenScript(self.Id) end
+    function record:Rename(newName) return self.Window:RenameScript(self.Id, newName) end
+    function record:Delete() return self.Window:DeleteScript(self.Id) end
+    function record:Run() return self.Window:RunScript(self.Id) end
+    table.insert(self.CustomScripts, record)
+    self._scriptsById[id] = record
+    self:_CreateScriptRow(record)
+    self:_ScriptsChanged()
+    if config.Open ~= false then self:OpenScript(id) end
+    return record
+end
+
+function Window:RenameScript(idOrName, newName)
+    local record = self:GetScript(idOrName)
+    if not record then return nil, "Script não encontrado." end
+    local name, err = ScriptName(self, newName, record.Id)
+    if not name then return nil, err end
+    record.Name = name
+    if record.UIElements then record.UIElements.Label.Text = name end
+    if self.ActiveScript == record then self.ScriptEditorElements.Title.Text = name end
+    record.Dirty = true
+    self:_ScriptsChanged()
+    return record
+end
+
+function Window:SetScriptSource(idOrName, source)
+    local record = self:GetScript(idOrName)
+    if not record then return nil, "Script não encontrado." end
+    if type(source) ~= "string" then return nil, "O código precisa ser texto." end
+    source = NormalizeSource(source)
+    if #source > (self.Config.MaxScriptBytes or 60000) then return nil, "Este script é grande demais para o editor." end
+    if source == record.Source then return record end
+    record.Source, record.Dirty = source, true
+    if self.ActiveScript == record then
+        self._settingScriptText = true
+        self.ScriptEditorElements.Input.Text = source
+        self._settingScriptText = false
+        self:_RenderScriptEditor()
+    end
+    self:_ScriptsChanged()
+    return record
+end
+
+function Window:DeleteScript(idOrName)
+    local record = self:GetScript(idOrName)
+    if not record then return false, "Script não encontrado." end
+    local replacement
+    for i, item in ipairs(self.CustomScripts) do
+        if item == record then
+            table.remove(self.CustomScripts, i)
+            replacement = self.CustomScripts[i] or self.CustomScripts[i - 1]
+            break
+        end
+    end
+    self._scriptsById[record.Id] = nil
+    if record.UIElements then record.UIElements.Row:Destroy() end
+    if self.ActiveScript == record then
+        self:CloseScriptEditor()
+        if replacement then self:OpenScript(replacement) end
+    end
+    self:_ScriptsChanged()
+    return true
+end
+
+function Window:ImportScripts(payload, replaceExisting)
+    if self.Destroyed or not self.ScriptExplorer then return false, "Explorer indisponível." end
+    if type(payload) == "string" then
+        local ok, decoded = pcall(function() return HttpService:JSONDecode(payload) end)
+        if not ok then return false, "Arquivo de scripts inválido." end
+        payload = decoded
+    end
+    if type(payload) ~= "table" then return false, "Arquivo de scripts inválido." end
+    if payload.Version ~= nil and payload.Version ~= 1 then return false, "Versão de scripts incompatível." end
+    local records = payload.Scripts or payload
+    if type(records) ~= "table" then return false, "Lista de scripts inválida." end
+    for key in pairs(records) do
+        if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > #records then
+            return false, "Lista de scripts inválida."
+        end
+    end
+    local existing = replaceExisting and 0 or #self.CustomScripts
+    if #records + existing > (self.Config.MaxCustomScripts or 100) then return false, "Há scripts demais neste arquivo." end
+    local names, prepared = {}, {}
+    if not replaceExisting then for _, record in ipairs(self.CustomScripts) do names[record.Name:lower()] = true end end
+    -- Validate the whole import before touching the existing scripts.
+    for _, item in ipairs(records) do
+        if type(item) ~= "table" or type(item.Source) ~= "string" then return false, "Um script do arquivo é inválido." end
+        local name, err = ScriptName(self, item.Name, nil, names)
+        if not name then return false, err end
+        local source = NormalizeSource(item.Source)
+        if #source > (self.Config.MaxScriptBytes or 60000) then return false, "Um script do arquivo é grande demais." end
+        names[name:lower()] = true
+        table.insert(prepared, { Id = item.Id, Name = name, Source = source, Open = false })
+    end
+    self._importingScripts = true
+    if replaceExisting then
+        self:CloseScriptEditor()
+        for _, record in ipairs(self.CustomScripts) do if record.UIElements then record.UIElements.Row:Destroy() end end
+        self.CustomScripts, self._scriptsById = {}, {}
+    end
+    for _, item in ipairs(prepared) do self:CreateScript(item) end
+    self._importingScripts = false
+    self:_ScriptsChanged()
+    return true
+end
+
+function Window:_LeaveScriptEditor()
+    if not self.ActiveScript then return end
+    if self.ScriptEditorElements.Input:IsFocused() then self.ScriptEditorElements.Input:ReleaseFocus() end
+    self.ActiveScript = nil
+    self.ScriptEditor.Visible = false
+    self.ContentHost.Visible = true
+    self:_RenderScriptRows()
+end
+
+function Window:CloseScriptEditor()
+    if not self.ActiveScript then return self end
+    if self._scriptsDirty then self:SaveScripts() end
+    if self.ActiveTab then self:_setActiveTab(self.ActiveTab) else self:_LeaveScriptEditor() end
+    return self
+end
+
+function Window:OpenScript(idOrName)
+    local record = self:GetScript(idOrName)
+    if not record or self.Destroyed then return nil, "Script não encontrado." end
+    if self.ActiveDropdown then self.ActiveDropdown:Close() end
+    if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
+    if self.ScriptEditorElements.Input:IsFocused() then self.ScriptEditorElements.Input:ReleaseFocus() end
+    self._scriptsCollapsed = false
+    self.ScriptExplorerElements.List.Visible = true
+    self.ScriptExplorerElements.Arrow.Rotation = 0
+    self.ActiveScript = record
+    self.ContentHost.Visible = false
+    self.ScriptEditor.Visible = true
+    self._settingScriptText = true
+    self.ScriptEditorElements.Input.Text = record.Source
+    self._settingScriptText = false
+    self.ScriptEditorElements.Title.Text = record.Name
+    self.ScriptEditorElements.Scroll.CanvasPosition = Vector2.new(0, 0)
+    for _, tab in ipairs(self.Tabs) do
+        tab.Button.BackgroundTransparency = 1
+        tab.ButtonLabel.TextColor3 = self.Theme.SubText
+        if tab.ButtonIcon then tab.ButtonIcon.ImageColor3 = self.Theme.Icon end
+        if tab.Accent then tab.Accent.BackgroundTransparency = 1 end
+    end
+    self:_RenderScriptEditor()
+    self:_RenderScriptRows()
+    self:_ScriptStatus(record.Dirty and "Alterações pendentes" or (self._hasScriptStorage and "Salvo" or "Salvo nesta janela"))
+    task.defer(function()
+        if not self.Destroyed and self.ActiveScript == record and self.Visible then
+            self.ScriptEditorElements.Input:CaptureFocus()
+            self.ScriptEditorElements.Input.CursorPosition = #record.Source + 1
+        end
+    end)
+    safeCallback(self.Config.OnScriptOpened, record, self)
+    return record
+end
+
+function Window:RunScript(idOrName)
+    local record = self:GetScript(idOrName or self.ActiveScript)
+    if not record then return false, "Script não encontrado." end
+    if self.Config.AllowScriptExecution == false then return false, "Execução desativada." end
+    local runner = self.Config.OnRunScript
+    if type(runner) ~= "function" then
+        if type(loadstring) ~= "function" then
+            self:_ScriptStatus("Este ambiente não permite executar scripts.", true)
+            return false, "Use OnRunScript para integrar a execução neste ambiente."
+        end
+        local ok, compiled, err = pcall(loadstring, record.Source, "@" .. record.Name)
+        if not ok or not compiled then
+            self:_ScriptStatus(tostring(err or compiled), true)
+            return false, err or compiled
+        end
+        runner = function() return compiled() end
+    end
+    local source, name = record.Source, record.Name
+    self:_ScriptStatus("Executando " .. name .. "...")
+    task.spawn(function()
+        local ok, err = pcall(runner, source, record, self)
+        if not self.Destroyed and self.ActiveScript == record then
+            self:_ScriptStatus(ok and ("Concluído: " .. name) or tostring(err), not ok)
+        end
+        if not ok then safeCallback(self.Config.OnScriptError, err, record, self) end
+    end)
+    return true
+end
+
+function Window:_UpdateScriptLayout()
+    if not self.ScriptExplorer or self.Destroyed then return end
+    local desired = self.Config.ScriptExplorerWidth or 192
+    local available = self.Main.AbsoluteSize.X - self.SidebarWidth - 336
+    local width = math.floor(clamp(available, math.min(148, desired), desired))
+    self._scriptRightInset = width + 12
+    self.ScriptExplorer.Size = UDim2.new(0, width, 1, -16)
+    self.ScriptExplorer.Position = UDim2.new(1, -8, 0, 8)
+    local side, top = self.SidebarWidth, self.TopbarHeight
+    self.Topbar.Position = UDim2.fromOffset(side + 12, 6)
+    self.Topbar.Size = UDim2.new(1, -(side + 24 + self._scriptRightInset), 0, top)
+    self.ContentHost.Position = UDim2.fromOffset(side + 12, top + 10)
+    self.ContentHost.Size = UDim2.new(1, -(side + 24 + self._scriptRightInset), 1, -(top + 22))
+    self.ScriptEditor.Position = self.ContentHost.Position
+    self.ScriptEditor.Size = self.ContentHost.Size
+    self.CloseButton.Position = UDim2.new(1, -(12 + self._scriptRightInset), 0, 13)
+end
+
+function Window:_CreateScriptRow(record)
+    local row = New("TextButton", {
+        Name = record.Id, Text = "", AutoButtonColor = false, BorderSizePixel = 0,
+        BackgroundColor3 = self.Theme.SurfaceHover, BackgroundTransparency = 1,
+        Size = UDim2.new(1, -4, 0, 29), LayoutOrder = #self.CustomScripts,
+        ZIndex = 12, Parent = self.ScriptExplorerElements.List,
+    })
+    Corner(row, self.Theme.ControlRadius)
+    local icon = CreateIcon("file-code", 14, self.Theme.Icon, 14)
+    icon.Position = UDim2.fromOffset(19, 7)
+    icon.Parent = row
+    local marker = New("Frame", {
+        Name = "Selected", BackgroundColor3 = self.Theme.Accent, BorderSizePixel = 0,
+        Position = UDim2.fromOffset(7, 9), Size = UDim2.fromOffset(2, 11), Visible = false,
+        ZIndex = 14, Parent = row,
+    })
+    Corner(marker, 2)
+    local label = New("TextLabel", {
+        BackgroundTransparency = 1, Text = record.Name, Font = self.Theme.FontMedium,
+        TextColor3 = self.Theme.SubText, TextSize = 11, TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd, Position = UDim2.fromOffset(40, 0),
+        Size = UDim2.new(1, -54, 1, 0), ZIndex = 14, Parent = row,
+    })
+    local dirty = New("Frame", {
+        Name = "Unsaved", BackgroundColor3 = self.Theme.Accent, BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -5, 0.5, 0),
+        Size = UDim2.fromOffset(4, 4), Visible = false, ZIndex = 14, Parent = row,
+    })
+    Corner(dirty, 99)
+    BindTheme(self, label, "Font", "FontMedium")
+    BindTheme(self, marker, "BackgroundColor3", "Accent")
+    BindTheme(self, dirty, "BackgroundColor3", "Accent")
+    record.UIElements = { Row = row, Label = label, Icon = icon, Marker = marker, Dirty = dirty }
+    row.MouseEnter:Connect(function()
+        if self.ActiveScript ~= record then HoverTween(row, 0.15, { BackgroundTransparency = 0.5 }) end
+    end)
+    row.MouseLeave:Connect(function()
+        if self.ActiveScript ~= record then HoverTween(row, 0.18, { BackgroundTransparency = 1 }) end
+    end)
+    row.MouseButton1Click:Connect(function() self:OpenScript(record) end)
+end
+
+function Window:_RenderScriptRows()
+    if not self.ScriptExplorerElements then return end
+    for i, record in ipairs(self.CustomScripts) do
+        local ui, selected = record.UIElements, self.ActiveScript == record
+        if ui then
+            ui.Row.LayoutOrder = i
+            ui.Row.BackgroundColor3 = self.Theme.SurfaceHover
+            ui.Row.BackgroundTransparency = selected and 0 or 1
+            ui.Label.Text = record.Name
+            ui.Label.TextColor3 = selected and self.Theme.Text or self.Theme.SubText
+            ui.Icon.ImageColor3 = selected and self.Theme.IconSelected or self.Theme.Icon
+            ui.Marker.Visible = selected
+            ui.Dirty.Visible = record.Dirty == true
+        end
+    end
+    local count = #self.CustomScripts
+    self.ScriptExplorerElements.Count.Text = tostring(count) .. (count == 1 and " script" or " scripts")
+    self.ScriptExplorerElements.Empty.Visible = count == 0 and not self._scriptsCollapsed
+    self.ScriptExplorerElements.Storage.Text = self._hasScriptStorage
+        and (type(self.Config.SaveScripts) == "function" and "Salvo" or "Local") or "Memória"
+end
+
+function Window:_EditorMeasure(text)
+    return TextService:GetTextSize(text, 13, Enum.Font.Code, Vector2.new(100000, 100000)).X
+end
+
+function Window:_RenderScriptEditor()
+    local ui = self.ScriptEditorElements
+    if not ui or not self.ActiveScript then return end
+    local source, lines, numbers, maxWidth, start = self.ActiveScript.Source, {}, {}, 0, 1
+    for line in (source .. "\n"):gmatch("(.-)\n") do
+        table.insert(lines, { Text = line, Start = start })
+        table.insert(numbers, tostring(#lines))
+        start = start + #line + 1
+        maxWidth = math.max(maxWidth, self:_EditorMeasure(line))
+    end
+    self._editorLines = lines
+    local width = math.max(ui.Scroll.AbsoluteSize.X, maxWidth + 36, 120)
+    local height = math.max(ui.Scroll.AbsoluteSize.Y, #lines * 20 + 28, 60)
+    self._editorCanvasWidth, self._editorCanvasHeight = width, height
+    ui.Scroll.CanvasSize = UDim2.fromOffset(width, height)
+    ui.Input.Size = UDim2.fromOffset(width - 20, height - 20)
+    ui.Highlight.Size = ui.Input.Size
+    ui.Numbers.Text = table.concat(numbers, "\n")
+    ui.Numbers.Size = UDim2.new(1, -12, 0, height)
+    local highlighted = HighlightLua(source, self.Theme)
+    self._editorHasHighlight = highlighted ~= nil
+    ui.Highlight.Text = highlighted or ""
+    ui.Input.TextTransparency = highlighted and 1 or 0
+    ui.Highlight.TextColor3 = self.Theme.Text
+    ui.Input.TextColor3 = self.Theme.Text
+    ui.Caret.BackgroundColor3 = self.Theme.Accent
+    ui.ActiveLine.BackgroundColor3 = self.Theme.SurfaceHover
+    ui.LineCount.Text = "Lua · " .. tostring(#lines) .. (#lines == 1 and " linha" or " linhas")
+    self:_UpdateEditorCursor(false)
+end
+
+function Window:_EditorLineAt(bytePosition)
+    local lines = self._editorLines or { { Start = 1, Text = "" } }
+    local low, high = 1, #lines
+    while low < high do
+        local middle = math.floor((low + high + 1) / 2)
+        if lines[middle].Start <= bytePosition then low = middle else high = middle - 1 end
+    end
+    return low, lines[low]
+end
+
+function Window:_UpdateEditorCursor(reveal)
+    local ui = self.ScriptEditorElements
+    if not ui or not self.ActiveScript or self._settingScriptText then return end
+    local source = self.ActiveScript.Source
+    local position = clamp(ui.Input.CursorPosition > 0 and ui.Input.CursorPosition or 1, 1, #source + 1)
+    local lineIndex, line = self:_EditorLineAt(position)
+    local prefix = line.Text:sub(1, position - line.Start)
+    local x, y = 10 + self:_EditorMeasure(prefix), 10 + (lineIndex - 1) * 20
+    local focused = ui.Input:IsFocused() and self.Visible and self.ScriptEditor.Visible
+    self._scriptCaretTimestamp = os.clock()
+    ui.Caret.Position = UDim2.fromOffset(x, y + 1)
+    ui.Caret.Visible = focused and self._editorHasHighlight
+    ui.ActiveLine.Position = UDim2.fromOffset(0, y)
+    ui.ActiveLine.Size = UDim2.fromOffset(self._editorCanvasWidth or 120, 20)
+    ui.Numbers.Position = UDim2.fromOffset(0, 10 - ui.Scroll.CanvasPosition.Y)
+    local length = utf8.len(prefix) or #prefix
+    ui.Cursor.Text = "Ln " .. tostring(lineIndex) .. ", Col " .. tostring(length + 1)
+
+    local selection = ui.Input.SelectionStart
+    local used = 0
+    if focused and self._editorHasHighlight and selection and selection > 0 and selection ~= position then
+        local first, last = math.min(position, selection), math.max(position, selection)
+        local firstLine = self:_EditorLineAt(first)
+        local lastLine = self:_EditorLineAt(math.max(first, last - 1))
+        local visibleFirst = math.max(1, math.floor(ui.Scroll.CanvasPosition.Y / 20) - 1)
+        local visibleLast = math.min(#self._editorLines, visibleFirst + math.ceil(ui.Scroll.AbsoluteSize.Y / 20) + 4)
+        for index = math.max(firstLine, visibleFirst), math.min(lastLine, visibleLast) do
+            local selectedLine = self._editorLines[index]
+            local startByte = clamp(first - selectedLine.Start, 0, #selectedLine.Text)
+            local endByte = clamp(last - selectedLine.Start, 0, #selectedLine.Text)
+            local startX = self:_EditorMeasure(selectedLine.Text:sub(1, startByte))
+            local endX = self:_EditorMeasure(selectedLine.Text:sub(1, endByte))
+            if last > selectedLine.Start + #selectedLine.Text then endX = endX + self:_EditorMeasure(" ") end
+            used = used + 1
+            local rect = self._scriptSelectionRects[used]
+            if not rect then
+                rect = New("Frame", { Name = "Selection", BorderSizePixel = 0,
+                    BackgroundTransparency = 0.55, ZIndex = 23, Parent = ui.Scroll })
+                self._scriptSelectionRects[used] = rect
+            end
+            rect.BackgroundColor3 = self.Theme.SyntaxSelection
+            rect.Position = UDim2.fromOffset(10 + startX, 10 + (index - 1) * 20)
+            rect.Size = UDim2.fromOffset(math.max(2, endX - startX), 20)
+            rect.Visible = true
+        end
+    end
+    for i = used + 1, #self._scriptSelectionRects do self._scriptSelectionRects[i].Visible = false end
+    if reveal and focused then
+        local canvas, viewport = ui.Scroll.CanvasPosition, ui.Scroll.AbsoluteSize
+        local newX, newY = canvas.X, canvas.Y
+        if x < canvas.X + 10 then newX = math.max(0, x - 10)
+        elseif x + 12 > canvas.X + viewport.X then newX = x + 24 - viewport.X end
+        if y < canvas.Y + 5 then newY = math.max(0, y - 5)
+        elseif y + 24 > canvas.Y + viewport.Y then newY = y + 32 - viewport.Y end
+        newX = clamp(newX, 0, math.max(0, self._editorCanvasWidth - viewport.X))
+        newY = clamp(newY, 0, math.max(0, self._editorCanvasHeight - viewport.Y))
+        if newX ~= canvas.X or newY ~= canvas.Y then ui.Scroll.CanvasPosition = Vector2.new(newX, newY) end
+    end
+end
+
+function Window:_HandleScriptTextChanged()
+    if self._settingScriptText or not self.ActiveScript then return end
+    local ui, record = self.ScriptEditorElements, self.ActiveScript
+    local source, oldSource = NormalizeSource(ui.Input.Text), record.Source
+    if source == oldSource then return end
+    if #source > (self.Config.MaxScriptBytes or 60000) then
+        self._settingScriptText = true
+        ui.Input.Text = oldSource
+        self._settingScriptText = false
+        self:_ScriptStatus("Este script atingiu o limite de tamanho do editor.", true)
+        return
+    end
+    local correctedPosition
+    if self.Config.ScriptAutoIndent ~= false and #source == #oldSource + 1 then
+        local prefix = 0
+        while prefix < #oldSource and source:sub(prefix + 1, prefix + 1) == oldSource:sub(prefix + 1, prefix + 1) do prefix = prefix + 1 end
+        if source:sub(prefix + 1, prefix + 1) == "\n" and source:sub(prefix + 2) == oldSource:sub(prefix + 1) then
+            local previousLine = source:sub(1, prefix):match("([^\n]*)$") or ""
+            local indent = previousLine:match("^[ \t]*") or ""
+            local statement = previousLine:gsub("%-%-.*$", ""):match("^%s*(.-)%s*$")
+            if statement:match("%f[%w]then$") or statement:match("%f[%w]do$")
+                or statement:match("%f[%w]repeat$") or statement:match("function[^(]*%b()$")
+                or statement:match("{$") then indent = indent .. "    " end
+            if #indent > 0 and #source + #indent <= (self.Config.MaxScriptBytes or 60000) then
+                source = source:sub(1, prefix + 1) .. indent .. source:sub(prefix + 2)
+                correctedPosition = prefix + 2 + #indent
+            end
+        end
+    end
+    record.Source, record.Dirty = source, true
+    if source ~= ui.Input.Text then
+        self._settingScriptText = true
+        ui.Input.Text = source
+        self._settingScriptText = false
+    end
+    self:_RenderScriptEditor()
+    self:_ScriptsChanged()
+    if correctedPosition then
+        task.defer(function()
+            if not self.Destroyed and self.ActiveScript == record then
+                ui.Input.CursorPosition = correctedPosition
+                ui.Input.SelectionStart = -1
+                self:_UpdateEditorCursor(true)
+            end
+        end)
+    end
+    safeCallback(self.Config.OnScriptChanged, record, self)
+end
+
+function Window:InsertScriptText(text)
+    if not self.ActiveScript or type(text) ~= "string" then return false end
+    local ui, source = self.ScriptEditorElements, self.ActiveScript.Source
+    local cursor = ui.Input.CursorPosition > 0 and ui.Input.CursorPosition or (#source + 1)
+    local selection = ui.Input.SelectionStart > 0 and ui.Input.SelectionStart or cursor
+    local first, last = math.min(cursor, selection), math.max(cursor, selection)
+    local result = source:sub(1, first - 1) .. text .. source:sub(last)
+    local record, err = self:SetScriptSource(self.ActiveScript, result)
+    if not record then self:_ScriptStatus(err, true); return false end
+    ui.Input:CaptureFocus()
+    ui.Input.SelectionStart = -1
+    ui.Input.CursorPosition = first + #text
+    self:_UpdateEditorCursor(true)
+    return true
+end
+
+function Window:OpenScriptNamePopup(idOrName)
+    if self.Destroyed or not self.ScriptExplorer then return nil end
+    if self._scriptModal then self._scriptModal:Close() end
+    if self.ActiveDropdown then self.ActiveDropdown:Close() end
+    if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
+    local record = idOrName and self:GetScript(idOrName) or nil
+    if idOrName and not record then return nil, "Script não encontrado." end
+    local theme = self.Theme
+    local overlay = New("TextButton", {
+        Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 0.4,
+        BorderSizePixel = 0, Text = "", AutoButtonColor = false, Active = true,
+        Size = UDim2.fromScale(1, 1), ZIndex = 7000, Parent = self.ScreenGui,
+    })
+    local panel = New("Frame", {
+        Name = "ScriptNamePopup", BackgroundColor3 = theme.Popup, BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(360, 216), ZIndex = 7001, Active = true, Parent = overlay,
+    })
+    Corner(panel, 8)
+    local border = FineStroke(panel, theme.Stroke, 0.1)
+    BindTheme(self, overlay, "BackgroundColor3", "Overlay")
+    BindTheme(self, panel, "BackgroundColor3", "Popup")
+    BindTheme(self, border, "Color", "Stroke")
+    local icon = CreateIcon(record and "pencil" or "file-plus", 20, theme.Accent, 7003)
+    icon.Position = UDim2.fromOffset(18, 18)
+    icon.Parent = panel
+    BindTheme(self, icon, "ImageColor3", "Accent")
+    local title = New("TextLabel", {
+        BackgroundTransparency = 1, Text = record and "Rename script" or "New script",
+        Font = theme.FontBold, TextSize = 15, TextColor3 = theme.Text,
+        TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(50, 14),
+        Size = UDim2.new(1, -90, 0, 28), ZIndex = 7003, Parent = panel,
+    })
+    local subtitle = New("TextLabel", {
+        BackgroundTransparency = 1, Text = record and "Escolha um novo nome para o script." or "Dê um nome ao seu script para começar.",
+        Font = theme.Font, TextSize = 11, TextColor3 = theme.SubText,
+        TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(18, 49),
+        Size = UDim2.new(1, -36, 0, 24), ZIndex = 7003, Parent = panel,
+    })
+    local input = New("TextBox", {
+        Name = "ScriptName", ClearTextOnFocus = false, MultiLine = false,
+        Text = record and record.Name:sub(1, -5) or "", PlaceholderText = "MeuScript",
+        Font = theme.FontMedium, TextSize = 12, TextColor3 = theme.Text, PlaceholderColor3 = theme.DimText,
+        TextXAlignment = Enum.TextXAlignment.Left, BackgroundColor3 = theme.Input, BorderSizePixel = 0,
+        Position = UDim2.fromOffset(18, 82), Size = UDim2.new(1, -36, 0, 34), ZIndex = 7003, Parent = panel,
+    })
+    Corner(input, 5)
+    local inputBorder = FineStroke(input, theme.Border, 0.1)
+    Padding(input, 10, 10, 0, 0)
+    local errorLabel = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "", TextColor3 = theme.Danger, Font = theme.Font,
+        TextSize = 10, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,
+        Position = UDim2.fromOffset(18, 119), Size = UDim2.new(1, -36, 0, 28), ZIndex = 7003, Parent = panel,
+    })
+    for _, pair in ipairs({ {title,"Text"}, {subtitle,"SubText"}, {errorLabel,"Danger"}, {input,"Text"} }) do
+        BindTheme(self, pair[1], "TextColor3", pair[2])
+    end
+    BindTheme(self, input, "BackgroundColor3", "Input")
+    BindTheme(self, input, "PlaceholderColor3", "DimText")
+    BindTheme(self, inputBorder, "Color", "Border")
+    BindTheme(self, title, "Font", "FontBold")
+    BindTheme(self, subtitle, "Font", "Font")
+    BindTheme(self, input, "Font", "FontMedium")
+    BindTheme(self, errorLabel, "Font", "Font")
+    local modal = { UIElements = { Overlay = overlay, Panel = panel, Input = input, Error = errorLabel }, Closed = false }
+    local window = self
+    function modal:Close()
+        if self.Closed then return end
+        self.Closed = true
+        if window._scriptModal == self then window._scriptModal = nil end
+        if input:IsFocused() then input:ReleaseFocus() end
+        overlay:Destroy()
+    end
+    function modal:Confirm()
+        if self.Closed then return nil end
+        local created, err
+        if record then created, err = window:RenameScript(record, input.Text)
+        else created, err = window:CreateScript({ Name = input.Text, Open = false }) end
+        if not created then
+            errorLabel.Text = err or "Não foi possível criar o script."
+            inputBorder.Color = window.Theme.Danger
+            input:CaptureFocus()
+            return nil, err
+        end
+        self:Close()
+        window:OpenScript(created)
+        return created
+    end
+    local function action(titleText, lucide, x, primary, callback)
+        local button = New("TextButton", {
+            Name = titleText, Text = "", AutoButtonColor = false, BorderSizePixel = 0,
+            BackgroundColor3 = primary and theme.Accent or theme.Surface2,
+            Position = UDim2.new(1, x, 1, -49), Size = UDim2.fromOffset(103, 31), ZIndex = 7004, Parent = panel,
+        })
+        Corner(button, 5)
+        local image = CreateIcon(lucide, 13, primary and theme.AccentText or theme.SubText, 7005)
+        image.Position = UDim2.fromOffset(11, 9)
+        image.Parent = button
+        local label = New("TextLabel", {
+            BackgroundTransparency = 1, Text = titleText, Font = theme.FontMedium, TextSize = 11,
+            TextColor3 = primary and theme.AccentText or theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+            Position = UDim2.fromOffset(31, 0), Size = UDim2.new(1, -36, 1, 0), ZIndex = 7005, Parent = button,
+        })
+        BindTheme(window, button, "BackgroundColor3", primary and "Accent" or "Surface2")
+        BindTheme(window, image, "ImageColor3", primary and "AccentText" or "SubText")
+        BindTheme(window, label, "TextColor3", primary and "AccentText" or "Text")
+        button.MouseEnter:Connect(function() HoverTween(button, 0.15, { BackgroundColor3 = primary and window.Theme.AccentHover or window.Theme.SurfaceHover }) end)
+        button.MouseLeave:Connect(function() HoverTween(button, 0.18, { BackgroundColor3 = primary and window.Theme.Accent or window.Theme.Surface2 }) end)
+        button.MouseButton1Click:Connect(callback)
+        return button
+    end
+    modal.UIElements.Cancel = action("Cancel", "x", -232, false, function() modal:Close() end)
+    modal.UIElements.Confirm = action("Confirm", "check", -121, true, function() modal:Confirm() end)
+    modal.UIElements.Close = ScriptIconButton(self, panel, "x", UDim2.new(1, -34, 0, 16), function() modal:Close() end)
+    input.Focused:Connect(function() inputBorder.Color = window.Theme.Accent end)
+    input.FocusLost:Connect(function(enter) if enter then modal:Confirm() end end)
+    input:GetPropertyChangedSignal("Text"):Connect(function() errorLabel.Text = ""; inputBorder.Color = window.Theme.Border end)
+    overlay.MouseButton1Click:Connect(function() modal:Close() end)
+    self._scriptModal = modal
+    PopIn(panel, 0)
+    task.defer(function()
+        if not modal.Closed and not self.Destroyed then
+            input:CaptureFocus()
+            if record then input.SelectionStart = 1; input.CursorPosition = #input.Text + 1 end
+        end
+    end)
+    return modal
+end
+
+function Window:_CreateScriptEditor()
+    local theme = self.Theme
+    local editor = New("Frame", {
+        Name = "ScriptEditor", BackgroundColor3 = theme.CodeBackground, BorderSizePixel = 0,
+        Position = self.ContentHost.Position, Size = self.ContentHost.Size, Visible = false,
+        ClipsDescendants = true, ZIndex = 20, Parent = self.Main,
+    })
+    Corner(editor, theme.SectionRadius)
+    local border = FineStroke(editor, theme.Border, 0.2)
+    BindTheme(self, editor, "BackgroundColor3", "CodeBackground")
+    BindTheme(self, border, "Color", "Border")
+    self.ScriptEditor = editor
+    local toolbar = New("Frame", {
+        Name = "EditorToolbar", BackgroundColor3 = theme.Surface2, BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 0, 37), ZIndex = 21, Parent = editor,
+    })
+    BindTheme(self, toolbar, "BackgroundColor3", "Surface2")
+    local fileIcon = CreateIcon("file-code", 15, theme.IconSelected, 23)
+    fileIcon.Position = UDim2.fromOffset(12, 11)
+    fileIcon.Parent = toolbar
+    BindTheme(self, fileIcon, "ImageColor3", "IconSelected")
+    local title = New("TextLabel", {
+        Name = "FileName", BackgroundTransparency = 1, Text = "", Font = theme.FontMedium,
+        TextSize = 12, TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd, Position = UDim2.fromOffset(36, 0),
+        Size = UDim2.new(1, -208, 1, 0), ZIndex = 23, Parent = toolbar,
+    })
+    BindTheme(self, title, "TextColor3", "Text")
+    BindTheme(self, title, "Font", "FontMedium")
+    local footer = New("Frame", {
+        Name = "EditorStatusBar", BackgroundColor3 = theme.Surface2, BorderSizePixel = 0,
+        Position = UDim2.new(0, 0, 1, -26), Size = UDim2.new(1, 0, 0, 26), ZIndex = 22, Parent = editor,
+    })
+    BindTheme(self, footer, "BackgroundColor3", "Surface2")
+    local lineCount = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "Lua", Font = theme.Font, TextSize = 10,
+        TextColor3 = theme.MutedText, TextXAlignment = Enum.TextXAlignment.Left,
+        Position = UDim2.fromOffset(10, 0), Size = UDim2.new(0, 102, 1, 0), ZIndex = 23, Parent = footer,
+    })
+    local status = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "", Font = theme.Font, TextSize = 10,
+        TextColor3 = theme.MutedText, TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd, Position = UDim2.fromOffset(112, 0),
+        Size = UDim2.new(1, -250, 1, 0), ZIndex = 23, Parent = footer,
+    })
+    local cursor = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "Ln 1, Col 1", Font = Enum.Font.Code, TextSize = 10,
+        TextColor3 = theme.SubText, TextXAlignment = Enum.TextXAlignment.Right,
+        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -9, 0, 0),
+        Size = UDim2.new(0, 126, 1, 0), ZIndex = 23, Parent = footer,
+    })
+    BindTheme(self, lineCount, "TextColor3", "MutedText")
+    BindTheme(self, cursor, "TextColor3", "SubText")
+    BindTheme(self, lineCount, "Font", "Font")
+    BindTheme(self, status, "Font", "Font")
+    local gutter = New("Frame", {
+        Name = "LineNumbersGutter", BackgroundColor3 = theme.CodeBackground, BorderSizePixel = 0,
+        Position = UDim2.fromOffset(0, 37), Size = UDim2.new(0, 45, 1, -63),
+        ClipsDescendants = true, ZIndex = 21, Parent = editor,
+    })
+    BindTheme(self, gutter, "BackgroundColor3", "CodeBackground")
+    local numbers = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "1", Font = Enum.Font.Code, TextSize = 13,
+        LineHeight = 20 / 13, TextColor3 = theme.DimText, TextXAlignment = Enum.TextXAlignment.Right,
+        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = false, RichText = false,
+        Position = UDim2.fromOffset(0, 10), Size = UDim2.new(1, -12, 1, 0), ZIndex = 23, Parent = gutter,
+    })
+    BindTheme(self, numbers, "TextColor3", "DimText")
+    local gutterLine = New("Frame", {
+        BackgroundColor3 = theme.Border, BorderSizePixel = 0, BackgroundTransparency = 0.45,
+        Position = UDim2.new(1, -1, 0, 0), Size = UDim2.new(0, 1, 1, 0), ZIndex = 22, Parent = gutter,
+    })
+    BindTheme(self, gutterLine, "BackgroundColor3", "Border")
+    local scroll = StyleScrollBar(New("ScrollingFrame", {
+        Name = "CodeScroll", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Position = UDim2.fromOffset(45, 37), Size = UDim2.new(1, -45, 1, -63),
+        ScrollingDirection = Enum.ScrollingDirection.XY, CanvasSize = UDim2.new(),
+        CanvasPosition = Vector2.new(0, 0), Active = true, ClipsDescendants = true,
+        ElasticBehavior = Enum.ElasticBehavior.Never, ZIndex = 21, Parent = editor,
+    }), { Thickness = 3, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
+    local activeLine = New("Frame", {
+        Name = "ActiveLine", BackgroundColor3 = theme.SurfaceHover, BackgroundTransparency = 0.6,
+        BorderSizePixel = 0, Position = UDim2.fromOffset(0, 10), Size = UDim2.new(1, 0, 0, 20), ZIndex = 22, Parent = scroll,
+    })
+    local highlight = New("TextLabel", {
+        Name = "Syntax", BackgroundTransparency = 1, Text = "", RichText = true,
+        TextColor3 = theme.Text, Font = Enum.Font.Code, TextSize = 13, LineHeight = 20 / 13,
+        TextWrapped = false, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+        Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 1, -20), ZIndex = 24, Parent = scroll,
+    })
+    local input = New("TextBox", {
+        Name = "Source", BackgroundTransparency = 1, BorderSizePixel = 0, Text = "", RichText = false,
+        MultiLine = true, ClearTextOnFocus = false, TextEditable = true, TextTransparency = 1,
+        TextColor3 = theme.Text, Font = Enum.Font.Code, TextSize = 13, LineHeight = 20 / 13,
+        TextWrapped = false, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top,
+        Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 1, -20), ZIndex = 25, Parent = scroll,
+    })
+    local caret = New("Frame", {
+        Name = "Caret", BackgroundColor3 = theme.Accent, BorderSizePixel = 0,
+        Size = UDim2.fromOffset(1, 17), Visible = false, ZIndex = 26, Parent = scroll,
+    })
+    self.ScriptEditorElements = { Toolbar = toolbar, Title = title, Input = input, Highlight = highlight,
+        Scroll = scroll, Numbers = numbers, Gutter = gutter, ActiveLine = activeLine, Caret = caret,
+        Status = status, LineCount = lineCount, Cursor = cursor }
+    local ui = self.ScriptEditorElements
+    ui.Run = ScriptIconButton(self, toolbar, "play", UDim2.new(1, -158, 0, 6), function() self:RunScript(self.ActiveScript) end)
+    ui.Run.Visible = self.Config.AllowScriptExecution ~= false
+        and (type(self.Config.OnRunScript) == "function" or type(loadstring) == "function")
+    ui.Save = ScriptIconButton(self, toolbar, "save", UDim2.new(1, -126, 0, 6), function() self:SaveScripts() end)
+    ui.Rename = ScriptIconButton(self, toolbar, "pencil", UDim2.new(1, -94, 0, 6), function() self:OpenScriptNamePopup(self.ActiveScript) end)
+    ui.Delete = ScriptIconButton(self, toolbar, "trash-2", UDim2.new(1, -62, 0, 6), function()
+        local record = self.ActiveScript
+        if not record then return end
+        if input:IsFocused() then input:ReleaseFocus() end
+        self:Dialog({ Title = "Excluir script?", Content = 'O script "' .. record.Name .. '" será removido do explorer.',
+            Buttons = { { Title = "Cancel" }, { Title = "Excluir", Color = self.Theme.Danger,
+                TextColor = self.Theme.AccentText, Callback = function() self:DeleteScript(record) end } } })
+    end)
+    ui.Close = ScriptIconButton(self, toolbar, "x", UDim2.new(1, -30, 0, 6), function() self:CloseScriptEditor() end)
+    input:GetPropertyChangedSignal("Text"):Connect(function() self:_HandleScriptTextChanged() end)
+    input:GetPropertyChangedSignal("CursorPosition"):Connect(function() self:_UpdateEditorCursor(true) end)
+    input:GetPropertyChangedSignal("SelectionStart"):Connect(function() self:_UpdateEditorCursor(false) end)
+    scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function() self:_UpdateEditorCursor(false) end)
+    scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self:_RenderScriptEditor() end)
+    input.Focused:Connect(function() self:_UpdateEditorCursor(true) end)
+    input.FocusLost:Connect(function()
+        caret.Visible = false
+        for _, rect in ipairs(self._scriptSelectionRects) do rect.Visible = false end
+        if self._scriptsDirty then self:SaveScripts() end
+    end)
+    WatchTheme(self, editor, function()
+        self:_RenderScriptEditor()
+        self:_ScriptStatus(self._scriptStatusText, self._scriptStatusDanger)
+        StyleScrollBar(scroll, { Thickness = 3, Color = self.Theme.Scrollbar, Transparency = self.Theme.ScrollbarTransparency })
+    end)
+end
+
+function Window:_LoadCustomScripts()
+    local payload, ok, err
+    self._scriptStorageFile = self.Config.ScriptStorageFile
+    if self._scriptStorageFile == nil then
+        local identity = tostring(self.Config.Name or self.Title):gsub("[^%w_-]", "_"):sub(1, 64)
+        self._scriptStorageFile = "PebbleUI_" .. identity .. "_scripts.json"
+    end
+    if self._scriptStorageFile == false or type(self._scriptStorageFile) ~= "string" then self._scriptStorageFile = nil end
+    self._hasScriptStorage = type(self.Config.SaveScripts) == "function"
+        or (self._scriptStorageFile ~= nil and type(readfile) == "function" and type(writefile) == "function")
+    if type(self.Config.LoadScripts) == "function" then
+        ok, payload = pcall(self.Config.LoadScripts, self)
+        if not ok then err = payload end
+    elseif self._scriptStorageFile and type(readfile) == "function" then
+        local exists = true
+        if type(isfile) == "function" then
+            local checkOk, found = pcall(isfile, self._scriptStorageFile)
+            exists = checkOk and found
+            if not checkOk then err = found end
+        end
+        if exists then
+            ok, payload = pcall(readfile, self._scriptStorageFile)
+            -- Without isfile, a missing file is a normal first launch.
+            if not ok and type(isfile) == "function" then err = payload end
+        end
+    end
+    if payload == nil and err == nil and type(self.Config.Scripts) == "table" then
+        ok, payload = true, { Version = 1, Scripts = self.Config.Scripts }
+    end
+    if ok and payload ~= nil then
+        self._loadingScripts = true
+        local imported, importError = self:ImportScripts(payload, true)
+        self._loadingScripts = false
+        if not imported then err = importError end
+    end
+    if err then
+        self._scriptStorageBlocked = true
+        self._hasScriptStorage = false
+        self:Notify({ Content = "Não foi possível carregar os scripts salvos. O explorer usará a memória desta janela.", Duration = 6 })
+    end
+    self._scriptsDirty = false
+    self._scriptSaveRevision = (self._scriptSaveRevision or 0) + 1
+    for _, record in ipairs(self.CustomScripts) do record.Dirty = false end
+    self:_RenderScriptRows()
+end
+
+function Window:_CreateScriptExplorer()
+    if self.Config.ScriptExplorer == false then return end
+    local theme = self.Theme
+    local frame = New("Frame", {
+        Name = "CustomScriptsExplorer", BackgroundColor3 = theme.Sidebar, BorderSizePixel = 0,
+        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 8),
+        Size = UDim2.new(0, self.Config.ScriptExplorerWidth or 192, 1, -16), ZIndex = 10, Parent = self.Main,
+    })
+    Corner(frame, 6)
+    local border = FineStroke(frame, theme.SidebarDivider, 0.35)
+    BindTheme(self, frame, "BackgroundColor3", "Sidebar")
+    BindTheme(self, border, "Color", "SidebarDivider")
+    self.ScriptExplorer = frame
+    local title = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "Explorer", Font = theme.FontMedium, TextSize = 12,
+        TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
+        Position = UDim2.fromOffset(12, 5), Size = UDim2.new(1, -52, 0, 34), ZIndex = 12, Parent = frame,
+    })
+    BindTheme(self, title, "TextColor3", "Text")
+    BindTheme(self, title, "Font", "FontMedium")
+    local plus = ScriptIconButton(self, frame, "plus", UDim2.new(1, -34, 0, 10), function() self:OpenScriptNamePopup() end)
+    local headerLine = New("Frame", {
+        BackgroundColor3 = theme.Border, BorderSizePixel = 0, BackgroundTransparency = 0.3,
+        Position = UDim2.fromOffset(8, 44), Size = UDim2.new(1, -16, 0, 1), ZIndex = 11, Parent = frame,
+    })
+    BindTheme(self, headerLine, "BackgroundColor3", "Border")
+    local folder = New("TextButton", {
+        Name = "CustomScriptsFolder", BackgroundTransparency = 1, BorderSizePixel = 0, Text = "", AutoButtonColor = false,
+        Position = UDim2.fromOffset(8, 49), Size = UDim2.new(1, -16, 0, 24), ZIndex = 12, Parent = frame,
+    })
+    local arrow = CreateIcon("chevron-down", 11, theme.MutedText, 14)
+    arrow.Position = UDim2.fromOffset(2, 6)
+    arrow.Parent = folder
+    local folderIcon = CreateIcon("folder-open", 14, theme.Icon, 14)
+    folderIcon.Position = UDim2.fromOffset(20, 5)
+    folderIcon.Parent = folder
+    local folderLabel = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "Custom Scripts", Font = theme.FontMedium, TextSize = 11,
+        TextColor3 = theme.SubText, TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd, Position = UDim2.fromOffset(42, 0),
+        Size = UDim2.new(1, -46, 1, 0), ZIndex = 14, Parent = folder,
+    })
+    BindTheme(self, folderLabel, "TextColor3", "SubText")
+    BindTheme(self, folderLabel, "Font", "FontMedium")
+    BindTheme(self, folderIcon, "ImageColor3", "Icon")
+    BindTheme(self, arrow, "ImageColor3", "MutedText")
+    local list = StyleScrollBar(New("ScrollingFrame", {
+        Name = "ScriptsList", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Position = UDim2.fromOffset(8, 78), Size = UDim2.new(1, -16, 1, -110),
+        CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y, ElasticBehavior = Enum.ElasticBehavior.Never,
+        ClipsDescendants = true, ZIndex = 11, Parent = frame,
+    }), { Thickness = theme.ScrollbarThickness, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
+    List(list, 2)
+    local empty = New("TextButton", {
+        Name = "EmptyScripts", BackgroundTransparency = 1, BorderSizePixel = 0, AutoButtonColor = false,
+        Text = "Nenhum script ainda.\nClique no + para criar.", Font = theme.Font, TextSize = 11,
+        TextColor3 = theme.MutedText, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top,
+        Position = UDim2.fromOffset(18, 90), Size = UDim2.new(1, -36, 0, 55), ZIndex = 12, Parent = frame,
+    })
+    BindTheme(self, empty, "TextColor3", "MutedText")
+    BindTheme(self, empty, "Font", "Font")
+    empty.MouseButton1Click:Connect(function() self:OpenScriptNamePopup() end)
+    local footerLine = New("Frame", {
+        BackgroundColor3 = theme.Border, BorderSizePixel = 0, BackgroundTransparency = 0.4,
+        Position = UDim2.new(0, 8, 1, -30), Size = UDim2.new(1, -16, 0, 1), ZIndex = 11, Parent = frame,
+    })
+    BindTheme(self, footerLine, "BackgroundColor3", "Border")
+    local count = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "0 scripts", Font = theme.Font, TextSize = 10,
+        TextColor3 = theme.DimText, TextXAlignment = Enum.TextXAlignment.Left,
+        Position = UDim2.new(0, 12, 1, -28), Size = UDim2.new(0.55, -12, 0, 24), ZIndex = 12, Parent = frame,
+    })
+    local storage = New("TextLabel", {
+        BackgroundTransparency = 1, Text = "Memória", Font = theme.Font, TextSize = 10,
+        TextColor3 = theme.MutedText, TextXAlignment = Enum.TextXAlignment.Right,
+        Position = UDim2.new(0.55, 0, 1, -28), Size = UDim2.new(0.45, -12, 0, 24), ZIndex = 12, Parent = frame,
+    })
+    BindTheme(self, count, "TextColor3", "DimText")
+    BindTheme(self, storage, "TextColor3", "MutedText")
+    BindTheme(self, count, "Font", "Font")
+    BindTheme(self, storage, "Font", "Font")
+    self.ScriptExplorerElements = { List = list, Empty = empty, Count = count, Storage = storage,
+        Plus = plus, Folder = folder, Arrow = arrow }
+    folder.MouseButton1Click:Connect(function()
+        self._scriptsCollapsed = not self._scriptsCollapsed
+        list.Visible = not self._scriptsCollapsed
+        Tween(arrow, 0.16, { Rotation = self._scriptsCollapsed and -90 or 0 })
+        self:_RenderScriptRows()
+    end)
+    self:_CreateScriptEditor()
+    self:_UpdateScriptLayout()
+    local showCount = self.ScriptEditor.AbsoluteSize.X >= 440
+    self.ScriptEditorElements.LineCount.Visible = showCount
+    self.ScriptEditorElements.Status.Position = UDim2.fromOffset(showCount and 112 or 10, 0)
+    self.ScriptEditorElements.Status.Size = UDim2.new(1, -(showCount and 250 or 148), 1, 0)
+    self.Main:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        self:_UpdateScriptLayout()
+        local ui = self.ScriptEditorElements
+        local showCount = self.ScriptEditor.AbsoluteSize.X >= 440
+        ui.LineCount.Visible = showCount
+        ui.Status.Position = UDim2.fromOffset(showCount and 112 or 10, 0)
+        ui.Status.Size = UDim2.new(1, -(showCount and 250 or 148), 1, 0)
+    end)
+    WatchTheme(self, frame, function()
+        self:_RenderScriptRows()
+        StyleScrollBar(list, { Thickness = self.Theme.ScrollbarThickness, Color = self.Theme.Scrollbar,
+            Transparency = self.Theme.ScrollbarTransparency })
+    end)
+    local connection = UserInputService.InputBegan:Connect(function(input)
+        if self.Destroyed then return end
+        if self._scriptModal then
+            if input.KeyCode == Enum.KeyCode.Escape then self._scriptModal:Close() end
+            return
+        end
+        local ui = self.ScriptEditorElements
+        if not self.Visible or not self.ActiveScript or not ui.Input:IsFocused() then return end
+        if input.KeyCode == Enum.KeyCode.Tab then
+            self:InsertScriptText("    ")
+        elseif (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
+            or UserInputService:IsKeyDown(Enum.KeyCode.LeftMeta) or UserInputService:IsKeyDown(Enum.KeyCode.RightMeta))
+            and input.KeyCode == Enum.KeyCode.S then
+            self:SaveScripts()
+        end
+    end)
+    table.insert(self._scriptConnections, connection)
+    local caretConnection = RunService.RenderStepped:Connect(function()
+        local ui = self.ScriptEditorElements
+        if self.Destroyed or not self.Visible or not self.ActiveScript or not ui.Input:IsFocused() then
+            ui.Caret.Visible = false
+            return
+        end
+        ui.Caret.Visible = self._editorHasHighlight
+            and ((os.clock() - (self._scriptCaretTimestamp or 0)) % 1.1 < 0.65)
+    end)
+    table.insert(self._scriptConnections, caretConnection)
+    self:_LoadCustomScripts()
+end
+
+function Window:_DisposeScripts()
+    if self._scriptDisposed then return end
+    self._scriptDisposed = true
+    if self._scriptsDirty then self:SaveScripts() end
+    if self._scriptModal then self._scriptModal:Close() end
+    for _, connection in ipairs(self._scriptConnections or {}) do connection:Disconnect() end
+    self._scriptConnections = {}
+end
+
+
+--============================================================
 -- Library creation
 --============================================================
 
@@ -2984,12 +4144,22 @@ function PebbleUI:CreateWindow(config)
     self.Destroyed = false
     self._themeBindings = {}
     self._themeRenderers = {}
+    self.CustomScripts = {}
+    self._scriptsById = {}
+    self._scriptCounter = 0
+    self._scriptConnections = {}
+    self._scriptSelectionRects = {}
 
     local bgTransparency = config.BackgroundTransparency
     if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
     self.BackgroundTransparency = clamp01(bgTransparency)
 
     local size = config.Size or Defaults.Size
+    if config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
+        local width = size.X.Offset + (config.ScriptExplorerWidth or 192) + 12
+        if size.X.Scale == 0 then width = math.min(width, (config.MaxSize or Defaults.MaxSize).X) end
+        size = UDim2.new(size.X.Scale, width, size.Y.Scale, size.Y.Offset)
+    end
     local sidebarWidth = config.SidebarWidth or Defaults.SidebarWidth
     local topHeight = config.TopbarHeight or Defaults.TopbarHeight
     local corner = config.CornerRadius or Defaults.CornerRadius
@@ -3311,6 +4481,11 @@ function PebbleUI:CreateWindow(config)
             end
         end)
     end
+    self:_CreateScriptExplorer()
+    screen.Destroying:Connect(function()
+        self:_DisposeScripts()
+        self.Destroyed = true
+    end)
     return self
 end
 
