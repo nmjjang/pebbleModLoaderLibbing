@@ -4475,6 +4475,26 @@ do
         end
         return false
     end
+    local function portVisual(kind)
+        if kind == "Exec" then return "git-commit", Color3.fromRGB(235, 239, 248) end
+        if kind == "string" then return "type", Color3.fromRGB(127, 200, 255) end
+        if kind == "number" then return "hash", Color3.fromRGB(255, 206, 120) end
+        if kind == "boolean" then return "toggle-right", Color3.fromRGB(144, 228, 170) end
+        if kind == "Instance" or tostring(kind):match("^Class:") then return "cubes", Color3.fromRGB(173, 154, 234) end
+        if tostring(kind):match("^Enum%.") then return "list-tree", Color3.fromRGB(241, 159, 189) end
+        return "circle-dot", Color3.fromRGB(146, 209, 221)
+    end
+    local function definitionMatchesContext(def, pending)
+        if not def or not pending then return true, nil end
+        local wantInputs = pending.Direction == "out"
+        local want = pending.Port and pending.Port.Type
+        local ports = def[wantInputs and "Inputs" or "Outputs"] or {}
+        for _, p in ipairs(ports) do
+            local from, to = wantInputs and want or p.Type, wantInputs and p.Type or want
+            if compatible(from, to) then return true, p end
+        end
+        return false, nil
+    end
     local function nodeById(record, id)
         for _, node in ipairs(record.Nodes) do if node.Id == id then return node end end
     end
@@ -5065,7 +5085,7 @@ do
     end
     function Window:_LeaveBlueprintEditor()
         if not self.ActiveBlueprint then return end
-        self.ActiveBlueprint = nil; self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil
+        self.ActiveBlueprint = nil; self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil; self._bpPaletteContext = nil
         self.BlueprintEditor.Visible = false; self.ContentHost.Visible = true
         self.BlueprintUI.Palette.Visible = false; self.BlueprintUI.Tooltip.Visible = false
         self:_RenderBlueprintRows()
@@ -5081,7 +5101,7 @@ do
         if self.ActiveDropdown then self.ActiveDropdown:Close() end
         if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
         self:_CloseCreationMenu()
-        self.ActiveBlueprint = record; self._blueprintsCollapsed = false; self._bpSelection = nil; self._bpPending = nil
+        self.ActiveBlueprint = record; self._blueprintsCollapsed = false; self._bpSelection = nil; self._bpPending = nil; self._bpPaletteContext = nil
         self.ContentHost.Visible = false; self.ScriptEditor.Visible = false; self.BlueprintEditor.Visible = true
         self.BlueprintUI.Title.Text = record.Name
         for _, tab in ipairs(self.Tabs) do
@@ -5143,7 +5163,7 @@ do
             self:_RefreshBlueprintCompatibility()
         else
             self._bpPending = endpoint; self._bpRejectedTarget = nil; self._bpPendingStart = pointer(input)
-            self:_BlueprintStatus(endpoint.Port.Name .. " · " .. endpoint.Port.Type .. " · select a compatible port")
+            self:_BlueprintStatus(endpoint.Port.Name .. " · " .. endpoint.Port.Type .. " · drag to a port or empty space for a filtered catalog")
             self:_RefreshBlueprintCompatibility()
         end
     end
@@ -5224,8 +5244,17 @@ do
                     local holder = New("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, Position = UDim2.fromOffset(0,(i-1)*32), Size = UDim2.new(1,0,0,32), ZIndex = 26, Parent = scroll })
                     if row.Input then dot(row.Input,"in",holder) end
                     if row.Output then dot(row.Output,"out",holder) end
-                    local title = label(self,holder,row.Name,UDim2.fromOffset(27,0),UDim2.fromOffset(100,32),"SubText","Font",10,27)
-                    self:_BlueprintTooltip(title,(row.Input or row.Output).Description)
+                    local rowPort = row.Input or row.Output
+                    local titleOffset = 27
+                    if rowPort and (rowPort.Type == "Instance" or tostring(rowPort.Type):match("^Class:")) then
+                        local _, typeColor = portVisual(rowPort.Type)
+                        local rowIcon = CreateIcon("cubes", 12, typeColor, 27)
+                        rowIcon.Position = UDim2.fromOffset(24,10)
+                        rowIcon.Parent = holder
+                        titleOffset = 41
+                    end
+                    local title = label(self,holder,row.Name,UDim2.fromOffset(titleOffset,0),UDim2.fromOffset(100,32),"SubText","Font",10,27)
+                    self:_BlueprintTooltip(title,rowPort.Description)
                     local p = row.Input
                     if p and p.Type ~= "Exec" and p.Type ~= "Instance" and not p.Type:match("^Class:") then
                         local link = incoming(r,n.Id,p.Name)
@@ -5307,7 +5336,7 @@ do
                 pool[used] = line
             end
             local middle = (a+b)/2
-            line.Visible = true; line.Position = UDim2.fromOffset(middle.X,middle.Y); line.Size = UDim2.fromOffset(length+1,2)
+            line.Visible = true; line.Position = UDim2.fromOffset(middle.X,middle.Y); line.Size = UDim2.fromOffset(length+1,3)
             line.Rotation = math.deg(math.atan2(delta.Y,delta.X)); line.BackgroundColor3 = color; line.BackgroundTransparency = transparency or 0.1
         end
         local function point(endpoint)
@@ -5321,8 +5350,8 @@ do
             local offset = math.max(55,math.abs(b.X-a.X)*0.45)
             local c1,c2 = a+Vector2.new(offset,0),b-Vector2.new(offset,0)
             local previous = a
-            for i=1,20 do
-                local t=i/20; local u=1-t
+            for i=1,36 do
+                local t=i/36; local u=1-t
                 local p=a*(u*u*u)+c1*(3*u*u*t)+c2*(3*u*t*t)+b*(t*t*t)
                 segment(previous,p,color,transparency); previous=p
             end
@@ -5359,17 +5388,21 @@ do
     function Window:_RenderBlueprintPalette()
         local ui = self.BlueprintUI; if not ui then return end
         for _,child in ipairs(ui.PaletteList:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
+        local context = self._bpPaletteContext or self._bpPending
         local query=ui.Search.Text:lower(); local groups={}
         for _,def in pairs(Catalog) do
-            if query=="" or (def.Title .. " " .. def.Category .. " " .. def.Description):lower():find(query,1,true) then
-                groups[def.Category]=groups[def.Category] or {}; table.insert(groups[def.Category],def)
+            local prepared = ensureDefinition(def)
+            local matchesContext, matchedPort = definitionMatchesContext(prepared, context)
+            if matchesContext and (query=="" or (prepared.Title .. " " .. prepared.Category .. " " .. prepared.Description):lower():find(query,1,true)) then
+                groups[prepared.Category]=groups[prepared.Category] or {}
+                table.insert(groups[prepared.Category],{ Def = prepared, MatchedPort = matchedPort })
             end
         end
         local names={}; for name in pairs(groups) do table.insert(names,name) end; table.sort(names)
         local order=0
         for _,category in ipairs(names) do
             local cat=category; local defs=groups[cat]
-            table.sort(defs,function(a,b) return a.Title<b.Title end)
+            table.sort(defs,function(a,b) return a.Def.Title<b.Def.Title end)
             order=order+1
             local heading=textButton(self,ui.PaletteList,cat,UDim2.new(),UDim2.new(1,-4,0,28),function()
                 self._bpCategoryCollapsed[cat]=not self._bpCategoryCollapsed[cat]; self:_RenderBlueprintPalette()
@@ -5379,32 +5412,72 @@ do
             bpChevron(self,heading,self._bpCategoryCollapsed[cat],9,8,45)
             bpIcon(self,heading,BP_CATEGORY_ICONS[cat] or "box",UDim2.fromOffset(27,7),14,"IconSelected",45)
             if not self._bpCategoryCollapsed[cat] or query~="" then
-                for _,def in ipairs(defs) do
-                    local itemDef=def; order=order+1
-                    local item=textButton(self,ui.PaletteList,def.Title,UDim2.new(),UDim2.new(1,-4,0,29),function()
+                for _,entry in ipairs(defs) do
+                    local itemDef = entry.Def
+                    local matchedPort = entry.MatchedPort
+                    order=order+1
+                    local item=textButton(self,ui.PaletteList,itemDef.Title,UDim2.new(),UDim2.new(1,-4,0,29),function()
                         local r=self.ActiveBlueprint; if not r then return end
                         ensureDefinition(itemDef)
                         if itemDef.Disabled then self:_BlueprintNotice(itemDef.Disabled,true); return end
                         local pos=self._bpAddPosition or ((ui.Board.AbsoluteSize/2-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom)
                         local node,err=self:AddBlueprintNode(r,itemDef.Id,{ X=pos.X,Y=pos.Y })
                         if not node then self:_BlueprintNotice(err,true); return end
-                        ui.Palette.Visible=false; self._bpAddPosition=nil; self:_SelectBlueprintNode(node.Id)
+                        if self._bpPaletteContext then self:_AutoConnectNewBlueprintNode(r,node,self._bpPaletteContext) end
+                        ui.Palette.Visible=false; self._bpAddPosition=nil; self._bpPaletteContext=nil; self:_SelectBlueprintNode(node.Id)
+                        self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil
+                        self:_RefreshBlueprintCompatibility()
                         self:_BlueprintStatus("Node added: " .. itemDef.Title)
                     end,false,44)
                     item.LayoutOrder=order; item.BackgroundTransparency=0.7
-                    setButtonLabelLayout(item,35,8,Enum.TextXAlignment.Left)
-                    bpIcon(self,item,BP_CATEGORY_ICONS[def.Category] or "box",UDim2.fromOffset(12,7),15,"IconSelected",45)
-                    self:_BlueprintTooltip(item,def.Description)
+                    if context and matchedPort then
+                        local iconName, iconColor = portVisual(matchedPort.Type)
+                        setButtonLabelLayout(item,35,54,Enum.TextXAlignment.Left)
+                        bpIcon(self,item,iconName,UDim2.fromOffset(12,7),15,"IconSelected",45).ImageColor3 = iconColor
+                        local typeTag = label(self,item,matchedPort.Type,UDim2.new(1,-82,0,0),UDim2.fromOffset(74,29),"DimText","Font",9,46)
+                        typeTag.TextXAlignment = Enum.TextXAlignment.Right
+                        typeTag.TextColor3 = iconColor
+                    else
+                        setButtonLabelLayout(item,35,8,Enum.TextXAlignment.Left)
+                        bpIcon(self,item,BP_CATEGORY_ICONS[itemDef.Category] or "box",UDim2.fromOffset(12,7),15,"IconSelected",45)
+                    end
+                    self:_BlueprintTooltip(item,itemDef.Description .. (matchedPort and ("\nCompatible pin: " .. matchedPort.Name .. " · " .. matchedPort.Type) or ""))
                 end
             end
         end
     end
-    function Window:_OpenBlueprintPalette(position)
+    function Window:_OpenBlueprintPalette(position, pendingEndpoint)
         if not self.ActiveBlueprint then return end
         local ui=self.BlueprintUI
-        self._bpAddPosition=position; ui.Palette.Visible=true
+        self._bpAddPosition = position
+        self._bpPaletteContext = pendingEndpoint
+        ui.Palette.Visible = true
         self:_RenderBlueprintPalette(); PopIn(ui.Palette)
         ui.Search:CaptureFocus()
+    end
+    function Window:_AutoConnectNewBlueprintNode(record, newNode, pendingEndpoint)
+        if not record or not newNode or not pendingEndpoint then return false end
+        local def = definition(newNode)
+        if not def then return false end
+        local wantInputs = pendingEndpoint.Direction == "out"
+        local ports = def[wantInputs and "Inputs" or "Outputs"] or {}
+        for _, p in ipairs(ports) do
+            local sourceNode, sourcePort, targetNode, targetPort
+            if pendingEndpoint.Direction == "out" then
+                if compatible(pendingEndpoint.Port.Type, p.Type) then
+                    sourceNode, sourcePort, targetNode, targetPort = pendingEndpoint.Node, pendingEndpoint.Port.Name, newNode.Id, p.Name
+                end
+            else
+                if compatible(p.Type, pendingEndpoint.Port.Type) then
+                    sourceNode, sourcePort, targetNode, targetPort = newNode.Id, p.Name, pendingEndpoint.Node, pendingEndpoint.Port.Name
+                end
+            end
+            if sourceNode then
+                local ok = self:ConnectBlueprint(record, sourceNode, sourcePort, targetNode, targetPort)
+                return ok == true or ok ~= false
+            end
+        end
+        return false
     end
     function Window:_BlueprintTransferPopup(importing)
         if not self.ActiveBlueprint then return end
@@ -5485,9 +5558,10 @@ do
             local p=pointer(input)
             for _,nodeUI in pairs(self._bpNodeUI or {}) do if inside(nodeUI.Frame,p) then return end end
             if input.UserInputType==Enum.UserInputType.MouseButton2 then
-                local r=self.ActiveBlueprint; self:_OpenBlueprintPalette((p-board.AbsolutePosition-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom)
-            elseif input.UserInputType==Enum.UserInputType.MouseButton3 or input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-                self:_SelectBlueprintNode(nil); self._bpPending=nil; self._bpRejectedTarget=nil; self:_RefreshBlueprintCompatibility()
+                local r=self.ActiveBlueprint
+                self:_OpenBlueprintPalette((p-board.AbsolutePosition-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom)
+            elseif input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+                self:_SelectBlueprintNode(nil); self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; self:_RefreshBlueprintCompatibility()
                 local r=self.ActiveBlueprint; self._bpDrag={ Mode="pan",Start=p,X=r.View.X,Y=r.View.Y,Input=input }
             end
         end)
@@ -5532,8 +5606,13 @@ do
                 for _,e in ipairs(self._bpEndpoints or {}) do
                     if e.Direction~=self._bpPending.Direction and inside(e.Button,p) and inside(e.Scroll,p) then selected=e; break end
                 end
-                if selected then self:_BlueprintPortPressed(selected,input)
-                elseif self._bpPendingStart and (p-self._bpPendingStart).Magnitude>8 then self._bpPending=nil; self._bpRejectedTarget=nil; self:_RefreshBlueprintCompatibility() end
+                if selected then
+                    self:_BlueprintPortPressed(selected,input)
+                elseif self._bpPendingStart and (p-self._bpPendingStart).Magnitude>8 then
+                    local r = self.ActiveBlueprint
+                    local graphPos = (p-board.AbsolutePosition-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom
+                    self:_OpenBlueprintPalette(graphPos, self._bpPending)
+                end
             end
         end))
         track(UserInputService.InputBegan:Connect(function(input)
@@ -5541,7 +5620,7 @@ do
             if self._creationMenu and input.UserInputType==Enum.UserInputType.MouseButton1 and not inside(self._creationMenu,pointer(input)) and not inside(self.ScriptExplorerElements.Plus,pointer(input)) then self:_CloseCreationMenu() end
             if not self.Visible or not self.ActiveBlueprint or self._scriptModal or UserInputService:GetFocusedTextBox() then return end
             local ctrl=UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
-            if input.KeyCode==Enum.KeyCode.Escape then self._bpPending=nil; self._bpRejectedTarget=nil; palette.Visible=false; self:_CloseCreationMenu(); self:_RefreshBlueprintCompatibility()
+            if input.KeyCode==Enum.KeyCode.Escape then self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; palette.Visible=false; self:_CloseCreationMenu(); self:_RefreshBlueprintCompatibility()
             elseif input.KeyCode==Enum.KeyCode.Delete or input.KeyCode==Enum.KeyCode.Backspace then if self._bpSelection then self:DeleteBlueprintNode(self.ActiveBlueprint,self._bpSelection) end
             elseif input.KeyCode==Enum.KeyCode.F then self:_FrameBlueprint()
             elseif ctrl and input.KeyCode==Enum.KeyCode.S then self:SaveBlueprints()
