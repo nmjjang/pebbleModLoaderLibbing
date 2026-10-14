@@ -1152,8 +1152,12 @@ function Section:Slider(config)
         Parent = holder,
     })
 
-    local valueLabel = New("TextLabel", {
+    -- Clicking the visible number enters direct numeric editing.
+    local valueLabel = New("TextButton", {
+        Name = "SliderValueButton",
         BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        AutoButtonColor = false,
         Text = "",
         TextColor3 = config.ValueColor or theme.Text,
         TextSize = config.ValueTextSize or 11,
@@ -1164,6 +1168,26 @@ function Section:Slider(config)
         TextXAlignment = Enum.TextXAlignment.Right,
         Parent = holder,
     })
+    local valueInput = New("TextBox", {
+        Name = "SliderValueInput",
+        Visible = false,
+        BackgroundColor3 = theme.Input,
+        BorderSizePixel = 0,
+        ClearTextOnFocus = false,
+        Text = "",
+        PlaceholderText = "...",
+        PlaceholderColor3 = theme.SubText,
+        TextColor3 = config.ValueColor or theme.Text,
+        TextSize = config.ValueTextSize or 11,
+        Font = config.Font or theme.Font,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.fromOffset(67, 20),
+        ZIndex = valueLabel.ZIndex + 1,
+        Parent = holder,
+    })
+    Corner(valueInput, 4)
 
     -- A generous hit area keeps the thin visual rail easy to drag.
     local track = New("TextButton", {
@@ -1209,6 +1233,9 @@ function Section:Slider(config)
     BindTheme(window, fill, "BackgroundColor3", "SliderFill", config.FillColor)
     BindTheme(window, knob, "BackgroundColor3", "SliderKnob", config.KnobColor)
     BindTheme(window, valueLabel, "TextColor3", "Text", config.ValueColor)
+    BindTheme(window, valueInput, "BackgroundColor3", "Input")
+    BindTheme(window, valueInput, "TextColor3", "Text", config.ValueColor)
+    BindTheme(window, valueInput, "Font", "Font", config.Font)
     BindTheme(window, title, "Font", "Font", config.Font)
     BindTheme(window, valueLabel, "Font", "Font", config.Font)
 
@@ -1220,7 +1247,7 @@ function Section:Slider(config)
 
     local obj = {
         __type = "Slider",
-        UIElements = { Holder = holder, Title = title, Track = track, Rail = rail, Fill = fill, Knob = knob, Value = valueLabel },
+        UIElements = { Holder = holder, Title = title, Track = track, Rail = rail, Fill = fill, Knob = knob, Value = valueLabel, ValueInput = valueInput },
     }
 
     local function format(v)
@@ -1253,6 +1280,34 @@ function Section:Slider(config)
         return self
     end
     function obj:Get() return state.Value end
+
+    local editStartingValue = default
+    local editing = false
+    local function stopEditing(enterPressed)
+        if not editing then return end
+        editing = false
+        local proposed = tonumber((valueInput.Text or ""):gsub(",", "."):match("^%s*(.-)%s*$"))
+        valueInput.Visible = false
+        valueLabel.Visible = true
+        -- Invalid or out-of-range entries revert to the value before editing.
+        if enterPressed and proposed and proposed == proposed and proposed >= min and proposed <= max then
+            obj:Set(proposed, true)
+        else
+            obj:Set(editStartingValue, false)
+        end
+    end
+    valueLabel.MouseButton1Click:Connect(function()
+        if state.Locked or editing then return end
+        editing = true
+        editStartingValue = state.Value
+        valueLabel.Visible = false
+        valueInput.Text = ""
+        valueInput.Visible = true
+        valueInput:CaptureFocus()
+    end)
+    valueInput.FocusLost:Connect(function(enterPressed)
+        stopEditing(enterPressed)
+    end)
 
     local function updateFromX(x)
         local width = math.max(1, track.AbsoluteSize.X)
@@ -1304,7 +1359,10 @@ function Section:Slider(config)
     end)
 
     local function renderLocked()
-        if state.Locked then state.Dragging = false end
+        if state.Locked then
+            state.Dragging = false
+            if editing then stopEditing(false); valueInput:ReleaseFocus() end
+        end
         title.TextColor3 = state.Locked and theme.MutedText or (config.TextColor or theme.SubText)
         valueLabel.TextColor3 = state.Locked and theme.MutedText or (config.ValueColor or theme.Text)
         fill.BackgroundTransparency = state.Locked and 0.55 or 0
