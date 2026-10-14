@@ -2686,6 +2686,7 @@ function Window:ToggleVisibility()
         if self.ActiveDropdown then self.ActiveDropdown:Close() end
         if self._scriptModal then self._scriptModal:Close() end
         self:_CloseCreationMenu()
+        if self.CloseUserProfile then self.CloseUserProfile() end
         self._bpPending, self._bpDrag = nil, nil
         if self.BlueprintUI then self.BlueprintUI.Palette.Visible = false; self.BlueprintUI.Tooltip.Visible = false end
         local focused = UserInputService:GetFocusedTextBox()
@@ -2699,6 +2700,7 @@ end
 
 function Window:Close()
     if self.Destroyed then return end
+    if self.CloseUserProfile then self.CloseUserProfile() end
     self:_DisposeBlueprints()
     self:_DisposeScripts()
     self.Destroyed = true
@@ -6098,6 +6100,112 @@ function PebbleUI:CreateWindow(config)
     end)
 
     PopIn(brand, 0.05)
+
+    -- Clicking the avatar/name opens a compact account profile. No screen dimmer.
+    local profileButton = New("TextButton", {
+        Name = "OpenUserProfile", Text = "", AutoButtonColor = false,
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+        Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(1, 1),
+        ZIndex = 8, Parent = brand,
+    })
+    self.ProfileButton = profileButton
+    local profilePanel
+
+    local function closeProfile()
+        if profilePanel then
+            profilePanel:Destroy()
+            profilePanel = nil
+        end
+        self.UserProfilePopup = nil
+    end
+    self.CloseUserProfile = function() closeProfile() end
+
+    local function addProfileText(parent, text, x, y, w, h, size, color, font, z)
+        return New("TextLabel", {
+            BackgroundTransparency = 1, Text = tostring(text),
+            TextColor3 = color, TextSize = size, Font = font,
+            TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Center,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            Position = UDim2.fromOffset(x, y), Size = UDim2.new(1, w, 0, h),
+            ZIndex = z, Parent = parent,
+        })
+    end
+
+    local function addProfileDetail(parent, caption, value, y)
+        addProfileText(parent, caption, 18, y, -36, 16, 10, self.Theme.DimText, self.Theme.Font, 4103)
+        addProfileText(parent, value, 18, y + 16, -36, 22, 12, self.Theme.Text, self.Theme.FontMedium, 4103)
+        New("Frame", { BackgroundColor3 = self.Theme.Stroke, BackgroundTransparency = 0.7,
+            BorderSizePixel = 0, Position = UDim2.new(0, 18, 0, y + 42),
+            Size = UDim2.new(1, -36, 0, 1), ZIndex = 4103, Parent = parent })
+    end
+
+    local function openProfile()
+        if self.Destroyed or not self.Main or not self.Main.Parent then return end
+        if profilePanel then closeProfile(); return end
+        local availableWidth = math.max(225, self.Main.AbsoluteSize.X - 28)
+        local panelWidth = math.min(340, availableWidth)
+        local panelHeight = 383
+        profilePanel = New("Frame", {
+            Name = "UserProfilePopup", BackgroundColor3 = self.Theme.Popup,
+            BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(panelWidth, panelHeight),
+            ZIndex = 4100, Parent = self.Main,
+        })
+        self.UserProfilePopup = profilePanel
+        Corner(profilePanel, 10)
+        FineStroke(profilePanel, self.Theme.Stroke, 0.15)
+        BindTheme(self, profilePanel, "BackgroundColor3", "Popup")
+
+        local closeButton = New("TextButton", {
+            Name = "CloseProfile", Text = "×", TextSize = 20, Font = self.Theme.FontMedium,
+            TextColor3 = self.Theme.SubText, BackgroundColor3 = self.Theme.Surface2,
+            AutoButtonColor = false, BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12),
+            Size = UDim2.fromOffset(28, 28), ZIndex = 4105, Parent = profilePanel,
+        })
+        Corner(closeButton, 5)
+        closeButton.MouseButton1Click:Connect(closeProfile)
+
+        New("Frame", { Name = "ProfileAvatarHolder", BackgroundColor3 = self.Theme.SurfaceHover,
+            BorderSizePixel = 0, Position = UDim2.fromOffset(18, 18),
+            Size = UDim2.fromOffset(64, 64), ZIndex = 4101, Parent = profilePanel })
+        local avatar = profilePanel.ProfileAvatarHolder
+        Corner(avatar, 10)
+        local largeHeadshot = New("ImageLabel", {
+            BackgroundTransparency = 1, Image = self.Headshot.Image,
+            ScaleType = Enum.ScaleType.Crop,
+            Position = UDim2.fromOffset(2, 2), Size = UDim2.new(1, -4, 1, -4),
+            ZIndex = 4102, Parent = avatar,
+        })
+        Corner(largeHeadshot, 9)
+        if largeHeadshot.Image == "" then
+            task.spawn(function()
+                local okThumb, thumb = pcall(function()
+                    return Players:GetUserThumbnailAsync(LocalPlayer.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+                end)
+                if okThumb and thumb and largeHeadshot.Parent then largeHeadshot.Image = thumb end
+            end)
+        end
+        addProfileText(profilePanel, LocalPlayer.DisplayName, 96, 20, -146, 32, 19, self.Theme.Text, self.Theme.FontBold, 4102)
+        addProfileText(profilePanel, "@" .. LocalPlayer.Name, 97, 53, -147, 22, 12, self.Theme.SubText, self.Theme.Font, 4102)
+        New("Frame", { BackgroundColor3 = self.Theme.Stroke, BackgroundTransparency = 0.55,
+            BorderSizePixel = 0, Position = UDim2.fromOffset(18, 98),
+            Size = UDim2.new(1, -36, 0, 1), ZIndex = 4102, Parent = profilePanel })
+        addProfileDetail(profilePanel, "USER ID", tostring(LocalPlayer.UserId), 113)
+        addProfileDetail(profilePanel, "HWID", "Indisponível pela API do Roblox", 166)
+        addProfileDetail(profilePanel, "IDADE DA CONTA", tostring(LocalPlayer.AccountAge) .. " dias", 219)
+        local teamName = LocalPlayer.Team and LocalPlayer.Team.Name or "Nenhuma equipe"
+        addProfileDetail(profilePanel, "EQUIPE", teamName, 272)
+        addProfileText(profilePanel, "Perfil local do jogador", 18, 346, -36, 19, 10, self.Theme.DimText, self.Theme.Font, 4103)
+        PopIn(profilePanel)
+    end
+    profileButton.MouseButton1Click:Connect(openProfile)
+    profileButton.MouseEnter:Connect(function()
+        if not self.Destroyed then Tween(brand, 0.15, { BackgroundTransparency = 0.85 }) end
+    end)
+    profileButton.MouseLeave:Connect(function()
+        if not self.Destroyed then Tween(brand, 0.15, { BackgroundTransparency = 1 }) end
+    end)
 
     New("Frame", {
         Name = "SidebarRightMask",
