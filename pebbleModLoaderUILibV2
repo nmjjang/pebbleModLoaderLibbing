@@ -4999,12 +4999,20 @@ do
         self:_BlueprintStatus(text,danger)
         self:Notify({ Content = tostring(text), Duration = danger and 6 or 3, Icon = danger and "triangle-alert" or "check", IconColor = danger and self.Theme.Danger or self.Theme.Success })
     end
+    function Window:_HideBlueprintTooltip()
+        self._bpTooltipRevision = (self._bpTooltipRevision or 0) + 1
+        if self.BlueprintUI and self.BlueprintUI.Tooltip then
+            self.BlueprintUI.Tooltip.Visible = false
+        end
+    end
     function Window:_BlueprintTooltip(obj,text)
         obj.MouseEnter:Connect(function()
-            self._bpTooltipRevision = (self._bpTooltipRevision or 0)+1
+            if self._bpTooltipSuppress or self._bpDrag or self._bpPending then return end
+            self:_HideBlueprintTooltip()
             local revision = self._bpTooltipRevision
             task.delay(0.35,function()
-                if self.Destroyed or self._bpTooltipRevision ~= revision or not obj.Parent or not self.Visible then return end
+                if self.Destroyed or self._bpTooltipRevision ~= revision or not obj.Parent or not self.Visible
+                    or self._bpTooltipSuppress or self._bpDrag or self._bpPending then return end
                 local tip = self.BlueprintUI and self.BlueprintUI.Tooltip
                 if not tip then return end
                 tip.Text = text; tip.Visible = true
@@ -5015,8 +5023,14 @@ do
             end)
         end)
         obj.MouseLeave:Connect(function()
-            self._bpTooltipRevision = (self._bpTooltipRevision or 0)+1
-            if self.BlueprintUI then self.BlueprintUI.Tooltip.Visible = false end
+            self:_HideBlueprintTooltip()
+        end)
+        obj.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2
+                or input.UserInputType == Enum.UserInputType.Touch then
+                self._bpTooltipSuppress = true
+                self:_HideBlueprintTooltip()
+            end
         end)
     end
     function Window:_CloseCreationMenu()
@@ -5136,6 +5150,7 @@ do
             if tab.ButtonIcon then tab.ButtonIcon.ImageColor3 = self.Theme.Icon end
             if tab.Accent then tab.Accent.BackgroundTransparency = 1 end
         end
+        self._bpTooltipSuppress = false
         self:_BuildBlueprintBoard(); self:_RenderScriptRows(); self:_RenderBlueprintRows()
         self:_BlueprintStatus("Drag the nodes · connect the points · Run to execute")
         PopIn(self.BlueprintEditor)
@@ -5244,6 +5259,13 @@ do
                     ZIndex = 24, Parent = ui.NodeLayer })
                 Corner(frame,6); BindTheme(self,frame,"BackgroundColor3","Surface")
                 local stroke = Stroke(frame,def.Color,1,n.Id == self._bpSelection and 0 or 0.55)
+                frame.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.MouseButton2
+                        or input.UserInputType == Enum.UserInputType.Touch then
+                        self._bpTooltipSuppress = true
+                        self:_HideBlueprintTooltip()
+                    end
+                end)
                 local header = New("TextButton", { Text = "", AutoButtonColor = false, BackgroundColor3 = def.Color, BackgroundTransparency = 0.85,
                     BorderSizePixel = 0, Size = UDim2.new(1,0,0,36), ZIndex = 25, Parent = frame })
                 bpIcon(self,header,BP_CATEGORY_ICONS[def.Category] or "box",UDim2.fromOffset(11,10),16,"IconSelected",26)
@@ -5254,6 +5276,8 @@ do
                 header.InputBegan:Connect(function(input)
                     if self._bpBuilding then return end
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        self._bpTooltipSuppress = true
+                        self:_HideBlueprintTooltip()
                         self:_SelectBlueprintNode(n.Id)
                         self._bpDrag = { Mode = "node", Node = n, Frame = frame, Start = pointer(input), X = n.X, Y = n.Y, Input = input }
                     end
@@ -5648,6 +5672,14 @@ do
         track(UserInputService.InputChanged:Connect(function(input)
             if not self.Visible or not self.ActiveBlueprint or not self.BlueprintEditor.Visible then return end
             local p=pointer(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement and self._bpTooltipSuppress and not self._bpDrag then
+                local overNode = false
+                for _, nodeUI in pairs(self._bpNodeUI or {}) do
+                    if inside(nodeUI.Frame,p) then overNode = true; break end
+                end
+                if not overNode then self._bpTooltipSuppress = false end
+            end
+            if self._bpDrag then self:_HideBlueprintTooltip() end
             if input.UserInputType==Enum.UserInputType.MouseWheel and inside(board,p) and not palette.Visible then
                 for _,nodeUI in pairs(self._bpNodeUI or {}) do if inside(nodeUI.Scroll,p) then return end end
                 self:_ZoomBlueprint(input.Position.Z>0 and 1.1 or 1/1.1,p); return
