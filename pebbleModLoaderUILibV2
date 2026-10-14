@@ -6144,7 +6144,7 @@ function PebbleUI:CreateWindow(config)
         if profilePanel then closeProfile(); return end
         local availableWidth = math.max(225, self.Main.AbsoluteSize.X - 28)
         local panelWidth = math.min(340, availableWidth)
-        local panelHeight = 383
+        local panelHeight = 318
         profilePanel = New("Frame", {
             Name = "UserProfilePopup", BackgroundColor3 = self.Theme.Popup,
             BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
@@ -6192,11 +6192,9 @@ function PebbleUI:CreateWindow(config)
             BorderSizePixel = 0, Position = UDim2.fromOffset(18, 98),
             Size = UDim2.new(1, -36, 0, 1), ZIndex = 4102, Parent = profilePanel })
         addProfileDetail(profilePanel, "USER ID", tostring(LocalPlayer.UserId), 113)
-        addProfileDetail(profilePanel, "HWID", "Indisponível pela API do Roblox", 166)
-        addProfileDetail(profilePanel, "IDADE DA CONTA", tostring(LocalPlayer.AccountAge) .. " dias", 219)
-        local teamName = LocalPlayer.Team and LocalPlayer.Team.Name or "Nenhuma equipe"
-        addProfileDetail(profilePanel, "EQUIPE", teamName, 272)
-        addProfileText(profilePanel, "Perfil local do jogador", 18, 346, -36, 19, 10, self.Theme.DimText, self.Theme.Font, 4103)
+        addProfileDetail(profilePanel, "HWID", "Unavailable via Roblox API", 166)
+        addProfileDetail(profilePanel, "ACCOUNT AGE", tostring(LocalPlayer.AccountAge) .. " days", 219)
+        addProfileText(profilePanel, "Local player profile", 18, 282, -36, 19, 10, self.Theme.DimText, self.Theme.Font, 4103)
         PopIn(profilePanel)
     end
     profileButton.MouseButton1Click:Connect(openProfile)
