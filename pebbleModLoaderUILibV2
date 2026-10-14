@@ -5022,6 +5022,12 @@ do
     function Window:_CloseCreationMenu()
         if self._creationMenu then self._creationMenu:Destroy(); self._creationMenu = nil end
     end
+    function Window:_CloseBlueprintPalette()
+        if not self.BlueprintUI then return end
+        self.BlueprintUI.Palette.Visible = false
+        self._bpAddPosition = nil
+        self._bpPaletteContext = nil
+    end
     function Window:OpenCreationMenu()
         if self._creationMenu then self:_CloseCreationMenu(); return end
         if not self.ScriptExplorer then return end
@@ -5085,7 +5091,7 @@ do
     end
     function Window:_LeaveBlueprintEditor()
         if not self.ActiveBlueprint then return end
-        self.ActiveBlueprint = nil; self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil; self._bpPaletteContext = nil
+        self.ActiveBlueprint = nil; self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil; self._bpPaletteContext = nil; self._bpSelectionSet = nil
         self.BlueprintEditor.Visible = false; self.ContentHost.Visible = true
         self.BlueprintUI.Palette.Visible = false; self.BlueprintUI.Tooltip.Visible = false
         self:_RenderBlueprintRows()
@@ -5101,7 +5107,7 @@ do
         if self.ActiveDropdown then self.ActiveDropdown:Close() end
         if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
         self:_CloseCreationMenu()
-        self.ActiveBlueprint = record; self._blueprintsCollapsed = false; self._bpSelection = nil; self._bpPending = nil; self._bpPaletteContext = nil
+        self.ActiveBlueprint = record; self._blueprintsCollapsed = false; self._bpSelection = nil; self._bpSelectionSet = nil; self._bpPending = nil; self._bpPaletteContext = nil
         self.ContentHost.Visible = false; self.ScriptEditor.Visible = false; self.BlueprintEditor.Visible = true
         self.BlueprintUI.Title.Text = record.Name
         for _, tab in ipairs(self.Tabs) do
@@ -5115,11 +5121,38 @@ do
         safeCallback(self.Config.OnBlueprintOpened,record,self)
         return record
     end
-    function Window:_SelectBlueprintNode(id)
+    function Window:_SelectBlueprintNode(id, selectionSet)
         self._bpSelection = id
+        self._bpSelectionSet = selectionSet
         for nodeId,ui in pairs(self._bpNodeUI or {}) do
-            HoverTween(ui.Stroke,0.16,{ Transparency = nodeId == id and 0 or 0.55, Thickness = nodeId == id and 1.5 or 1 })
+            local selected = nodeId == id or (selectionSet and selectionSet[nodeId])
+            HoverTween(ui.Stroke,0.16,{ Transparency = selected and 0 or 0.55, Thickness = selected and 1.5 or 1 })
         end
+    end
+    function Window:_UpdateBlueprintMarquee(screenPoint)
+        local ui = self.BlueprintUI
+        local drag = self._bpDrag
+        if not ui or not drag or not drag.Started then return end
+        local startLocal = drag.Start - ui.Board.AbsolutePosition
+        local currentLocal = screenPoint - ui.Board.AbsolutePosition
+        local x1, y1 = math.min(startLocal.X, currentLocal.X), math.min(startLocal.Y, currentLocal.Y)
+        local x2, y2 = math.max(startLocal.X, currentLocal.X), math.max(startLocal.Y, currentLocal.Y)
+        ui.SelectionBox.Visible = true
+        ui.SelectionBox.Position = UDim2.fromOffset(x1, y1)
+        ui.SelectionBox.Size = UDim2.fromOffset(math.max(1, x2 - x1), math.max(1, y2 - y1))
+        local chosen, first = {}, nil
+        for nodeId, nodeUI in pairs(self._bpNodeUI or {}) do
+            local p = nodeUI.Frame.AbsolutePosition
+            local s = nodeUI.Frame.AbsoluteSize
+            local nx1, ny1, nx2, ny2 = p.X, p.Y, p.X + s.X, p.Y + s.Y
+            local intersects = nx2 >= x1 + ui.Board.AbsolutePosition.X and nx1 <= x2 + ui.Board.AbsolutePosition.X
+                and ny2 >= y1 + ui.Board.AbsolutePosition.Y and ny1 <= y2 + ui.Board.AbsolutePosition.Y
+            if intersects then
+                chosen[nodeId] = true
+                first = first or nodeId
+            end
+        end
+        self:_SelectBlueprintNode(first, chosen)
     end
     function Window:_RefreshBlueprintCompatibility()
         local r = self.ActiveBlueprint; if not r then return end
@@ -5171,7 +5204,7 @@ do
         local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r or not ui then return end
         if self._bpBuilding then return end
         self._bpBuilding = true
-        self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil; self._bpTooltipRevision = (self._bpTooltipRevision or 0)+1; ui.Tooltip.Visible = false
+        self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil; self._bpTooltipRevision = (self._bpTooltipRevision or 0)+1; ui.Tooltip.Visible = false; if ui.SelectionBox then ui.SelectionBox.Visible = false end
         for _,child in ipairs(ui.NodeLayer:GetChildren()) do if child:IsA("GuiObject") then child:Destroy() end end
         self._bpNodeUI,self._bpEndpoints = {},{}
         for _,node in ipairs(r.Nodes) do
@@ -5184,7 +5217,7 @@ do
                     if row then row.Output = p else row = { Name = p.Name, Output = p }; table.insert(rows,row); byName[p.Name] = row end
                 end
                 local dynamicHeight = def.Dynamic and (n.Type == "Cast" and 25 or 50) or 0
-                local height = 42+dynamicHeight+math.min(9,#rows)*32+18
+                local height = 42+dynamicHeight+#rows*32+18
                 local frame = New("CanvasGroup", { Name = n.Id, BackgroundColor3 = self.Theme.Surface, BorderSizePixel = 0,
                     Position = UDim2.fromOffset(n.X,n.Y), Size = UDim2.fromOffset(258,height), GroupTransparency = (def.Disabled or (r.Invalid and r.Invalid[n.Id])) and 0.74 or 0,
                     ZIndex = 24, Parent = ui.NodeLayer })
@@ -5221,9 +5254,8 @@ do
                     self:_BlueprintTooltip(typeBox,"Exact property type. References use Instance; enums use Enum.Material, Enum.Font, etc.")
                     end
                 end
-                local scroll = StyleScrollBar(New("ScrollingFrame", { Name = "Properties", BackgroundTransparency = 1, BorderSizePixel = 0,
-                    Position = UDim2.fromOffset(0,39+dynamicHeight), Size = UDim2.new(1,0,1,-(51+dynamicHeight)), CanvasSize = UDim2.fromOffset(0,#rows*32),
-                    ScrollingDirection = Enum.ScrollingDirection.Y, ElasticBehavior = Enum.ElasticBehavior.Never, ScrollBarThickness = 2, ZIndex = 25, Parent = frame }),{ Thickness = 2,Color = self.Theme.Scrollbar,Transparency = 0.65 })
+                local scroll = New("Frame", { Name = "Properties", BackgroundTransparency = 1, BorderSizePixel = 0,
+                    Position = UDim2.fromOffset(0,39+dynamicHeight), Size = UDim2.new(1,0,0,#rows*32), ZIndex = 25, Parent = frame })
                 local nodeUI = { Frame = frame, Stroke = stroke, Scroll = scroll, Endpoints = {} }; self._bpNodeUI[n.Id] = nodeUI
                 local function dot(p,direction,rowFrame)
                     local color = p.Type == "Exec" and self.Theme.Text or def.Color
@@ -5275,7 +5307,6 @@ do
                         label(self,holder,(row.Output or p).Type,UDim2.fromOffset(130,0),UDim2.fromOffset(101,32),"DimText","Font",9,27)
                     end
                 end
-                scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function() self._bpWireDirty = true end)
                 label(self,frame,def.Category .. " · " .. #rows .. " ports",UDim2.new(0,12,1,-14),UDim2.new(1,-24,0,12),"DimText","Font",9,26)
             end
         end
@@ -5424,7 +5455,7 @@ do
                         local node,err=self:AddBlueprintNode(r,itemDef.Id,{ X=pos.X,Y=pos.Y })
                         if not node then self:_BlueprintNotice(err,true); return end
                         if self._bpPaletteContext then self:_AutoConnectNewBlueprintNode(r,node,self._bpPaletteContext) end
-                        ui.Palette.Visible=false; self._bpAddPosition=nil; self._bpPaletteContext=nil; self:_SelectBlueprintNode(node.Id)
+                        self:_CloseBlueprintPalette(); self:_SelectBlueprintNode(node.Id)
                         self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil
                         self:_RefreshBlueprintCompatibility()
                         self:_BlueprintStatus("Node added: " .. itemDef.Title)
@@ -5511,6 +5542,8 @@ do
         BindTheme(self,board,"BackgroundColor3","CodeBackground")
         local grid=New("Frame",{ BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=21,Parent=board })
         local wireLayer=New("Frame",{ BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=22,Parent=board })
+        local selectionBox=New("Frame",{ Visible=false, BackgroundColor3=self.Theme.Accent, BackgroundTransparency=0.82, BorderSizePixel=0, ZIndex=23, Parent=board })
+        Stroke(selectionBox,self.Theme.Accent,1,0.1)
         local nodeLayer=New("Frame",{ BackgroundTransparency=1,Size=UDim2.fromOffset(0,0),ZIndex=24,Parent=board })
         local scale=New("UIScale",{ Scale=0.85,Parent=nodeLayer })
         local status=label(self,editor,"",UDim2.new(0,10,1,-29),UDim2.new(1,-82,0,28),"MutedText","Font",10,31)
@@ -5520,15 +5553,15 @@ do
         local palette=New("Frame",{ Name="NodePalette",BackgroundColor3=self.Theme.Popup,BorderSizePixel=0,Position=UDim2.fromOffset(10,76),Size=UDim2.new(0,244,1,-116),Visible=false,ClipsDescendants=true,ZIndex=40,Parent=editor })
         Corner(palette,6); BindTheme(self,palette,"BackgroundColor3","Popup"); Stroke(palette,self.Theme.Border,1,0.1)
         label(self,palette,"Node catalog",UDim2.fromOffset(12,4),UDim2.new(1,-46,0,28),"Text","FontMedium",12,42)
-        textButton(self,palette,"×",UDim2.new(1,-31,0,6),UDim2.fromOffset(24,24),function() palette.Visible=false end,false,44)
+        textButton(self,palette,"×",UDim2.new(1,-31,0,6),UDim2.fromOffset(24,24),function() self:_CloseBlueprintPalette() end,false,44)
         local search=editBox(self,palette,"",UDim2.fromOffset(10,38),UDim2.new(1,-20,0,28),44,function() end)
         search.PlaceholderText="Search class, service or category..."; search.PlaceholderColor3=self.Theme.DimText
         local paletteList=StyleScrollBar(New("ScrollingFrame",{ BackgroundTransparency=1,BorderSizePixel=0,Position=UDim2.fromOffset(8,76),Size=UDim2.new(1,-16,1,-85),CanvasSize=UDim2.new(),AutomaticCanvasSize=Enum.AutomaticSize.Y,ScrollingDirection=Enum.ScrollingDirection.Y,ZIndex=42,Parent=palette }),{ Thickness=2,Color=self.Theme.Scrollbar,Transparency=0.6 })
         List(paletteList,2)
         local tooltip=New("TextLabel",{ BackgroundColor3=self.Theme.Popup,BackgroundTransparency=0.04,BorderSizePixel=0,Text="",TextWrapped=true,TextSize=11,Font=self.Theme.Font,TextColor3=self.Theme.Text,Size=UDim2.fromOffset(280,80),Visible=false,ZIndex=6800,Parent=self.ScreenGui })
         Corner(tooltip,6); Padding(tooltip,10,10,8,8); Stroke(tooltip,self.Theme.Border,1,0.2); BindTheme(self,tooltip,"BackgroundColor3","Popup"); BindTheme(self,tooltip,"TextColor3","Text")
-        self.BlueprintUI={ Title=title,Board=board,Grid=grid,WireLayer=wireLayer,NodeLayer=nodeLayer,Scale=scale,Status=status,Zoom=zoom,Empty=empty,Palette=palette,Search=search,PaletteList=paletteList,Tooltip=tooltip }
-        local add=textButton(self,toolbar,"+ Node",UDim2.fromOffset(0,0),UDim2.fromOffset(92,27),function() if palette.Visible then palette.Visible=false else self:_OpenBlueprintPalette() end end,false,33)
+        self.BlueprintUI={ Title=title,Board=board,Grid=grid,WireLayer=wireLayer,SelectionBox=selectionBox,NodeLayer=nodeLayer,Scale=scale,Status=status,Zoom=zoom,Empty=empty,Palette=palette,Search=search,PaletteList=paletteList,Tooltip=tooltip }
+        local add=textButton(self,toolbar,"+ Node",UDim2.fromOffset(0,0),UDim2.fromOffset(92,27),function() if palette.Visible then self:_CloseBlueprintPalette() else self:_OpenBlueprintPalette() end end,false,33)
         local run=textButton(self,toolbar,"▶ Run",UDim2.fromOffset(98,0),UDim2.fromOffset(84,27),function() self:RunBlueprint() end,true,33)
         local stop=textButton(self,toolbar,"■",UDim2.fromOffset(188,0),UDim2.fromOffset(29,27),function() self:StopBlueprint() end,false,33)
         local validate=textButton(self,toolbar,"✓",UDim2.fromOffset(223,0),UDim2.fromOffset(29,27),function()
@@ -5554,15 +5587,16 @@ do
         textButton(self,editor,"×",UDim2.new(1,-38,0,6),UDim2.fromOffset(27,25),function() self:CloseBlueprintEditor() end,false,33)
         self:_BlueprintTooltip(export,"Export all blueprints to JSON"); self:_BlueprintTooltip(import,"Import blueprints from JSON"); self:_BlueprintTooltip(rename,"Rename"); self:_BlueprintTooltip(delete,"Delete blueprint")
         board.InputBegan:Connect(function(input)
-            if not self.ActiveBlueprint or self._bpBuilding or palette.Visible then return end
+            if not self.ActiveBlueprint or self._bpBuilding then return end
+            if self._bpSuppressBoardClick and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch) then self._bpSuppressBoardClick=nil; return end
             local p=pointer(input)
             for _,nodeUI in pairs(self._bpNodeUI or {}) do if inside(nodeUI.Frame,p) then return end end
-            if input.UserInputType==Enum.UserInputType.MouseButton2 then
-                local r=self.ActiveBlueprint
-                self:_OpenBlueprintPalette((p-board.AbsolutePosition-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom)
-            elseif input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
                 self:_SelectBlueprintNode(nil); self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; self:_RefreshBlueprintCompatibility()
-                local r=self.ActiveBlueprint; self._bpDrag={ Mode="pan",Start=p,X=r.View.X,Y=r.View.Y,Input=input }
+                self._bpDrag={ Mode="board-left",Start=p,Input=input,Started=false }
+            elseif input.UserInputType==Enum.UserInputType.MouseButton2 then
+                local r=self.ActiveBlueprint
+                self._bpDrag={ Mode="pan",Start=p,X=r.View.X,Y=r.View.Y,Input=input }
             end
         end)
         search:GetPropertyChangedSignal("Text"):Connect(function()
@@ -5587,22 +5621,42 @@ do
                 if drag.Mode=="node" then
                     drag.Node.X=drag.X+delta.X/r.View.Zoom; drag.Node.Y=drag.Y+delta.Y/r.View.Zoom
                     drag.Frame.Position=UDim2.fromOffset(drag.Node.X,drag.Node.Y)
-                else
+                    self._bpWireDirty=true
+                elseif drag.Mode=="pan" then
                     if self._bpPanTween then self._bpPanTween:Cancel() end
                     r.View.X=drag.X+delta.X; r.View.Y=drag.Y+delta.Y; self:_ApplyBlueprintView()
+                    self._bpWireDirty=true
+                elseif drag.Mode=="board-left" then
+                    if not drag.Started and delta.Magnitude > 6 then
+                        drag.Started = true
+                        self:_CloseBlueprintPalette()
+                    end
+                    if drag.Started then self:_UpdateBlueprintMarquee(p) end
                 end
-                self._bpWireDirty=true
             end
             if self._bpPending then self._bpWireDirty=true end
         end))
         track(UserInputService.InputEnded:Connect(function(input)
             if not self.ActiveBlueprint then return end
+            local p=pointer(input)
             local drag=self._bpDrag
-            if drag and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.MouseButton3 or input==drag.Input) then
+            if drag and drag.Mode=="board-left" and (input.UserInputType==Enum.UserInputType.MouseButton1 or input==drag.Input or input.UserInputType==Enum.UserInputType.Touch) then
+                if drag.Started then
+                    if self.BlueprintUI and self.BlueprintUI.SelectionBox then self.BlueprintUI.SelectionBox.Visible = false end
+                else
+                    if self.BlueprintUI and self.BlueprintUI.Palette.Visible then
+                        self:_CloseBlueprintPalette()
+                    else
+                        local r=self.ActiveBlueprint
+                        self:_OpenBlueprintPalette((p-board.AbsolutePosition-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom)
+                    end
+                end
+                self._bpDrag=nil
+            elseif drag and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.MouseButton2 or input==drag.Input) then
                 self._bpDrag=nil; self:_BlueprintChanged(self.ActiveBlueprint,drag.Mode=="pan")
             end
             if self._bpPending and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch) then
-                local p=pointer(input); local selected
+                local selected
                 for _,e in ipairs(self._bpEndpoints or {}) do
                     if e.Direction~=self._bpPending.Direction and inside(e.Button,p) and inside(e.Scroll,p) then selected=e; break end
                 end
@@ -5617,10 +5671,12 @@ do
         end))
         track(UserInputService.InputBegan:Connect(function(input)
             if self.Destroyed then return end
-            if self._creationMenu and input.UserInputType==Enum.UserInputType.MouseButton1 and not inside(self._creationMenu,pointer(input)) and not inside(self.ScriptExplorerElements.Plus,pointer(input)) then self:_CloseCreationMenu() end
+            local clickPoint = pointer(input)
+            if self._creationMenu and input.UserInputType==Enum.UserInputType.MouseButton1 and not inside(self._creationMenu,clickPoint) and not inside(self.ScriptExplorerElements.Plus,clickPoint) then self:_CloseCreationMenu() end
+            if self.BlueprintUI and self.BlueprintUI.Palette.Visible and input.UserInputType==Enum.UserInputType.MouseButton1 and not inside(self.BlueprintUI.Palette,clickPoint) then self:_CloseBlueprintPalette(); self._bpSuppressBoardClick=true end
             if not self.Visible or not self.ActiveBlueprint or self._scriptModal or UserInputService:GetFocusedTextBox() then return end
             local ctrl=UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
-            if input.KeyCode==Enum.KeyCode.Escape then self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; palette.Visible=false; self:_CloseCreationMenu(); self:_RefreshBlueprintCompatibility()
+            if input.KeyCode==Enum.KeyCode.Escape then self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; self:_CloseBlueprintPalette(); self:_CloseCreationMenu(); self:_RefreshBlueprintCompatibility()
             elseif input.KeyCode==Enum.KeyCode.Delete or input.KeyCode==Enum.KeyCode.Backspace then if self._bpSelection then self:DeleteBlueprintNode(self.ActiveBlueprint,self._bpSelection) end
             elseif input.KeyCode==Enum.KeyCode.F then self:_FrameBlueprint()
             elseif ctrl and input.KeyCode==Enum.KeyCode.S then self:SaveBlueprints()
