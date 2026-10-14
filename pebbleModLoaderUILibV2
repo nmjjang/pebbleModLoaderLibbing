@@ -6,6 +6,7 @@ local PebbleUI = { Version = "1.6.0-lucide-blueprints" }
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
@@ -3589,11 +3590,11 @@ function Window:_RefreshScriptAutocomplete()
         self:_CloseScriptAutocomplete(); return
     end
     local source, cursor = record.Source, ui.Input.CursorPosition
-    if cursor < 2 or cursor > #source + 1 then self:_CloseScriptAutocomplete(); return end
+    if cursor < 1 or cursor > #source + 1 then self:_CloseScriptAutocomplete(); return end
     if ui.Input.SelectionStart > 0 and ui.Input.SelectionStart ~= cursor then self:_CloseScriptAutocomplete(); return end
     local before = source:sub(1, cursor - 1)
     local prefix = before:match("([%a_][%w_]*)$")
-    if not prefix or #prefix < 2 then self:_CloseScriptAutocomplete(); return end
+    if not prefix or #prefix < 1 then self:_CloseScriptAutocomplete(); return end
     local startsAt = cursor - #prefix
     local marker = before:sub(startsAt - 1, startsAt - 1)
     local serviceMode = before:match("GetService%s*%(%s*\"[%w_]*$") ~= nil or before:match("GetService%s*%(%s*'[%w_]*$") ~= nil
@@ -3632,13 +3633,20 @@ function Window:_RefreshScriptAutocomplete()
     self._scriptCompletionItems = matches
     self._scriptCompletionStart = startsAt
     self._scriptCompletionCursor = cursor
-    self._scriptCompletionIndex = 1
+    local previousWord = self._scriptCompletionItems and self._scriptCompletionItems[self._scriptCompletionIndex or 1]
+    local chosen = 1
+    if previousWord then
+        for i, suggestion in ipairs(matches) do
+            if suggestion == previousWord then chosen = i; break end
+        end
+    end
+    self._scriptCompletionIndex = chosen
     for i, row in ipairs(ui.CompletionRows) do
         local word = matches[i]
         row.Button.Visible = word ~= nil
         if word then
             row.Label.Text = word
-            row.Button.BackgroundTransparency = i == 1 and 0.15 or 1
+            row.Button.BackgroundTransparency = i == chosen and 0.15 or 1
         end
     end
     ui.Completion.Visible = true
@@ -4094,20 +4102,38 @@ function Window:_CreateScriptEditor()
         for _, rect in ipairs(self._scriptSelectionRects) do rect.Visible = false end
         if self._scriptsDirty then self:SaveScripts() end
     end)
-    local completionKeyConn = UserInputService.InputBegan:Connect(function(key)
-        if not self.ActiveScript or not self.Visible or not editor.Visible or not input:IsFocused() then return end
-        if not ui.Completion.Visible then return end
-        if key.KeyCode == Enum.KeyCode.Down then
-            self:_MoveScriptAutocomplete(1)
-        elseif key.KeyCode == Enum.KeyCode.Up then
-            self:_MoveScriptAutocomplete(-1)
-        elseif key.KeyCode == Enum.KeyCode.Tab or key.KeyCode == Enum.KeyCode.Return then
-            self:_ChooseScriptAutocomplete()
-        elseif key.KeyCode == Enum.KeyCode.Escape then
-            self:_CloseScriptAutocomplete()
+    -- Bind at a high priority so Enter accepts a completion instead of inserting a newline.
+    -- Returning Pass when the popup is hidden leaves normal text editing untouched.
+    local completionActionName = "PebbleUIAutocomplete_" .. tostring(self)
+    local function completionAction(_, state, key)
+        if not self.ActiveScript or not self.Visible or not editor.Visible or not input:IsFocused()
+            or not ui.Completion.Visible or not self._scriptCompletionItems then
+            return Enum.ContextActionResult.Pass
         end
-    end)
-    table.insert(self._scriptConnections, completionKeyConn)
+        local code = key.KeyCode
+        local handled = code == Enum.KeyCode.Down or code == Enum.KeyCode.Up
+            or code == Enum.KeyCode.Tab or code == Enum.KeyCode.Return
+            or code == Enum.KeyCode.KeypadEnter or code == Enum.KeyCode.Escape
+        if not handled then return Enum.ContextActionResult.Pass end
+        if state == Enum.UserInputState.Begin then
+            if code == Enum.KeyCode.Down then
+                self:_MoveScriptAutocomplete(1)
+            elseif code == Enum.KeyCode.Up then
+                self:_MoveScriptAutocomplete(-1)
+            elseif code == Enum.KeyCode.Escape then
+                self:_CloseScriptAutocomplete()
+            else
+                self:_ChooseScriptAutocomplete()
+            end
+        end
+        return Enum.ContextActionResult.Sink
+    end
+    ContextActionService:BindActionAtPriority(completionActionName, completionAction, false, 3100,
+        Enum.KeyCode.Down, Enum.KeyCode.Up, Enum.KeyCode.Tab,
+        Enum.KeyCode.Return, Enum.KeyCode.KeypadEnter, Enum.KeyCode.Escape)
+    table.insert(self._scriptConnections, { Disconnect = function()
+        ContextActionService:UnbindAction(completionActionName)
+    end })
     WatchTheme(self, editor, function()
         self:_RenderScriptEditor()
         self:_ScriptStatus(self._scriptStatusText, self._scriptStatusDanger)
