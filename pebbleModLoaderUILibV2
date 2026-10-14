@@ -5027,6 +5027,12 @@ do
         self.BlueprintUI.Palette.Visible = false
         self._bpAddPosition = nil
         self._bpPaletteContext = nil
+        -- Also release the preview wire when the contextual menu is dismissed.
+        self._bpPending = nil
+        self._bpPendingStart = nil
+        self._bpRejectedTarget = nil
+        if self.ActiveBlueprint then self:_RefreshBlueprintCompatibility() end
+        self._bpWireDirty = true
     end
     function Window:OpenCreationMenu()
         if self._creationMenu then self:_CloseCreationMenu(); return end
@@ -5477,13 +5483,26 @@ do
             end
         end
     end
-    function Window:_OpenBlueprintPalette(position, pendingEndpoint)
+    function Window:_OpenBlueprintPalette(position, pendingEndpoint, screenPoint)
         if not self.ActiveBlueprint then return end
-        local ui=self.BlueprintUI
-        self._bpAddPosition = position
+        local ui = self.BlueprintUI
+        local cursor = screenPoint or pointer()
+        local boardOrigin = ui.Board.AbsolutePosition
+        local r = self.ActiveBlueprint
+        self._bpAddPosition = position or ((cursor - boardOrigin - Vector2.new(r.View.X,r.View.Y)) / r.View.Zoom)
         self._bpPaletteContext = pendingEndpoint
+        -- Place the catalog beside the actual mouse cursor, keeping it inside the editor.
+        local editorOrigin = self.BlueprintEditor.AbsolutePosition
+        local editorSize = self.BlueprintEditor.AbsoluteSize
+        local menuSize = ui.Palette.AbsoluteSize
+        local menuWidth = menuSize.X > 0 and menuSize.X or 244
+        local menuHeight = menuSize.Y > 0 and menuSize.Y or math.max(160,editorSize.Y-116)
+        local x = clamp(cursor.X-editorOrigin.X+8, 2, math.max(2,editorSize.X-menuWidth-2))
+        local y = clamp(cursor.Y-editorOrigin.Y+8, 2, math.max(2,editorSize.Y-menuHeight-2))
+        ui.Palette.Position = UDim2.fromOffset(x,y)
         ui.Palette.Visible = true
-        self:_RenderBlueprintPalette(); PopIn(ui.Palette)
+        self:_RenderBlueprintPalette()
+        PopIn(ui.Palette)
         ui.Search:CaptureFocus()
     end
     function Window:_AutoConnectNewBlueprintNode(record, newNode, pendingEndpoint)
@@ -5550,7 +5569,7 @@ do
         local zoom=label(self,editor,"85%",UDim2.new(1,-68,1,-29),UDim2.fromOffset(58,28),"DimText","Font",10,31); zoom.TextXAlignment=Enum.TextXAlignment.Right
         local empty=label(self,board,"Empty board\nClick Add Node to start",UDim2.fromScale(0.5,0.5),UDim2.fromOffset(260,70),"MutedText","Font",12,29)
         empty.AnchorPoint=Vector2.new(0.5,0.5); empty.TextXAlignment=Enum.TextXAlignment.Center; empty.TextWrapped=true
-        local palette=New("Frame",{ Name="NodePalette",BackgroundColor3=self.Theme.Popup,BorderSizePixel=0,Position=UDim2.fromOffset(10,76),Size=UDim2.new(0,244,1,-116),Visible=false,ClipsDescendants=true,ZIndex=40,Parent=editor })
+        local palette=New("Frame",{ Name="NodePalette",BackgroundColor3=self.Theme.Popup,BorderSizePixel=0,Position=UDim2.fromOffset(10,76),Size=UDim2.fromOffset(244,math.min(340,math.max(180,editor.AbsoluteSize.Y-110))),Visible=false,ClipsDescendants=true,ZIndex=40,Parent=editor })
         Corner(palette,6); BindTheme(self,palette,"BackgroundColor3","Popup"); Stroke(palette,self.Theme.Border,1,0.1)
         label(self,palette,"Node catalog",UDim2.fromOffset(12,4),UDim2.new(1,-46,0,28),"Text","FontMedium",12,42)
         textButton(self,palette,"×",UDim2.new(1,-31,0,6),UDim2.fromOffset(24,24),function() self:_CloseBlueprintPalette() end,false,44)
@@ -5592,7 +5611,9 @@ do
             local p=pointer(input)
             for _,nodeUI in pairs(self._bpNodeUI or {}) do if inside(nodeUI.Frame,p) then return end end
             if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-                self:_SelectBlueprintNode(nil); self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; self:_RefreshBlueprintCompatibility()
+                -- Releasing a dragged wire is handled by InputEnded, not board selection.
+                if self._bpPending then return end
+                self:_SelectBlueprintNode(nil)
                 self._bpDrag={ Mode="board-left",Start=p,Input=input,Started=false }
             elseif input.UserInputType==Enum.UserInputType.MouseButton2 then
                 local r=self.ActiveBlueprint
@@ -5646,9 +5667,8 @@ do
                 else
                     if self.BlueprintUI and self.BlueprintUI.Palette.Visible then
                         self:_CloseBlueprintPalette()
-                    else
-                        local r=self.ActiveBlueprint
-                        self:_OpenBlueprintPalette((p-board.AbsolutePosition-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom)
+                    elseif not self._bpDismissedOnPress then
+                        self:_OpenBlueprintPalette(nil,nil,p)
                     end
                 end
                 self._bpDrag=nil
@@ -5665,15 +5685,23 @@ do
                 elseif self._bpPendingStart and (p-self._bpPendingStart).Magnitude>8 then
                     local r = self.ActiveBlueprint
                     local graphPos = (p-board.AbsolutePosition-Vector2.new(r.View.X,r.View.Y))/r.View.Zoom
-                    self:_OpenBlueprintPalette(graphPos, self._bpPending)
+                    self:_OpenBlueprintPalette(graphPos, self._bpPending, p)
                 end
+            end
+            if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+                self._bpDismissedOnPress = nil
+                self._bpSuppressBoardClick = nil
             end
         end))
         track(UserInputService.InputBegan:Connect(function(input)
             if self.Destroyed then return end
             local clickPoint = pointer(input)
             if self._creationMenu and input.UserInputType==Enum.UserInputType.MouseButton1 and not inside(self._creationMenu,clickPoint) and not inside(self.ScriptExplorerElements.Plus,clickPoint) then self:_CloseCreationMenu() end
-            if self.BlueprintUI and self.BlueprintUI.Palette.Visible and input.UserInputType==Enum.UserInputType.MouseButton1 and not inside(self.BlueprintUI.Palette,clickPoint) then self:_CloseBlueprintPalette(); self._bpSuppressBoardClick=true end
+            if self.BlueprintUI and self.BlueprintUI.Palette.Visible and input.UserInputType==Enum.UserInputType.MouseButton1 and not inside(self.BlueprintUI.Palette,clickPoint) then
+                self._bpDismissedOnPress = true
+                self:_CloseBlueprintPalette()
+                self._bpSuppressBoardClick = true
+            end
             if not self.Visible or not self.ActiveBlueprint or self._scriptModal or UserInputService:GetFocusedTextBox() then return end
             local ctrl=UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
             if input.KeyCode==Enum.KeyCode.Escape then self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; self:_CloseBlueprintPalette(); self:_CloseCreationMenu(); self:_RefreshBlueprintCompatibility()
