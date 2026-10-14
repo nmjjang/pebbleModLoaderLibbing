@@ -237,63 +237,63 @@ end
 --============================================================
 
 local DefaultTheme = {
-    -- Monochrome dark skin: graphite panels, cool text and white controls.
+    -- Default dark skin: base / panel / raised with blue accent.
     Font = Enum.Font.Gotham,
     FontBold = Enum.Font.GothamBold,
     FontMedium = Enum.Font.GothamMedium,
     FontDisplay = Enum.Font.GothamBold,
 
-    BackgroundTop     = Color3.fromRGB(15, 16, 21),
-    BackgroundBottom  = Color3.fromRGB(9, 10, 14),
-    Sidebar           = Color3.fromRGB(10, 11, 15),
-    SidebarDivider    = Color3.fromRGB(31, 34, 43),
+    BackgroundTop     = Color3.fromRGB(15, 16, 19),
+    BackgroundBottom  = Color3.fromRGB(15, 16, 19),
+    Sidebar           = Color3.fromRGB(27, 29, 32),
+    SidebarDivider    = Color3.fromRGB(55, 59, 63),
 
-    Surface           = Color3.fromRGB(15, 16, 21),
-    Surface2          = Color3.fromRGB(22, 24, 31),
-    SurfaceHover      = Color3.fromRGB(31, 34, 43),
-    Input             = Color3.fromRGB(11, 12, 17),
-    Popup             = Color3.fromRGB(18, 20, 27),
-    CodeBackground    = Color3.fromRGB(9, 10, 14),
+    Surface           = Color3.fromRGB(27, 29, 32),
+    Surface2          = Color3.fromRGB(37, 39, 42),
+    SurfaceHover      = Color3.fromRGB(45, 48, 52),
+    Input             = Color3.fromRGB(15, 16, 19),
+    Popup             = Color3.fromRGB(27, 29, 32),
+    CodeBackground    = Color3.fromRGB(15, 16, 19),
 
-    Text              = Color3.fromRGB(231, 235, 243),
-    SubText           = Color3.fromRGB(166, 175, 193),
-    MutedText         = Color3.fromRGB(113, 122, 140),
-    DimText           = Color3.fromRGB(78, 87, 105),
+    Text              = Color3.fromRGB(230, 232, 236),
+    SubText           = Color3.fromRGB(154, 158, 165),
+    MutedText         = Color3.fromRGB(128, 132, 140),
+    DimText           = Color3.fromRGB(109, 113, 121),
 
-    Accent            = Color3.fromRGB(231, 236, 247),
-    AccentHover       = Color3.fromRGB(255, 255, 255),
-    AccentText        = Color3.fromRGB(12, 14, 20),
-    Button            = Color3.fromRGB(23, 26, 34),
-    ButtonHover       = Color3.fromRGB(35, 39, 50),
-    ButtonText        = Color3.fromRGB(223, 229, 241),
-    SliderTrack       = Color3.fromRGB(34, 38, 48),
-    SliderFill        = Color3.fromRGB(222, 230, 245),
-    SliderKnob        = Color3.fromRGB(245, 248, 255),
+    Accent            = Color3.fromRGB(65, 151, 220),
+    AccentHover       = Color3.fromRGB(86, 170, 235),
+    AccentText        = Color3.fromRGB(255, 255, 255),
+    Button            = Color3.fromRGB(37, 39, 42),
+    ButtonHover       = Color3.fromRGB(47, 50, 54),
+    ButtonText        = Color3.fromRGB(230, 232, 236),
+    SliderTrack       = Color3.fromRGB(55, 59, 63),
+    SliderFill        = Color3.fromRGB(65, 151, 220),
+    SliderKnob        = Color3.fromRGB(230, 232, 236),
 
-    Stroke            = Color3.fromRGB(44, 49, 61),
-    Border            = Color3.fromRGB(34, 38, 48),
-    CheckboxBorder    = Color3.fromRGB(64, 71, 86),
+    Stroke            = Color3.fromRGB(55, 59, 63),
+    Border            = Color3.fromRGB(55, 59, 63),
+    CheckboxBorder    = Color3.fromRGB(80, 85, 90),
 
-    Icon              = Color3.fromRGB(141, 151, 173),
-    IconSelected      = Color3.fromRGB(237, 242, 253),
+    Icon              = Color3.fromRGB(154, 158, 165),
+    IconSelected      = Color3.fromRGB(230, 232, 236),
 
     Success           = Color3.fromRGB(134, 207, 172),
     Warning           = Color3.fromRGB(223, 185, 107),
     Danger            = Color3.fromRGB(239, 115, 139),
     Overlay           = Color3.fromRGB(0, 0, 0),
 
-    TopbarText        = Color3.fromRGB(229, 235, 247),
+    TopbarText        = Color3.fromRGB(230, 232, 236),
     TopbarTextHover   = Color3.fromRGB(255, 255, 255),
-    TopbarIcon        = Color3.fromRGB(126, 137, 158),
-    TopbarIconHover   = Color3.fromRGB(245, 248, 255),
+    TopbarIcon        = Color3.fromRGB(154, 158, 165),
+    TopbarIconHover   = Color3.fromRGB(230, 232, 236),
 
     -- Legacy keys remain available to existing custom themes.
-    Sky               = Color3.fromRGB(76, 86, 109),
-    SkySoft           = Color3.fromRGB(25, 29, 39),
+    Sky               = Color3.fromRGB(65, 151, 220),
+    SkySoft           = Color3.fromRGB(37, 39, 42),
     Butter            = Color3.fromRGB(223, 185, 107),
     Peach             = Color3.fromRGB(207, 146, 139),
     Mint              = Color3.fromRGB(134, 207, 172),
-    Paper             = Color3.fromRGB(21, 24, 32),
+    Paper             = Color3.fromRGB(27, 29, 32),
     Shadow            = Color3.fromRGB(0, 0, 0),
 
     SyntaxKeyword     = Color3.fromRGB(174, 156, 235),
@@ -307,7 +307,7 @@ local DefaultTheme = {
     ControlRadius     = 4,
     SectionRadius     = 5,
     PopupRadius       = 6,
-    Scrollbar         = Color3.fromRGB(73, 82, 101),
+    Scrollbar         = Color3.fromRGB(80, 85, 90),
     ScrollbarTransparency = 0.6,
     ScrollbarThickness    = 2,
 }
@@ -3340,6 +3340,7 @@ end
 
 function Window:_LeaveScriptEditor()
     if not self.ActiveScript then return end
+    self:_CloseScriptAutocomplete()
     if self.ScriptEditorElements.Input:IsFocused() then self.ScriptEditorElements.Input:ReleaseFocus() end
     self.ActiveScript = nil
     self.ScriptEditor.Visible = false
@@ -3559,6 +3560,129 @@ function Window:_EditorLineAt(bytePosition)
     return low, lines[low]
 end
 
+
+-- Lightweight Luau completion for the embedded script editor.
+local SCRIPT_COMPLETION_WORDS = {
+    "and", "break", "continue", "do", "else", "elseif", "end", "export", "false", "for", "function", "if", "in", "local", "nil", "not", "or", "repeat", "return", "then", "true", "type", "until", "while",
+    "game", "workspace", "script", "plugin", "shared", "_G", "Enum", "Instance", "Vector2", "Vector3", "CFrame", "Color3", "UDim", "UDim2", "Rect", "Ray", "Region3", "BrickColor", "NumberRange", "NumberSequence", "ColorSequence", "TweenInfo", "PhysicalProperties", "Random", "DateTime", "Font", "Axes", "Faces",
+    "assert", "error", "getmetatable", "setmetatable", "ipairs", "pairs", "next", "pcall", "xpcall", "print", "warn", "require", "select", "tonumber", "tostring", "type", "typeof", "unpack", "rawequal", "rawget", "rawset", "rawlen", "collectgarbage", "loadstring",
+    "task", "table", "string", "math", "bit32", "coroutine", "utf8", "debug", "os", "tick", "time", "elapsedTime", "wait", "spawn", "delay", "settings", "UserSettings",
+    "GetService", "FindFirstChild", "WaitForChild", "GetChildren", "GetDescendants", "IsA", "Clone", "Destroy", "FindFirstAncestor", "FindFirstAncestorOfClass", "GetAttribute", "SetAttribute", "GetAttributeChangedSignal", "GetPropertyChangedSignal", "Connect", "Once", "Disconnect", "Fire", "Invoke", "GetPlayers", "GetPlayerFromCharacter", "GetMouse", "GetFullName", "IsDescendantOf", "PivotTo", "GetPivot", "FindFirstChildOfClass", "FindFirstChildWhichIsA",
+    "Players", "RunService", "TweenService", "UserInputService", "Lighting", "ReplicatedStorage", "ReplicatedFirst", "SoundService", "StarterGui", "StarterPlayer", "HttpService", "CollectionService", "Debris", "MarketplaceService", "TextService", "ContextActionService", "GuiService", "TeleportService", "Teams", "Chat", "TextChatService", "PathfindingService", "PhysicsService", "ProximityPromptService",
+    "RenderStepped", "Heartbeat", "Stepped", "InputBegan", "InputEnded", "MouseButton1Click", "Touched", "Changed", "ChildAdded", "ChildRemoved", "CharacterAdded", "PlayerAdded", "PlayerRemoving", "AncestryChanged", "Completed", "Value", "Name", "Parent", "Position", "Size", "Visible", "Text", "BackgroundColor3", "Transparency", "AnchorPoint", "AbsolutePosition", "AbsoluteSize", "LocalPlayer", "Character", "Humanoid", "HumanoidRootPart", "CurrentCamera", "CameraType", "FieldOfView", "WalkSpeed", "JumpPower",
+}
+local SCRIPT_MEMBER_WORDS = {
+    "FindFirstChild", "WaitForChild", "GetChildren", "GetDescendants", "FindFirstChildOfClass", "FindFirstChildWhichIsA", "IsA", "Clone", "Destroy", "GetAttribute", "SetAttribute", "GetPropertyChangedSignal", "GetAttributeChangedSignal", "GetFullName", "IsDescendantOf", "Connect", "Once", "Disconnect", "Fire", "Invoke", "GetService", "GetPlayers", "GetPlayerFromCharacter", "GetMouse", "PivotTo", "GetPivot", "Play", "Stop", "Pause", "Cancel", "Create", "GetAsync", "JSONEncode", "JSONDecode", "Raycast", "Lerp", "Magnitude", "Unit", "Position", "Size", "Parent", "Name", "Value", "Text", "Visible", "Transparency", "BackgroundColor3", "CFrame", "Character", "LocalPlayer", "CurrentCamera", "RenderStepped", "Heartbeat", "InputBegan", "InputEnded", "MouseButton1Click", "Touched", "Changed", "CharacterAdded", "PlayerAdded", "PlayerRemoving", "Completed",
+}
+local SCRIPT_SERVICES = { "Players", "Lighting", "Workspace", "ReplicatedStorage", "ReplicatedFirst", "RunService", "TweenService", "UserInputService", "TextService", "HttpService", "SoundService", "Debris", "CollectionService", "StarterGui", "StarterPlayer", "StarterPack", "ServerScriptService", "ServerStorage", "Teams", "MarketplaceService", "TeleportService", "ContextActionService", "GuiService", "TextChatService", "PathfindingService" }
+
+function Window:_CloseScriptAutocomplete()
+    local ui = self.ScriptEditorElements
+    if ui and ui.Completion then ui.Completion.Visible = false end
+    self._scriptCompletionItems = nil
+    self._scriptCompletionIndex = nil
+end
+
+function Window:_RefreshScriptAutocomplete()
+    local ui, record = self.ScriptEditorElements, self.ActiveScript
+    if not ui or not ui.Completion or not record or not ui.Input:IsFocused() or not self.ScriptEditor.Visible then
+        self:_CloseScriptAutocomplete(); return
+    end
+    local source, cursor = record.Source, ui.Input.CursorPosition
+    if cursor < 2 or cursor > #source + 1 then self:_CloseScriptAutocomplete(); return end
+    if ui.Input.SelectionStart > 0 and ui.Input.SelectionStart ~= cursor then self:_CloseScriptAutocomplete(); return end
+    local before = source:sub(1, cursor - 1)
+    local prefix = before:match("([%a_][%w_]*)$")
+    if not prefix or #prefix < 2 then self:_CloseScriptAutocomplete(); return end
+    local startsAt = cursor - #prefix
+    local marker = before:sub(startsAt - 1, startsAt - 1)
+    local serviceMode = before:match("GetService%s*%(%s*\"[%w_]*$") ~= nil or before:match("GetService%s*%(%s*'[%w_]*$") ~= nil
+    local candidates = serviceMode and SCRIPT_SERVICES or (marker == "." or marker == ":") and SCRIPT_MEMBER_WORDS or SCRIPT_COMPLETION_WORDS
+    local seen, matches = {}, {}
+    local lowerPrefix = prefix:lower()
+    local function add(word)
+        if word ~= prefix and #word > #prefix and word:sub(1,#prefix):lower() == lowerPrefix and not seen[word] then
+            seen[word] = true
+            table.insert(matches, word)
+        end
+    end
+    for _, word in ipairs(candidates) do add(word) end
+    if not serviceMode and marker ~= "." and marker ~= ":" then
+        local scanned = 0
+        for word in source:gmatch("[%a_][%w_]*") do
+            add(word)
+            scanned = scanned + 1
+            if scanned > 3500 then break end
+        end
+    end
+    table.sort(matches, function(a,b) return a:lower() < b:lower() end)
+    while #matches > 8 do table.remove(matches) end
+    if #matches == 0 then self:_CloseScriptAutocomplete(); return end
+    local lineIdx, line = self:_EditorLineAt(cursor)
+    local beforeWord = line.Text:sub(1, startsAt - line.Start)
+    local x = ui.Scroll.AbsolutePosition.X + 10 + self:_EditorMeasure(beforeWord) - ui.Scroll.CanvasPosition.X
+    local y = ui.Scroll.AbsolutePosition.Y + 12 + lineIdx * 20 - ui.Scroll.CanvasPosition.Y
+    local parentPos, parentSize = self.ScriptEditor.AbsolutePosition, self.ScriptEditor.AbsoluteSize
+    local width, height = 242, #matches * 25 + 8
+    x = math.clamp(x - parentPos.X, 48, math.max(48,parentSize.X - width - 6))
+    y = y - parentPos.Y
+    if y + height > parentSize.Y - 27 then y = math.max(40, y - height - 24) end
+    ui.Completion.Position = UDim2.fromOffset(x,y)
+    ui.Completion.Size = UDim2.fromOffset(width,height)
+    self._scriptCompletionItems = matches
+    self._scriptCompletionStart = startsAt
+    self._scriptCompletionCursor = cursor
+    self._scriptCompletionIndex = 1
+    for i, row in ipairs(ui.CompletionRows) do
+        local word = matches[i]
+        row.Button.Visible = word ~= nil
+        if word then
+            row.Label.Text = word
+            row.Button.BackgroundTransparency = i == 1 and 0.15 or 1
+        end
+    end
+    ui.Completion.Visible = true
+end
+
+function Window:_ChooseScriptAutocomplete(index)
+    local ui, record = self.ScriptEditorElements, self.ActiveScript
+    local choices = self._scriptCompletionItems
+    if not ui or not record or not choices then return false end
+    local word = choices[index or self._scriptCompletionIndex or 1]
+    if not word then return false end
+    local cursor = ui.Input.CursorPosition
+    local start = self._scriptCompletionStart
+    if not start or cursor ~= self._scriptCompletionCursor then self:_CloseScriptAutocomplete(); return false end
+    local source = record.Source
+    local newSource = source:sub(1,start-1) .. word .. source:sub(cursor)
+    if #newSource > (self.Config.MaxScriptBytes or 60000) then return false end
+    self:_CloseScriptAutocomplete()
+    self._scriptCompletionRefreshLocked = true
+    self._settingScriptText = true
+    ui.Input.Text = newSource
+    self._settingScriptText = false
+    record.Source, record.Dirty = newSource, true
+    self:_RenderScriptEditor()
+    self:_ScriptsChanged()
+    safeCallback(self.Config.OnScriptChanged,record,self)
+    ui.Input:CaptureFocus()
+    ui.Input.CursorPosition = start + #word
+    ui.Input.SelectionStart = -1
+    self:_UpdateEditorCursor(true)
+    self._scriptCompletionRefreshLocked = false
+    return true
+end
+
+function Window:_MoveScriptAutocomplete(step)
+    local ui = self.ScriptEditorElements
+    local items = self._scriptCompletionItems
+    if not ui or not items then return end
+    self._scriptCompletionIndex = ((self._scriptCompletionIndex or 1) - 1 + step) % #items + 1
+    for i,row in ipairs(ui.CompletionRows) do
+        row.Button.BackgroundTransparency = i == self._scriptCompletionIndex and 0.15 or 1
+    end
+end
+
 function Window:_UpdateEditorCursor(reveal)
     local ui = self.ScriptEditorElements
     if not ui or not self.ActiveScript or self._settingScriptText then return end
@@ -3617,6 +3741,7 @@ function Window:_UpdateEditorCursor(reveal)
         newY = clamp(newY, 0, math.max(0, self._editorCanvasHeight - viewport.Y))
         if newX ~= canvas.X or newY ~= canvas.Y then ui.Scroll.CanvasPosition = Vector2.new(newX, newY) end
     end
+    if self._scriptCompletionRefreshLocked ~= true then self:_RefreshScriptAutocomplete() end
 end
 
 function Window:_HandleScriptTextChanged()
@@ -3936,6 +4061,27 @@ function Window:_CreateScriptEditor()
                 TextColor = self.Theme.AccentText, Callback = function() self:DeleteScript(record) end } } })
     end)
     ui.Close = ScriptIconButton(self, toolbar, "x", UDim2.new(1, -30, 0, 6), function() self:CloseScriptEditor() end)
+    local completion = New("Frame", { Name = "ScriptAutocomplete", Visible = false,
+        BackgroundColor3 = theme.Popup, BorderSizePixel = 0, ZIndex = 36,
+        Size = UDim2.fromOffset(242, 208), Parent = editor })
+    Corner(completion, 5); Stroke(completion, theme.Border, 1, 0.12)
+    BindTheme(self, completion, "BackgroundColor3", "Popup")
+    local completionRows = {}
+    for i = 1,8 do
+        local row = New("TextButton", { Name = "Suggestion" .. i, Text = "", AutoButtonColor = false,
+            BorderSizePixel = 0, BackgroundColor3 = theme.SurfaceHover, BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(4, 4 + (i - 1)*25), Size = UDim2.new(1,-8,0,25),
+            ZIndex = 37, Parent = completion })
+        Corner(row,3)
+        local labelObj = New("TextLabel", { Name = "Label", Text = "", BackgroundTransparency = 1,
+            TextColor3 = theme.Text, Font = Enum.Font.Code, TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(9,0),
+            Size = UDim2.new(1,-12,1,0), ZIndex = 38, Parent = row })
+        BindTheme(self,labelObj,"TextColor3","Text")
+        row.MouseButton1Down:Connect(function() self:_ChooseScriptAutocomplete(i) end)
+        completionRows[i] = { Button = row, Label = labelObj }
+    end
+    ui.Completion, ui.CompletionRows = completion, completionRows
     input:GetPropertyChangedSignal("Text"):Connect(function() self:_HandleScriptTextChanged() end)
     input:GetPropertyChangedSignal("CursorPosition"):Connect(function() self:_UpdateEditorCursor(true) end)
     input:GetPropertyChangedSignal("SelectionStart"):Connect(function() self:_UpdateEditorCursor(false) end)
@@ -3943,10 +4089,25 @@ function Window:_CreateScriptEditor()
     scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self:_RenderScriptEditor() end)
     input.Focused:Connect(function() self:_UpdateEditorCursor(true) end)
     input.FocusLost:Connect(function()
+        self:_CloseScriptAutocomplete()
         caret.Visible = false
         for _, rect in ipairs(self._scriptSelectionRects) do rect.Visible = false end
         if self._scriptsDirty then self:SaveScripts() end
     end)
+    local completionKeyConn = UserInputService.InputBegan:Connect(function(key)
+        if not self.ActiveScript or not self.Visible or not editor.Visible or not input:IsFocused() then return end
+        if not ui.Completion.Visible then return end
+        if key.KeyCode == Enum.KeyCode.Down then
+            self:_MoveScriptAutocomplete(1)
+        elseif key.KeyCode == Enum.KeyCode.Up then
+            self:_MoveScriptAutocomplete(-1)
+        elseif key.KeyCode == Enum.KeyCode.Tab or key.KeyCode == Enum.KeyCode.Return then
+            self:_ChooseScriptAutocomplete()
+        elseif key.KeyCode == Enum.KeyCode.Escape then
+            self:_CloseScriptAutocomplete()
+        end
+    end)
+    table.insert(self._scriptConnections, completionKeyConn)
     WatchTheme(self, editor, function()
         self:_RenderScriptEditor()
         self:_ScriptStatus(self._scriptStatusText, self._scriptStatusDanger)
