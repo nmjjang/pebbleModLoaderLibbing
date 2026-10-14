@@ -4905,7 +4905,7 @@ do
         ["+ Node"]="plus", ["▶ Run"]="play", ["■"]="square", ["✓"]="check-check",
         ["⤢"]="maximize", ["−"]="minus", ["+"]="plus", ["↑"]="upload",
         ["↓"]="download", ["✎"]="pencil", ["⌫"]="trash-2", ["×"]="x",
-        ["Save"]="save", ["Script"]="file-code-2", ["Blueprint"]="workflow",
+        ["Save"]="save", ["Script"]="file-code", ["Blueprint"]="workflow",
     }
     local BP_CATEGORY_ICONS = {
         Logic="git-branch", Values="variable", Services="boxes", GUI="panels-top-left",
@@ -5095,7 +5095,22 @@ do
         end
         self:_LayoutBlueprintExplorer()
     end
+    function Window:_SetBlueprintGrabCursor(grabbing)
+        if grabbing then
+            if self._bpCursorActive then return end
+            self._bpCursorActive = true
+            local ok, icon = pcall(function() return UserInputService.MouseIcon end)
+            self._bpPreviousMouseIcon = ok and icon or nil
+            pcall(function() UserInputService.MouseIcon = "rbxasset://textures/DragCursor.png" end)
+        elseif self._bpCursorActive then
+            self._bpCursorActive = false
+            local previous = self._bpPreviousMouseIcon
+            self._bpPreviousMouseIcon = nil
+            pcall(function() UserInputService.MouseIcon = previous or "" end)
+        end
+    end
     function Window:_LeaveBlueprintEditor()
+        self:_SetBlueprintGrabCursor(false)
         if not self.ActiveBlueprint then return end
         self.ActiveBlueprint = nil; self._bpPending = nil; self._bpRejectedTarget = nil; self._bpDrag = nil; self._bpPaletteContext = nil; self._bpSelectionSet = nil
         self.BlueprintEditor.Visible = false; self.ContentHost.Visible = true
@@ -5618,6 +5633,7 @@ do
             elseif input.UserInputType==Enum.UserInputType.MouseButton2 then
                 local r=self.ActiveBlueprint
                 self._bpDrag={ Mode="pan",Start=p,X=r.View.X,Y=r.View.Y,Input=input }
+                self:_SetBlueprintGrabCursor(true)
             end
         end)
         search:GetPropertyChangedSignal("Text"):Connect(function()
@@ -5673,7 +5689,9 @@ do
                 end
                 self._bpDrag=nil
             elseif drag and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.MouseButton2 or input==drag.Input) then
-                self._bpDrag=nil; self:_BlueprintChanged(self.ActiveBlueprint,drag.Mode=="pan")
+                self._bpDrag=nil
+                if drag.Mode=="pan" then self:_SetBlueprintGrabCursor(false) end
+                self:_BlueprintChanged(self.ActiveBlueprint,drag.Mode=="pan")
             end
             if self._bpPending and (input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch) then
                 local selected
