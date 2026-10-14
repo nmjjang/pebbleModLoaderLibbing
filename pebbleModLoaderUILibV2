@@ -3691,7 +3691,7 @@ function Window:OpenScriptNamePopup(idOrName, blueprint)
     if idOrName and not record then return nil, "File not found." end
     local theme = self.Theme
     local overlay = New("TextButton", {
-        Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 0.4,
+        Name = "ScriptNameOverlay", BackgroundColor3 = theme.Overlay, BackgroundTransparency = 1,
         BorderSizePixel = 0, Text = "", AutoButtonColor = false, Active = true,
         Size = UDim2.fromScale(1, 1), ZIndex = 7000, Parent = self.ScreenGui,
     })
@@ -3723,7 +3723,7 @@ function Window:OpenScriptNamePopup(idOrName, blueprint)
     })
     local input = New("TextBox", {
         Name = "ScriptName", ClearTextOnFocus = false, MultiLine = false,
-        Text = record and record.Name:gsub(blueprint and "%.blueprint$" or "%.lua$", "") or "", PlaceholderText = blueprint and "MyBlueprint" or "MyScript",
+        Text = record and record.Name:gsub(blueprint and "%.bp$" or "%.lua$", ""):gsub(blueprint and "%.blueprint$" or "^$", "") or "", PlaceholderText = blueprint and "MyBlueprint" or "MyScript",
         Font = theme.FontMedium, TextSize = 12, TextColor3 = theme.Text, PlaceholderColor3 = theme.DimText,
         TextXAlignment = Enum.TextXAlignment.Left, BackgroundColor3 = theme.Input, BorderSizePixel = 0,
         Position = UDim2.fromOffset(18, 82), Size = UDim2.new(1, -36, 0, 34), ZIndex = 7003, Parent = panel,
@@ -3929,6 +3929,7 @@ function Window:_CreateScriptEditor()
         if not record then return end
         if input:IsFocused() then input:ReleaseFocus() end
         self:Dialog({ Title = "Delete script?", Content = 'The script "' .. record.Name .. '" will be removed from the explorer.',
+            OverlayTransparency = 1,
             Buttons = { { Title = "Cancel" }, { Title = "Delete", Color = self.Theme.Danger,
                 TextColor = self.Theme.AccentText, Callback = function() self:DeleteScript(record) end } } })
     end)
@@ -4506,9 +4507,9 @@ do
     end
     local function validName(name)
         if type(name) ~= "string" then return nil, "Enter a name." end
-        name = name:match("^%s*(.-)%s*$"):gsub("%.blueprint$", "")
+        name = name:match("^%s*(.-)%s*$"):gsub("%.blueprint$", ""):gsub("%.bp$", "")
         if name == "" or #name > 60 or name:find("[%c/\\]") then return nil, "Use a short name without slashes or line breaks." end
-        return name .. ".blueprint"
+        return name .. ".bp"
     end
     function Window:GetBlueprint(id)
         if type(id) == "table" then return id.Window == self and self._blueprintsById[id.Id] or nil end
@@ -4939,15 +4940,13 @@ do
         local icon
         if glyph then
             local iconSize = 14
-            local iconX = isIconOnly and 0.5 or 11
-            local anchorX = isIconOnly and 0.5 or 0
-            icon = bpIcon(window,obj,glyph,isIconOnly and UDim2.new(0.5,-iconSize/2,0.5,-iconSize/2) or UDim2.new(0,iconX,0.5,-iconSize/2),iconSize,
+            icon = bpIcon(window,obj,glyph,isIconOnly and UDim2.new(0.5,-iconSize/2,0.5,-iconSize/2) or UDim2.new(0,11,0.5,-iconSize/2),iconSize,
                 primary and "AccentText" or "IconSelected",obj.ZIndex+2)
-            icon.AnchorPoint = Vector2.new(anchorX,0)
             obj:SetAttribute("LucideIcon",glyph)
         end
         local labelText = isIconOnly and "" or tostring(displayText or "")
         local labelOffset = glyph and (isIconOnly and 0 or 31) or 0
+        local labelRight = (glyph and not isIconOnly) and 8 or 0
         local label = New("TextLabel", {
             Name = "ButtonLabel",
             BackgroundTransparency = 1,
@@ -4958,7 +4957,7 @@ do
             TextXAlignment = glyph and not isIconOnly and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center,
             TextYAlignment = Enum.TextYAlignment.Center,
             Position = UDim2.fromOffset(labelOffset,0),
-            Size = UDim2.new(1, -(labelOffset + 8), 1, 0),
+            Size = UDim2.new(1, -(labelOffset + labelRight), 1, 0),
             ZIndex = obj.ZIndex + 1,
             Parent = obj,
         })
@@ -5594,8 +5593,15 @@ do
     function Window:_CreateBlueprintEditor()
         local editor=New("Frame",{ Name="BlueprintEditor",BackgroundColor3=self.Theme.CodeBackground,BorderSizePixel=0,Position=self.ContentHost.Position,Size=self.ContentHost.Size,Visible=false,ClipsDescendants=true,ZIndex=20,Parent=self.Main })
         self.BlueprintEditor=editor; Corner(editor,5); BindTheme(self,editor,"BackgroundColor3","CodeBackground"); Stroke(editor,self.Theme.Border,1,0.2)
-        local title=label(self,editor,"Custom Blueprints",UDim2.fromOffset(12,0),UDim2.new(1,-260,0,36),"Text","FontMedium",12,31)
+        local title=label(self,editor,"Custom Blueprints",UDim2.fromOffset(12,0),UDim2.new(1,-270,0,36),"Text","FontMedium",12,31)
         local toolbar=New("Frame",{ BackgroundTransparency=1,Position=UDim2.fromOffset(8,38),Size=UDim2.new(1,-16,0,28),ZIndex=31,Parent=editor })
+        -- Keep fixed-size toolbar buttons inside narrow Blueprint editors.
+        local toolbarScale=New("UIScale",{ Scale=1,Parent=toolbar })
+        local function fitToolbar()
+            toolbarScale.Scale=math.min(1,math.max(0.55,toolbar.AbsoluteSize.X/353))
+        end
+        toolbar:GetPropertyChangedSignal("AbsoluteSize"):Connect(fitToolbar)
+        task.defer(fitToolbar)
         local board=New("Frame",{ Name="Board",Active=true,BackgroundColor3=self.Theme.CodeBackground,BorderSizePixel=0,Position=UDim2.fromOffset(1,73),Size=UDim2.new(1,-2,1,-104),ClipsDescendants=true,ZIndex=21,Parent=editor })
         BindTheme(self,board,"BackgroundColor3","CodeBackground")
         local grid=New("Frame",{ BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=21,Parent=board })
@@ -5629,20 +5635,39 @@ do
         local frame=textButton(self,toolbar,"⤢",UDim2.fromOffset(258,0),UDim2.fromOffset(29,27),function() self:_FrameBlueprint() end,false,33)
         textButton(self,toolbar,"−",UDim2.fromOffset(293,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1/1.15) end,false,33)
         textButton(self,toolbar,"+",UDim2.fromOffset(326,0),UDim2.fromOffset(27,27),function() self:_ZoomBlueprint(1.15) end,false,33)
-        self:_BlueprintTooltip(add,"Add node · right-click on the board also opens the catalog")
+        self:_BlueprintTooltip(add,"Add node · left-click empty space also opens the catalog")
         self:_BlueprintTooltip(run,"Validates and runs the graph on the client. Running again removes the previous execution.")
         self:_BlueprintTooltip(stop,"Cancels and undoes the changes and objects created by this blueprint.")
         self:_BlueprintTooltip(validate,"Check ports, required values and cycles")
         self:_BlueprintTooltip(frame,"Frame all nodes · shortcut F")
-        textButton(self,editor,"Save",UDim2.new(1,-271,0,6),UDim2.fromOffset(78,25),function() self:SaveBlueprints() end,false,33)
-        local export=textButton(self,editor,"↑",UDim2.new(1,-187,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(false) end,false,33)
-        local import=textButton(self,editor,"↓",UDim2.new(1,-155,0,6),UDim2.fromOffset(27,25),function() self:_BlueprintTransferPopup(true) end,false,33)
-        local rename=textButton(self,editor,"✎",UDim2.new(1,-122,0,6),UDim2.fromOffset(27,25),function() self:OpenBlueprintNamePopup(self.ActiveBlueprint) end,false,33)
-        local delete=textButton(self,editor,"⌫",UDim2.new(1,-89,0,6),UDim2.fromOffset(27,25),function()
+        -- Right-aligned actions use UIListLayout rather than independent offsets.
+        -- This keeps spacing identical even if the window is resized.
+        local actions = New("Frame", {
+            Name = "BlueprintActions", BackgroundTransparency = 1,
+            Position = UDim2.new(1,-251,0,6), Size = UDim2.fromOffset(243,25),
+            ZIndex = 33, Parent = editor,
+        })
+        local actionLayout = New("UIListLayout", {
+            FillDirection = Enum.FillDirection.Horizontal,
+            HorizontalAlignment = Enum.HorizontalAlignment.Left,
+            VerticalAlignment = Enum.VerticalAlignment.Center,
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0,6), Parent = actions,
+        })
+        local function actionButton(labelText, width, order, callback)
+            local button = textButton(self,actions,labelText,UDim2.new(),UDim2.fromOffset(width,25),callback,false,34)
+            button.LayoutOrder = order
+            return button
+        end
+        local save = actionButton("Save",78,1,function() self:SaveBlueprints() end)
+        local export = actionButton("↑",27,2,function() self:_BlueprintTransferPopup(false) end)
+        local import = actionButton("↓",27,3,function() self:_BlueprintTransferPopup(true) end)
+        local rename = actionButton("✎",27,4,function() self:OpenBlueprintNamePopup(self.ActiveBlueprint) end)
+        local delete = actionButton("⌫",27,5,function()
             local record=self.ActiveBlueprint; if not record then return end
-            self:Dialog({ Title="Delete blueprint?",Content=record.Name,Buttons={{ Title="Cancel" },{ Title="Delete",Color=self.Theme.Danger,Callback=function() self:DeleteBlueprint(record) end }} })
-        end,false,33)
-        textButton(self,editor,"×",UDim2.new(1,-38,0,6),UDim2.fromOffset(27,25),function() self:CloseBlueprintEditor() end,false,33)
+            self:Dialog({ Title="Delete blueprint?",Content=record.Name,OverlayTransparency=1,Buttons={{ Title="Cancel" },{ Title="Delete",Color=self.Theme.Danger,Callback=function() self:DeleteBlueprint(record) end }} })
+        end)
+        local close = actionButton("×",27,6,function() self:CloseBlueprintEditor() end)
         self:_BlueprintTooltip(export,"Export all blueprints to JSON"); self:_BlueprintTooltip(import,"Import blueprints from JSON"); self:_BlueprintTooltip(rename,"Rename"); self:_BlueprintTooltip(delete,"Delete blueprint")
         board.InputBegan:Connect(function(input)
             if not self.ActiveBlueprint or self._bpBuilding then return end
