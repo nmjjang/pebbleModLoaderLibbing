@@ -3502,6 +3502,7 @@ function Window:_UpdateScriptLayout()
     self.ScriptEditor.Position = self.ContentHost.Position
     self.ScriptEditor.Size = self.ContentHost.Size
     self.CloseButton.Position = UDim2.new(1, -(12 + self._scriptRightInset), 0, 13)
+    if self._PositionGlobalSearch then self._PositionGlobalSearch() end
     if self.BlueprintEditor then
         self.BlueprintEditor.Position = self.ContentHost.Position
         self.BlueprintEditor.Size = self.ContentHost.Size
@@ -6557,6 +6558,199 @@ function PebbleUI:CreateWindow(config)
         }, EASE_SOFT, Enum.EasingDirection.In)
         task.delay(0.22, function() self:Close() end)
     end)
+
+    -- Global navigation search: tabs, sections and controls.
+    local searchWidth = 198
+    local searchBar = New("Frame", {
+        Name = "GlobalSearchBar", AnchorPoint = Vector2.new(1, 0),
+        Position = UDim2.new(1, -44, 0, 13), Size = UDim2.fromOffset(searchWidth, 24),
+        BackgroundColor3 = self.Theme.Input, BorderSizePixel = 0,
+        ZIndex = 60, Parent = main,
+    })
+    Corner(searchBar, self.Theme.ControlRadius)
+    BindTheme(self, searchBar, "BackgroundColor3", "Input")
+    local searchBorder = FineStroke(searchBar, self.Theme.Border, 0.2)
+    BindTheme(self, searchBorder, "Color", "Border")
+    local searchIcon = CreateIcon("search", 13, self.Theme.SubText, 61)
+    searchIcon.AnchorPoint = Vector2.new(0, 0.5)
+    searchIcon.Position = UDim2.new(0, 8, 0.5, 0)
+    searchIcon.Parent = searchBar
+    BindTheme(self, searchIcon, "ImageColor3", "SubText")
+    local searchInput = New("TextBox", {
+        Name = "SearchInput", BackgroundTransparency = 1, BorderSizePixel = 0,
+        ClearTextOnFocus = false, Text = "", PlaceholderText = "Search tabs & settings...",
+        TextColor3 = self.Theme.Text, PlaceholderColor3 = self.Theme.DimText,
+        TextSize = 11, Font = self.Theme.Font,
+        TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
+        Position = UDim2.fromOffset(28, 0), Size = UDim2.new(1, -34, 1, 0),
+        ZIndex = 61, Parent = searchBar,
+    })
+    BindTheme(self, searchInput, "TextColor3", "Text")
+    BindTheme(self, searchInput, "PlaceholderColor3", "DimText")
+    BindTheme(self, searchInput, "Font", "Font")
+    local searchResults = New("ScrollingFrame", {
+        Name = "GlobalSearchResults", Visible = false, BorderSizePixel = 0,
+        BackgroundColor3 = self.Theme.Popup, BackgroundTransparency = 0,
+        AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -44, 0, 41),
+        Size = UDim2.fromOffset(292, 0), ZIndex = 70,
+        ScrollBarThickness = 2, ScrollBarImageColor3 = self.Theme.Scrollbar,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(),
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        Parent = main,
+    })
+    Corner(searchResults, self.Theme.PopupRadius)
+    local searchResultsBorder = FineStroke(searchResults, self.Theme.Border, 0.1)
+    BindTheme(self, searchResults, "BackgroundColor3", "Popup")
+    BindTheme(self, searchResultsBorder, "Color", "Border")
+    List(searchResults, 2)
+    Padding(searchResults, 5, 7, 5, 5)
+    self.SearchBar, self.SearchInput, self.SearchResults = searchBar, searchInput, searchResults
+
+    local foundItems = {}
+    local selectedIndex = 1
+    local searchClosing = false
+    local function clearResults()
+        for _, child in ipairs(searchResults:GetChildren()) do
+            if child:IsA("GuiButton") then child:Destroy() end
+        end
+        foundItems = {}
+        searchResults.Visible = false
+    end
+    local function visitItem(item)
+        if not item then return end
+        searchClosing = true
+        clearResults()
+        searchInput.Text = ""
+        searchInput:ReleaseFocus()
+        searchClosing = false
+        self:_setActiveTab(item.Tab)
+        if item.Section then
+            local scroll = item.Section.Side == "Right" and item.Tab.RightScroll or item.Tab.LeftScroll
+            task.defer(function()
+                if self.Destroyed or not scroll.Parent or not item.Target.Parent then return end
+                local top = item.Target.AbsolutePosition.Y - scroll.AbsolutePosition.Y + scroll.CanvasPosition.Y
+                local target = math.max(0, top - 12)
+                local limit = math.max(0, scroll.AbsoluteCanvasSize.Y - scroll.AbsoluteWindowSize.Y)
+                Tween(scroll, 0.28, { CanvasPosition = Vector2.new(0, math.min(target, limit)) })
+                local original = item.Target.BackgroundTransparency
+                if item.Target:IsA("GuiObject") then
+                    item.Target.BackgroundTransparency = math.min(original, 0.55)
+                    task.delay(0.7, function()
+                        if item.Target.Parent then Tween(item.Target, 0.3, {BackgroundTransparency = original}) end
+                    end)
+                end
+            end)
+        end
+    end
+    local function rebuildSearch()
+        clearResults()
+        if searchClosing then return end
+        local query = string.lower((searchInput.Text or ""):match("^%s*(.-)%s*$"))
+        if query == "" then return end
+        for _, tab in ipairs(self.Tabs) do
+            local tabTitle = tostring(tab.Title or "Tab")
+            local tabMatch = string.find(string.lower(tabTitle), query, 1, true) ~= nil
+            if tabMatch then
+                table.insert(foundItems, { Tab = tab, Target = tab.Button, Label = tabTitle, Path = "TAB" })
+            end
+            for _, section in ipairs(tab.Sections) do
+                local secTitle = section.Title and section.Title.Text or section.Frame.Name
+                local secMatch = string.find(string.lower(secTitle), query, 1, true) ~= nil
+                if secMatch then
+                    table.insert(foundItems, { Tab = tab, Section = section, Target = section.Frame,
+                        Label = secTitle, Path = tabTitle .. "  /  SECTION" })
+                end
+                for _, row in ipairs(section.Content:GetChildren()) do
+                    if row:IsA("GuiObject") and row.LayoutOrder > 0 and row.Name ~= "Space" and row.Name ~= "Divider" then
+                        local label = row.Name
+                        if string.find(string.lower(label), query, 1, true) then
+                            table.insert(foundItems, { Tab = tab, Section = section, Target = row,
+                                Label = label, Path = tabTitle .. "  /  " .. secTitle })
+                        end
+                    end
+                end
+            end
+        end
+        if #foundItems == 0 then
+            searchResults.Visible = false
+            return
+        end
+        -- Bound the popup and avoid creating hundreds of UI instances for broad searches.
+        while #foundItems > 40 do table.remove(foundItems) end
+        selectedIndex = 1
+        searchResults.Size = UDim2.fromOffset(292, math.min(310, #foundItems * 43 + 10))
+        searchResults.CanvasPosition = Vector2.new(0, 0)
+        searchResults.Visible = true
+        for i, item in ipairs(foundItems) do
+            local result = New("TextButton", {
+                Name = "SearchResult", Text = "", AutoButtonColor = false,
+                BackgroundColor3 = self.Theme.SurfaceHover,
+                BackgroundTransparency = i == selectedIndex and 0.1 or 1,
+                Size = UDim2.new(1, -3, 0, 41), LayoutOrder = i,
+                BorderSizePixel = 0, ZIndex = 71, Parent = searchResults,
+            })
+            Corner(result, 4)
+            local heading = New("TextLabel", {
+                BackgroundTransparency = 1, Text = item.Label, Font = self.Theme.FontMedium,
+                TextColor3 = self.Theme.Text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Position = UDim2.fromOffset(9, 3), Size = UDim2.new(1, -18, 0, 18),
+                ZIndex = 72, Parent = result,
+            })
+            local path = New("TextLabel", {
+                BackgroundTransparency = 1, Text = item.Path, Font = self.Theme.Font,
+                TextColor3 = self.Theme.SubText, TextSize = 10, TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                Position = UDim2.fromOffset(9, 21), Size = UDim2.new(1, -18, 0, 15),
+                ZIndex = 72, Parent = result,
+            })
+            item.Button = result
+            BindTheme(self, heading, "TextColor3", "Text")
+            BindTheme(self, path, "TextColor3", "SubText")
+            result.MouseButton1Click:Connect(function() visitItem(item) end)
+            result.MouseEnter:Connect(function()
+                selectedIndex = i
+                for j, entry in ipairs(foundItems) do
+                    if entry.Button and entry.Button.Parent then entry.Button.BackgroundTransparency = j == i and 0.1 or 1 end
+                end
+            end)
+        end
+    end
+    searchInput:GetPropertyChangedSignal("Text"):Connect(rebuildSearch)
+    searchInput.Focused:Connect(rebuildSearch)
+    searchInput.FocusLost:Connect(function()
+        task.delay(0.16, function()
+            if searchInput.Parent and not searchInput:IsFocused() then clearResults() end
+        end)
+    end)
+    UserInputService.InputBegan:Connect(function(input)
+        if self.Destroyed or not searchResults.Visible or not searchInput:IsFocused() then return end
+        if input.KeyCode == Enum.KeyCode.Down or input.KeyCode == Enum.KeyCode.Up then
+            local delta = input.KeyCode == Enum.KeyCode.Down and 1 or -1
+            selectedIndex = (selectedIndex - 1 + delta) % #foundItems + 1
+            for i, item in ipairs(foundItems) do
+                if item.Button and item.Button.Parent then item.Button.BackgroundTransparency = i == selectedIndex and 0.1 or 1 end
+            end
+            searchResults.CanvasPosition = Vector2.new(0, math.max(0, (selectedIndex - 6) * 43))
+        elseif input.KeyCode == Enum.KeyCode.Return or input.KeyCode == Enum.KeyCode.KeypadEnter then
+            visitItem(foundItems[selectedIndex])
+        elseif input.KeyCode == Enum.KeyCode.Escape then
+            clearResults()
+            searchInput:ReleaseFocus()
+        end
+    end)
+    -- Keep search next to Close even when the script explorer changes the right inset.
+    local function positionSearch()
+        if not closeBtn.Parent then return end
+        local inset = self._scriptRightInset or 0
+        searchBar.Position = UDim2.new(1, -(44 + inset), 0, 13)
+        searchResults.Position = UDim2.new(1, -(44 + inset), 0, 41)
+        local available = closeBtn.AbsolutePosition.X - (topbar.AbsolutePosition.X + 110)
+        searchBar.Size = UDim2.fromOffset(math.max(100, math.min(searchWidth, available)), 24)
+    end
+    self._PositionGlobalSearch = positionSearch
+    main:GetPropertyChangedSignal("AbsoluteSize"):Connect(positionSearch)
+    task.defer(positionSearch)
 
     local contentHost = New("Frame", {
         Name = "ContentHost",
