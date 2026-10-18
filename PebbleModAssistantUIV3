@@ -233,115 +233,6 @@ local function FineStroke(parent, color, transparency)
     return Stroke(parent, color, 1, transparency == nil and 0.2 or transparency)
 end
 
--- Soft radial hover: Roblox UIGradient is linear, so translucent concentric
--- circles are used for a true radial falloff instead.
--- Rounded, pointer-following background illumination.
--- A CanvasGroup clips all radial discs to the same rounded silhouette as its host.
--- This prevents the square patches that appeared during hover.
-local function AttachRadialHover(target, theme, options)
-    options = options or {}
-    local globalMouse = options.GlobalMouse == true
-    local layer = New("CanvasGroup", {
-        Name = "RadialHoverLayer",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1),
-        ClipsDescendants = true,
-        GroupTransparency = 0,
-        ZIndex = options.ZIndex or (target.ZIndex + 1),
-        Active = false,
-        Parent = target,
-    })
-    -- UICorner on CanvasGroup performs an actual rounded clip on the contents.
-    local originalCorner = target:FindFirstChildOfClass("UICorner")
-    local maskCorner = New("UICorner", {
-        CornerRadius = originalCorner and originalCorner.CornerRadius or UDim.new(0, 9),
-        Parent = layer,
-    })
-    if originalCorner then
-        originalCorner:GetPropertyChangedSignal("CornerRadius"):Connect(function()
-            if maskCorner.Parent then maskCorner.CornerRadius = originalCorner.CornerRadius end
-        end)
-    end
-
-    local strengths = options.Strengths or { 0.955, 0.935, 0.91, 0.885, 0.86, 0.83, 0.80 }
-    local fractions = { 1, 0.86, 0.72, 0.58, 0.44, 0.30, 0.17 }
-    local discs = {}
-    for i = 1, #strengths do
-        local disc = New("Frame", {
-            Name = "RadialDisc" .. i,
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundColor3 = theme.RadialHover or theme.SurfaceHover,
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            ZIndex = layer.ZIndex,
-            Active = false,
-            Parent = layer,
-        })
-        Corner(disc, 999)
-        discs[i] = disc
-    end
-
-    local hovering = false
-    local lastX, lastY = 0.5, 0.5
-    local function place(x, y)
-        local w, h = math.max(target.AbsoluteSize.X, 1), math.max(target.AbsoluteSize.Y, 1)
-        lastX, lastY = x, y
-        local diameter = math.max(w, h) * (options.Spread or 1.65)
-        for i, disc in ipairs(discs) do
-            local radius = diameter * fractions[i]
-            disc.Size = UDim2.fromOffset(radius, radius)
-            disc.Position = UDim2.fromOffset(x * w, y * h)
-        end
-    end
-    local function hover(active)
-        if hovering == active then return end
-        hovering = active
-        for i, disc in ipairs(discs) do
-            Tween(disc, active and 0.23 or 0.32, {
-                BackgroundTransparency = active and strengths[i] or 1,
-            }, EASE_SOFT, Enum.EasingDirection.Out)
-        end
-    end
-    local function updatePointer(screenX, screenY)
-        if not target.Parent or not target.Visible then hover(false); return end
-        local pos, size = target.AbsolutePosition, target.AbsoluteSize
-        local inside = screenX >= pos.X and screenX <= pos.X + size.X
-            and screenY >= pos.Y and screenY <= pos.Y + size.Y
-        if inside then
-            place(math.clamp((screenX - pos.X) / math.max(size.X, 1), 0, 1),
-                  math.clamp((screenY - pos.Y) / math.max(size.Y, 1), 0, 1))
-        end
-        hover(inside)
-    end
-
-    if globalMouse then
-        -- GUI descendants swallow MouseMoved. Screen-wide input keeps the
-        -- illumination following the cursor even across tabs and sections.
-        local connection
-        connection = UserInputService.InputChanged:Connect(function(input)
-            if not target.Parent then connection:Disconnect(); return end
-            if input.UserInputType == Enum.UserInputType.MouseMovement then
-                updatePointer(input.Position.X, input.Position.Y)
-            end
-        end)
-        target:GetPropertyChangedSignal("Visible"):Connect(function()
-            if not target.Visible then hover(false) end
-        end)
-    else
-        target.MouseEnter:Connect(function()
-            local xy = UserInputService:GetMouseLocation()
-            updatePointer(xy.X, xy.Y)
-        end)
-        target.MouseMoved:Connect(updatePointer)
-        target.MouseLeave:Connect(function() hover(false) end)
-    end
-    target:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        place(lastX, lastY)
-    end)
-    return layer
-end
-
 --============================================================
 -- Theme
 --============================================================
@@ -353,72 +244,71 @@ local DefaultTheme = {
     FontMedium = Enum.Font.GothamMedium,
     FontDisplay = Enum.Font.GothamBold,
 
-    BackgroundTop     = Color3.fromRGB(232, 235, 237),
-    BackgroundBottom  = Color3.fromRGB(217, 224, 228),
-    Sidebar           = Color3.fromRGB(226, 231, 234),
-    SidebarDivider    = Color3.fromRGB(186, 196, 202),
+    BackgroundTop     = Color3.fromRGB(15, 16, 19),
+    BackgroundBottom  = Color3.fromRGB(15, 16, 19),
+    Sidebar           = Color3.fromRGB(27, 29, 32),
+    SidebarDivider    = Color3.fromRGB(55, 59, 63),
 
-    Surface           = Color3.fromRGB(233, 237, 239),
-    Surface2          = Color3.fromRGB(218, 225, 229),
-    SurfaceHover      = Color3.fromRGB(186, 197, 204),
-    Input             = Color3.fromRGB(243, 245, 246),
-    Popup             = Color3.fromRGB(238, 241, 243),
-    CodeBackground    = Color3.fromRGB(222, 229, 233),
+    Surface           = Color3.fromRGB(27, 29, 32),
+    Surface2          = Color3.fromRGB(37, 39, 42),
+    SurfaceHover      = Color3.fromRGB(45, 48, 52),
+    Input             = Color3.fromRGB(15, 16, 19),
+    Popup             = Color3.fromRGB(27, 29, 32),
+    CodeBackground    = Color3.fromRGB(15, 16, 19),
 
-    Text              = Color3.fromRGB(22, 30, 36),
-    SubText           = Color3.fromRGB(78, 91, 100),
-    MutedText         = Color3.fromRGB(105, 117, 126),
-    DimText           = Color3.fromRGB(128, 138, 146),
+    Text              = Color3.fromRGB(230, 232, 236),
+    SubText           = Color3.fromRGB(154, 158, 165),
+    MutedText         = Color3.fromRGB(128, 132, 140),
+    DimText           = Color3.fromRGB(109, 113, 121),
 
-    Accent            = Color3.fromRGB(76, 135, 182),
-    AccentHover       = Color3.fromRGB(61, 114, 156),
-    AccentText        = Color3.fromRGB(248, 249, 250),
-    Button            = Color3.fromRGB(220, 227, 231),
-    ButtonHover       = Color3.fromRGB(187, 198, 205),
-    ButtonText        = Color3.fromRGB(29, 38, 45),
-    SliderTrack       = Color3.fromRGB(190, 199, 204),
-    SliderFill        = Color3.fromRGB(76, 135, 182),
-    SliderKnob        = Color3.fromRGB(31, 40, 47),
+    Accent            = Color3.fromRGB(65, 151, 220),
+    AccentHover       = Color3.fromRGB(86, 170, 235),
+    AccentText        = Color3.fromRGB(255, 255, 255),
+    Button            = Color3.fromRGB(37, 39, 42),
+    ButtonHover       = Color3.fromRGB(47, 50, 54),
+    ButtonText        = Color3.fromRGB(230, 232, 236),
+    SliderTrack       = Color3.fromRGB(55, 59, 63),
+    SliderFill        = Color3.fromRGB(65, 151, 220),
+    SliderKnob        = Color3.fromRGB(230, 232, 236),
 
-    Stroke            = Color3.fromRGB(174, 185, 191),
-    Border            = Color3.fromRGB(189, 199, 204),
-    CheckboxBorder    = Color3.fromRGB(131, 145, 155),
+    Stroke            = Color3.fromRGB(55, 59, 63),
+    Border            = Color3.fromRGB(55, 59, 63),
+    CheckboxBorder    = Color3.fromRGB(80, 85, 90),
 
-    Icon              = Color3.fromRGB(94, 108, 117),
-    IconSelected      = Color3.fromRGB(22, 30, 36),
+    Icon              = Color3.fromRGB(154, 158, 165),
+    IconSelected      = Color3.fromRGB(230, 232, 236),
 
-    Success           = Color3.fromRGB(66, 124, 100),
-    Warning           = Color3.fromRGB(142, 105, 54),
-    Danger            = Color3.fromRGB(151, 76, 84),
-    Overlay           = Color3.fromRGB(38, 45, 51),
+    Success           = Color3.fromRGB(134, 207, 172),
+    Warning           = Color3.fromRGB(223, 185, 107),
+    Danger            = Color3.fromRGB(239, 115, 139),
+    Overlay           = Color3.fromRGB(0, 0, 0),
 
-    TopbarText        = Color3.fromRGB(24, 32, 38),
-    TopbarTextHover   = Color3.fromRGB(0, 0, 0),
-    TopbarIcon        = Color3.fromRGB(87, 101, 110),
-    TopbarIconHover   = Color3.fromRGB(22, 30, 36),
+    TopbarText        = Color3.fromRGB(230, 232, 236),
+    TopbarTextHover   = Color3.fromRGB(255, 255, 255),
+    TopbarIcon        = Color3.fromRGB(154, 158, 165),
+    TopbarIconHover   = Color3.fromRGB(230, 232, 236),
 
     -- Legacy keys remain available to existing custom themes.
-    Sky               = Color3.fromRGB(78, 103, 119),
-    SkySoft           = Color3.fromRGB(218, 225, 229),
-    Butter            = Color3.fromRGB(176, 150, 105),
-    Peach             = Color3.fromRGB(177, 133, 125),
-    Mint              = Color3.fromRGB(127, 168, 150),
-    Paper             = Color3.fromRGB(232, 236, 238),
-    Shadow            = Color3.fromRGB(80, 94, 104),
+    Sky               = Color3.fromRGB(65, 151, 220),
+    SkySoft           = Color3.fromRGB(37, 39, 42),
+    Butter            = Color3.fromRGB(223, 185, 107),
+    Peach             = Color3.fromRGB(207, 146, 139),
+    Mint              = Color3.fromRGB(134, 207, 172),
+    Paper             = Color3.fromRGB(27, 29, 32),
+    Shadow            = Color3.fromRGB(0, 0, 0),
 
-    SyntaxKeyword     = Color3.fromRGB(106, 72, 149),
-    SyntaxString      = Color3.fromRGB(65, 118, 82),
-    SyntaxNumber      = Color3.fromRGB(155, 103, 59),
-    SyntaxComment     = Color3.fromRGB(115, 128, 136),
-    SyntaxBuiltin     = Color3.fromRGB(50, 106, 142),
-    SyntaxFunction    = Color3.fromRGB(38, 113, 133),
-    SyntaxSelection   = Color3.fromRGB(171, 194, 210),
+    SyntaxKeyword     = Color3.fromRGB(174, 156, 235),
+    SyntaxString      = Color3.fromRGB(173, 203, 149),
+    SyntaxNumber      = Color3.fromRGB(216, 177, 135),
+    SyntaxComment     = Color3.fromRGB(93, 117, 138),
+    SyntaxBuiltin     = Color3.fromRGB(112, 183, 217),
+    SyntaxFunction    = Color3.fromRGB(144, 207, 222),
+    SyntaxSelection   = Color3.fromRGB(87, 119, 174),
 
-    ControlRadius     = 9,
-    SectionRadius     = 12,
-    PopupRadius       = 12,
-    RadialHover       = Color3.fromRGB(172, 185, 193),
-    Scrollbar         = Color3.fromRGB(135, 149, 159),
+    ControlRadius     = 4,
+    SectionRadius     = 5,
+    PopupRadius       = 6,
+    Scrollbar         = Color3.fromRGB(80, 85, 90),
     ScrollbarTransparency = 0.6,
     ScrollbarThickness    = 2,
 }
@@ -441,10 +331,10 @@ local Defaults = {
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
-    CornerRadius = 15,
+    CornerRadius = 8,
     LeftColumnWidth = 272,
-    ColumnGap = 15,
-    SectionGap = 13,
+    ColumnGap = 12,
+    SectionGap = 10,
     CompactControls = true,
 
     BackgroundTransparency = 0,
@@ -816,7 +706,6 @@ function Section:Button(config)
         Parent = self.Content,
     })
     Corner(btn, config.Corner or theme.ControlRadius)
-    AttachRadialHover(btn, theme)
     local border = FineStroke(btn, config.BorderColor or theme.Border, 0.18)
     BindTheme(window, btn, "BackgroundColor3", colorKey, config.Color)
     BindTheme(window, border, "Color", "Border", config.BorderColor)
@@ -824,7 +713,7 @@ function Section:Button(config)
     local iconOffset = 0
     if config.Icon then
         local icon = CreateIcon(config.Icon, config.IconSize or 14,
-            config.IconColor or theme[textKey], btn.ZIndex + 3)
+            config.IconColor or theme[textKey], btn.ZIndex + 1)
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 12, 0.5, 0)
         icon.Parent = btn
@@ -841,7 +730,7 @@ function Section:Button(config)
         Position = UDim2.fromOffset(12 + iconOffset, 0),
         Size = UDim2.new(1, -(24 + iconOffset), 1, 0),
         TextXAlignment = config.TextXAlignment or (config.Icon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center),
-        ZIndex = btn.ZIndex + 3,
+        ZIndex = btn.ZIndex + 2,
         Parent = btn,
     })
 
@@ -864,7 +753,7 @@ function Section:Button(config)
         if state.Locked then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             PressScale(btn)
-            Ripple(btn, input.Position, theme.RadialHover)
+            Ripple(btn, input.Position, theme[textKey])
         end
     end)
     btn.InputEnded:Connect(function(input)
@@ -2494,17 +2383,17 @@ function Window:_setActiveTab(tab)
         local selected = t == tab
         t.Container.Visible = selected
         Tween(t.ButtonLabel, 0.22, {
-            TextColor3 = selected and self.Theme.AccentText or self.Theme.SubText
+            TextColor3 = selected and self.Theme.Accent or self.Theme.SubText
         }, EASE_SOFT, Enum.EasingDirection.Out)
         if t.ButtonIcon then
             Tween(t.ButtonIcon, 0.22, {
-                ImageColor3 = selected and self.Theme.AccentText or self.Theme.Icon
+                ImageColor3 = selected and self.Theme.Accent or self.Theme.Icon
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Button then
             Tween(t.Button, 0.24, {
                 BackgroundTransparency = selected and 0 or 1,
-                BackgroundColor3 = selected and self.Theme.Accent or self.Theme.Sidebar,
+                BackgroundColor3 = selected and self.Theme.SurfaceHover or self.Theme.Sidebar,
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Accent then
@@ -2645,14 +2534,14 @@ function Window:Tab(config)
         LayoutOrder = self.SidebarOrder,
         Text = "",
         AutoButtonColor = false,
-        ZIndex = 3,
         Parent = self.SidebarList,
     })
     Corner(button, config.Corner or theme.ControlRadius)
-    -- Tab hover uses background tween only; no radial overlay on navigation.\n\n    local icon
+
+    local icon
     if config.Icon then
         icon = CreateIcon(config.Icon, config.IconSize or 14,
-            config.IconColor or theme.Icon, button.ZIndex + 3)
+            config.IconColor or theme.Icon, 2)
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 11, 0.5, 0)
         icon.Parent = button
@@ -2661,7 +2550,6 @@ function Window:Tab(config)
     local label = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = title,
-        ZIndex = button.ZIndex + 3,
         TextColor3 = theme.SubText,
         TextSize = config.TextSize or 12,
         Font = theme.FontMedium,
@@ -2675,7 +2563,6 @@ function Window:Tab(config)
 
     local accent = New("Frame", {
         Name = "Accent",
-        ZIndex = button.ZIndex + 3,
         BackgroundColor3 = config.AccentColor or theme.Accent,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -2776,9 +2663,9 @@ function Window:Tab(config)
     BindTheme(self, accent, "BackgroundColor3", "Accent", config.AccentColor)
     WatchTheme(self, button, function()
         local selected = self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint
-        label.TextColor3 = selected and theme.AccentText or theme.SubText
-        if icon then icon.ImageColor3 = selected and theme.AccentText or (config.IconColor or theme.Icon) end
-        button.BackgroundColor3 = selected and theme.Accent or theme.Sidebar
+        label.TextColor3 = selected and theme.Accent or theme.SubText
+        if icon then icon.ImageColor3 = selected and theme.Accent or (config.IconColor or theme.Icon) end
+        button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Sidebar
         for _, scrollFrame in ipairs({ leftScroll, rightScroll }) do
             StyleScrollBar(scrollFrame, { Thickness = theme.ScrollbarThickness, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
         end
@@ -2788,8 +2675,8 @@ function Window:Tab(config)
     button.MouseEnter:Connect(function()
         if self.ActiveTab ~= tab or self.ActiveScript or self.ActiveBlueprint then
             Tween(button, 0.2, { BackgroundTransparency = 0.5 }, EASE_SOFT, Enum.EasingDirection.Out)
-            HoverTween(label, 0.2, { TextColor3 = theme.Text })
-            if icon then HoverTween(icon, 0.2, { ImageColor3 = theme.Text }) end
+            HoverTween(label, 0.2, { TextColor3 = theme.Accent })
+            if icon then HoverTween(icon, 0.2, { ImageColor3 = theme.Accent }) end
             HoverScale(button, 1.003)
         end
     end)
@@ -6726,7 +6613,6 @@ function PebbleUI:CreateWindow(config)
         BackgroundTransparency = self.BackgroundTransparency,
         BorderSizePixel = 0,
         ClipsDescendants = true,
-        Active = true,
         Parent = screen,
     })
     Corner(main, corner)
@@ -6749,12 +6635,6 @@ function PebbleUI:CreateWindow(config)
     WatchTheme(self, main, function()
         mainGrad.Color = ColorSequence.new(self.Theme.BackgroundTop, self.Theme.BackgroundBottom)
     end)
-    self._MainRadialHover = AttachRadialHover(main, self.Theme, {
-        Spread = 2.15,
-        ZIndex = 1,
-        Color = self.Theme.RadialHover,
-        GlobalMouse = true,
-    })
 
     local sidebar = New("Frame", {
         Name = "Sidebar",
@@ -6763,8 +6643,6 @@ function PebbleUI:CreateWindow(config)
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(8, 8),
         Size = UDim2.new(0, sidebarWidth - 8, 1, -16),
-        Active = true,
-        ZIndex = 2,
         Parent = main,
     })
     Corner(sidebar, math.max(4, corner - 2))
@@ -6772,7 +6650,6 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
-    -- Navigation is an opaque foreground surface. Do not draw radial discs over tabs.
 
     local brand = New("Frame", {
         Name = "Brand", BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -6988,11 +6865,9 @@ function PebbleUI:CreateWindow(config)
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(sidebarWidth + 12, 6),
         Size = UDim2.new(1, -(sidebarWidth + 24), 0, topHeight),
-        Active = true,
         Parent = main,
     })
     self.Topbar = topbar
-    -- Topbar stays in the foreground, without its own hovering overlay.
 
     local titleLabel = New("TextLabel", {
         BackgroundTransparency = 1,
