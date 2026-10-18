@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.6.2-liquid-tabs" }
+local PebbleUI = { Version = "1.6.3-liquid-tabs-layer-fix" }
 
 --============================================================
 -- Services
@@ -6927,6 +6927,9 @@ function PebbleUI:CreateWindow(config)
     local sidebarList = New("Frame", {
         Name = "SidebarList",
         BackgroundTransparency = 1,
+        -- Sibling ZIndex behavior: keep the entire tab list above the liquid pill.
+        -- The button's own ZIndex is not enough when its parent is underneath.
+        ZIndex = 3,
         Position = UDim2.fromOffset(8, 58),
         Size = UDim2.new(1, -16, 1, -68),
         Parent = sidebar,
