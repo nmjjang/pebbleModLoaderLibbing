@@ -6185,7 +6185,7 @@ local function PlayStartupIntro(window)
     local cover = New("CanvasGroup", {
         Name = "StartupIntro",
         BackgroundColor3 = theme.BackgroundTop,
-        BackgroundTransparency = 1, -- Fade somente no fundo, sem esconder os filhos.
+        BackgroundTransparency = 0, -- Fundo opaco desde o primeiro frame, sem preview da UI.
         BorderSizePixel = 0,
         AnchorPoint = main.AnchorPoint,
         Position = main.Position,
@@ -6299,11 +6299,9 @@ local function PlayStartupIntro(window)
         if not cover.Parent then return end
         RunService.RenderStepped:Wait()
 
-        -- O painel de fundo entra sozinho; o gato so comeca depois.
-        local blackFade = Tween(cover, introFadeDuration, {
-            BackgroundTransparency = 0,
-        }, Enum.EasingStyle.Sine)
-        blackFade.Completed:Wait()
+        -- Fundo ja esta opaco antes da ScreenGui ser exibida.
+        -- Pequena pausa preserva o ritmo do loading sem revelar a UI.
+        task.wait(introFadeDuration)
         if not cover.Parent then return end
 
         -- Preload evita que o icon apareca no meio do slide por atraso da textura.
@@ -6421,7 +6419,7 @@ function PebbleUI:CreateWindow(config)
 
     local main = New("Frame", {
         Name = "Main",
-        Visible = true, -- Conteúdo pronto para renderizar; intro opcional por cima.
+        Visible = config.Loading == false, -- Escondida ate o loading terminar.
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = config.Position or Defaults.Position,
         Size = size,
@@ -6969,14 +6967,17 @@ function PebbleUI:CreateWindow(config)
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
 
-    -- Soft launch animation for the entire window.
-    main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
-    local mainScale = EnsureScale(main)
-    mainScale.Scale = 0.99
-    task.defer(function()
-        Tween(main, 0.28, { BackgroundTransparency = self.BackgroundTransparency }, EASE_SOFT, Enum.EasingDirection.Out)
-        Tween(mainScale, 0.28, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
-    end)
+    -- A animacao inicial da janela so roda sem loading.
+    -- Com loading, o painel permanece oculto ate a transicao final.
+    if config.Loading == false then
+        main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
+        local mainScale = EnsureScale(main)
+        mainScale.Scale = 0.99
+        task.defer(function()
+            Tween(main, 0.28, { BackgroundTransparency = self.BackgroundTransparency }, EASE_SOFT, Enum.EasingDirection.Out)
+            Tween(mainScale, 0.28, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+        end)
+    end
 
     local toggleKey = config.ToggleKey or Defaults.ToggleKey
     local inputConn
@@ -7025,12 +7026,15 @@ function PebbleUI:CreateWindow(config)
     self:_CreateScriptExplorer()
     self:_CreateCustomBlueprints()
 
-    -- Só agora a UI está montada. Evita overlays cobrindo a janela incompleta.
-    screen.Enabled = true
+    -- Monta o loading com a ScreenGui DESLIGADA.
+    -- Assim a primeira renderizacao mostra apenas o loading, nunca a UI.
     if config.Loading ~= false then
+        main.Visible = false
         PlayStartupIntro(self)
+        screen.Enabled = true
     else
         main.Visible = true
+        screen.Enabled = true
         task.defer(function()
             if not self.Destroyed then safeCallback(config.OnLoaded, self) end
         end)
