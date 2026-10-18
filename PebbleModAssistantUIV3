@@ -5649,18 +5649,40 @@ do
         local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r or not ui then return end
         local pool = self._bpWirePool or {}; self._bpWirePool = pool
         local used = 0
-        local function segment(a,b,color,transparency)
+        local now = os.clock()
+
+        local function lerpColor(a,b,t)
+            return Color3.new(
+                a.R + (b.R-a.R)*t,
+                a.G + (b.G-a.G)*t,
+                a.B + (b.B-a.B)*t
+            )
+        end
+        local function createSegment(parent,z)
+            local line = New("Frame", {
+                AnchorPoint = Vector2.new(0.5,0.5), BorderSizePixel = 0, ZIndex = z or 23,
+                BackgroundColor3 = Color3.new(1,1,1), Parent = parent
+            })
+            Corner(line, 999)
+            local grad = New("UIGradient", {
+                Rotation = 0,
+                Parent = line,
+            })
+            return { Frame = line, Gradient = grad }
+        end
+        local function applySegment(seg,a,b,startColor,endColor,startAlpha,endAlpha,thickness,z)
             local delta = b-a; local length = delta.Magnitude
-            if length < 0.01 then return end
-            used = used+1
-            local line = pool[used]
-            if not line then
-                line = New("Frame", { AnchorPoint = Vector2.new(0.5,0.5), BorderSizePixel = 0, ZIndex = 23, Parent = ui.WireLayer })
-                pool[used] = line
-            end
+            if length < 0.01 then return false end
+            local frame = seg.Frame; local grad = seg.Gradient
             local middle = (a+b)/2
-            line.Visible = true; line.Position = UDim2.fromOffset(middle.X,middle.Y); line.Size = UDim2.fromOffset(length+1,3)
-            line.Rotation = math.deg(math.atan2(delta.Y,delta.X)); line.BackgroundColor3 = color; line.BackgroundTransparency = transparency or 0.1
+            frame.Visible = true
+            frame.ZIndex = z or frame.ZIndex
+            frame.Position = UDim2.fromOffset(middle.X,middle.Y)
+            frame.Size = UDim2.fromOffset(length + math.max(2, thickness), thickness)
+            frame.Rotation = math.deg(math.atan2(delta.Y,delta.X))
+            grad.Color = ColorSequence.new(startColor,endColor)
+            grad.Transparency = NumberSequence.new(startAlpha,endAlpha)
+            return true
         end
         local function point(endpoint)
             if not endpoint or not endpoint.Button.Parent then return nil end
@@ -5668,32 +5690,87 @@ do
             if not inside(endpoint.Scroll,p) then return nil end
             return p-ui.Board.AbsolutePosition
         end
-        local function curve(a,b,color,transparency)
-            if not a or not b then return end
-            local offset = math.max(55,math.abs(b.X-a.X)*0.45)
-            local c1,c2 = a+Vector2.new(offset,0),b-Vector2.new(offset,0)
+        local function sampleCurve(a,b)
+            local samples = {}
+            local dx = math.abs(b.X-a.X)
+            local dy = math.abs(b.Y-a.Y)
+            local offset = math.max(72, dx*0.42)
+            local lift = math.min(28, dy*0.08)
+            local c1 = a + Vector2.new(offset, -lift)
+            local c2 = b - Vector2.new(offset, -lift)
+            local steps = math.clamp(math.floor((dx + dy) / 12), 32, 72)
             local previous = a
-            for i=1,36 do
-                local t=i/36; local u=1-t
+            for i=1,steps do
+                local t=i/steps; local u=1-t
                 local p=a*(u*u*u)+c1*(3*u*u*t)+c2*(3*u*t*t)+b*(t*t*t)
-                segment(previous,p,color,transparency); previous=p
+                samples[#samples+1] = { previous, p, (t - (0.5/steps)) }
+                previous=p
+            end
+            return samples
+        end
+        local function drawCurve(a,b,startColor,endColor,baseTransparency)
+            if not a or not b then return end
+            local curve = sampleCurve(a,b)
+            local pulse = (now*0.33)%1
+            local radius = 0.16
+            local coreThickness = 4
+            local glowThickness = 10
+            for _,segData in ipairs(curve) do
+                local p0,p1,midT = segData[1],segData[2],segData[3]
+                local t0 = math.max(0, midT - 0.01)
+                local t1 = math.min(1, midT + 0.01)
+                local c0 = lerpColor(startColor,endColor,t0)
+                local c1 = lerpColor(startColor,endColor,t1)
+                local dist = math.abs(midT-pulse)
+                dist = math.min(dist, 1-dist)
+                local highlight = math.clamp(1 - dist/radius, 0, 1)
+                local glowA0 = math.max(0, math.min(1, baseTransparency + 0.58 - highlight*0.25))
+                local glowA1 = glowA0
+                local coreA = math.max(0, math.min(1, baseTransparency + 0.10 - highlight*0.22))
+                local glowC0 = lerpColor(c0, Color3.new(1,1,1), 0.20 + highlight*0.45)
+                local glowC1 = lerpColor(c1, Color3.new(1,1,1), 0.20 + highlight*0.45)
+                local coreC0 = lerpColor(c0, Color3.new(1,1,1), highlight*0.18)
+                local coreC1 = lerpColor(c1, Color3.new(1,1,1), highlight*0.18)
+
+                used = used + 1
+                local glow = pool[used]
+                if not glow then glow = createSegment(ui.WireLayer,22); pool[used] = glow end
+                applySegment(glow,p0,p1,glowC0,glowC1,glowA0,glowA1,glowThickness,22)
+
+                used = used + 1
+                local core = pool[used]
+                if not core then core = createSegment(ui.WireLayer,23); pool[used] = core end
+                applySegment(core,p0,p1,coreC0,coreC1,coreA,coreA,coreThickness,23)
             end
         end
         local endpoints = {}
         for _,e in ipairs(self._bpEndpoints or {}) do endpoints[e.Node .. ":" .. e.Direction .. ":" .. e.Port.Name] = e end
         for _,link in ipairs(r.Links) do
-            local a = endpoints[link.From .. ":out:" .. link.Output]
-            local b = endpoints[link.To .. ":in:" .. link.Input]
-            local node = nodeById(r,link.From)
-            local color = node and definition(node).Color or self.Theme.SubText
-            curve(point(a),point(b),color,(r.Invalid and (r.Invalid[link.From] or r.Invalid[link.To])) and 0.75 or 0.12)
+            local aEndpoint = endpoints[link.From .. ":out:" .. link.Output]
+            local bEndpoint = endpoints[link.To .. ":in:" .. link.Input]
+            local sourceNode = nodeById(r,link.From)
+            local targetNode = nodeById(r,link.To)
+            local sourceDef = sourceNode and definition(sourceNode)
+            local targetDef = targetNode and definition(targetNode)
+            local startColor = sourceDef and sourceDef.Color or self.Theme.Accent
+            local endColor = targetDef and targetDef.Color or self.Theme.Text
+            local invalid = r.Invalid and (r.Invalid[link.From] or r.Invalid[link.To])
+            drawCurve(point(aEndpoint),point(bEndpoint),startColor,endColor,invalid and 0.62 or 0.08)
         end
         if self._bpPending then
-            local p = point(self._bpPending)
+            local pendingPoint = point(self._bpPending)
             local mouse = pointer()-ui.Board.AbsolutePosition
-            if self._bpPending.Direction == "out" then curve(p,mouse,self.Theme.Accent,0.25) else curve(mouse,p,self.Theme.Accent,0.25) end
+            local pendingNode = nodeById(r,self._bpPending.Node)
+            local pendingDef = pendingNode and definition(pendingNode)
+            local activeColor = pendingDef and pendingDef.Color or self.Theme.Accent
+            local white = Color3.new(1,1,1)
+            if self._bpPending.Direction == "out" then
+                drawCurve(pendingPoint,mouse,activeColor,white,0.14)
+            else
+                drawCurve(mouse,pendingPoint,white,activeColor,0.14)
+            end
         end
-        for i=used+1,#pool do pool[i].Visible = false end
+        for i=used+1,#pool do pool[i].Frame.Visible = false end
         -- Grid follows pan and zoom, with a fixed count of reusable line frames.
         local grid = self._bpGridPool or {}; self._bpGridPool=grid
         local spacing = math.max(16,32*r.View.Zoom)
@@ -6040,7 +6117,7 @@ do
         track(RunService.RenderStepped:Connect(function(dt)
             accumulator=accumulator+dt
             if accumulator<1/60 then return end; accumulator=0
-            if not self.Destroyed and self.Visible and self.ActiveBlueprint and self._bpWireDirty then self:_DrawBlueprintWires() end
+            if not self.Destroyed and self.Visible and self.ActiveBlueprint then if self._bpWireDirty or true then self:_DrawBlueprintWires() end end
         end))
         WatchTheme(self,editor,function()
             if self.ActiveBlueprint then self:_BuildBlueprintBoard() end
