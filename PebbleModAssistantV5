@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.8.0-real-minimal-16x9" }
+local PebbleUI = { Version = "1.7.0-real-layout" }
 
 --============================================================
 -- Services
@@ -244,57 +244,57 @@ local DefaultTheme = {
     FontMedium = Enum.Font.GothamMedium,
     FontDisplay = Enum.Font.GothamBold,
 
-    BackgroundTop     = Color3.fromRGB(21, 17, 35),
-    BackgroundBottom  = Color3.fromRGB(21, 17, 35),
-    Sidebar           = Color3.fromRGB(24, 19, 40),
-    SidebarDivider    = Color3.fromRGB(48, 40, 69),
+    BackgroundTop     = Color3.fromRGB(12, 13, 13),
+    BackgroundBottom  = Color3.fromRGB(12, 13, 13),
+    Sidebar           = Color3.fromRGB(15, 16, 16),
+    SidebarDivider    = Color3.fromRGB(35, 37, 38),
 
-    Surface           = Color3.fromRGB(29, 23, 47),
-    Surface2          = Color3.fromRGB(39, 32, 61),
-    SurfaceHover      = Color3.fromRGB(52, 43, 79),
-    Input             = Color3.fromRGB(37, 30, 58),
-    Popup             = Color3.fromRGB(31, 25, 49),
-    CodeBackground    = Color3.fromRGB(20, 16, 34),
+    Surface           = Color3.fromRGB(18, 19, 19),
+    Surface2          = Color3.fromRGB(24, 25, 25),
+    SurfaceHover      = Color3.fromRGB(28, 29, 29),
+    Input             = Color3.fromRGB(20, 21, 21),
+    Popup             = Color3.fromRGB(20, 21, 21),
+    CodeBackground    = Color3.fromRGB(12, 13, 13),
 
-    Text              = Color3.fromRGB(230, 224, 244),
-    SubText           = Color3.fromRGB(169, 155, 193),
-    MutedText         = Color3.fromRGB(136, 120, 161),
-    DimText           = Color3.fromRGB(105, 92, 129),
+    Text              = Color3.fromRGB(230, 232, 236),
+    SubText           = Color3.fromRGB(154, 158, 165),
+    MutedText         = Color3.fromRGB(128, 132, 140),
+    DimText           = Color3.fromRGB(109, 113, 121),
 
-    Accent            = Color3.fromRGB(156, 126, 211),
-    AccentHover       = Color3.fromRGB(177, 149, 229),
-    AccentText        = Color3.fromRGB(251, 248, 255),
-    Button            = Color3.fromRGB(42, 34, 65),
-    ButtonHover       = Color3.fromRGB(57, 46, 82),
-    ButtonText        = Color3.fromRGB(224, 215, 239),
-    SliderTrack       = Color3.fromRGB(62, 51, 87),
-    SliderFill        = Color3.fromRGB(156, 126, 211),
-    SliderKnob        = Color3.fromRGB(231, 218, 250),
+    Accent            = Color3.fromRGB(228, 229, 230),
+    AccentHover       = Color3.fromRGB(255, 255, 255),
+    AccentText        = Color3.fromRGB(18, 19, 19),
+    Button            = Color3.fromRGB(23, 24, 24),
+    ButtonHover       = Color3.fromRGB(36, 37, 37),
+    ButtonText        = Color3.fromRGB(230, 232, 236),
+    SliderTrack       = Color3.fromRGB(55, 59, 63),
+    SliderFill        = Color3.fromRGB(220, 222, 224),
+    SliderKnob        = Color3.fromRGB(230, 232, 236),
 
-    Stroke            = Color3.fromRGB(58, 47, 81),
-    Border            = Color3.fromRGB(58, 47, 81),
-    CheckboxBorder    = Color3.fromRGB(102, 85, 127),
+    Stroke            = Color3.fromRGB(38, 39, 39),
+    Border            = Color3.fromRGB(38, 39, 39),
+    CheckboxBorder    = Color3.fromRGB(80, 85, 90),
 
-    Icon              = Color3.fromRGB(160, 142, 187),
-    IconSelected      = Color3.fromRGB(235, 224, 250),
+    Icon              = Color3.fromRGB(154, 158, 165),
+    IconSelected      = Color3.fromRGB(230, 232, 236),
 
     Success           = Color3.fromRGB(134, 207, 172),
     Warning           = Color3.fromRGB(223, 185, 107),
     Danger            = Color3.fromRGB(239, 115, 139),
     Overlay           = Color3.fromRGB(0, 0, 0),
 
-    TopbarText        = Color3.fromRGB(228, 217, 246),
+    TopbarText        = Color3.fromRGB(230, 232, 236),
     TopbarTextHover   = Color3.fromRGB(255, 255, 255),
-    TopbarIcon        = Color3.fromRGB(158, 143, 183),
-    TopbarIconHover   = Color3.fromRGB(230, 218, 247),
+    TopbarIcon        = Color3.fromRGB(154, 158, 165),
+    TopbarIconHover   = Color3.fromRGB(230, 232, 236),
 
     -- Legacy keys remain available to existing custom themes.
-    Sky               = Color3.fromRGB(156, 126, 211),
-    SkySoft           = Color3.fromRGB(39, 32, 61),
+    Sky               = Color3.fromRGB(65, 151, 220),
+    SkySoft           = Color3.fromRGB(37, 39, 42),
     Butter            = Color3.fromRGB(223, 185, 107),
     Peach             = Color3.fromRGB(207, 146, 139),
     Mint              = Color3.fromRGB(134, 207, 172),
-    Paper             = Color3.fromRGB(29, 23, 47),
+    Paper             = Color3.fromRGB(27, 29, 32),
     Shadow            = Color3.fromRGB(0, 0, 0),
 
     SyntaxKeyword     = Color3.fromRGB(174, 156, 235),
@@ -303,12 +303,12 @@ local DefaultTheme = {
     SyntaxComment     = Color3.fromRGB(93, 117, 138),
     SyntaxBuiltin     = Color3.fromRGB(112, 183, 217),
     SyntaxFunction    = Color3.fromRGB(144, 207, 222),
-    SyntaxSelection   = Color3.fromRGB(96, 73, 139),
+    SyntaxSelection   = Color3.fromRGB(87, 119, 174),
 
-    ControlRadius     = 4,
-    SectionRadius     = 5,
+    ControlRadius     = 6,
+    SectionRadius     = 7,
     PopupRadius       = 6,
-    Scrollbar         = Color3.fromRGB(108, 93, 139),
+    Scrollbar         = Color3.fromRGB(80, 85, 90),
     ScrollbarTransparency = 0.6,
     ScrollbarThickness    = 2,
 }
@@ -317,25 +317,24 @@ PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
     Title = "Pebble UI",
-    RealLayout = true, -- Explorer na esquerda + tabs horizontais no topo
-    Version = "v1.8.0",
+    Version = "v1.6.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(960, 540),
+    Size = UDim2.fromOffset(940, 600),
     Position = UDim2.fromScale(0.5, 0.5),
-    MinSize = Vector2.new(760, 428),
-    MaxSize = Vector2.new(1600, 900),
+    MinSize = Vector2.new(600, 380),
+    MaxSize = Vector2.new(1400, 900),
 
-    TopbarHeight = 42,
-    SidebarWidth = 140,
+    TopbarHeight = 64,
+    SidebarWidth = 190,
     CollapsedSidebarWidth = 64,
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
-    CornerRadius = 9,
-    LeftColumnWidth = nil, -- two balanced columns in 16:9
-    ColumnGap = 14,
-    SectionGap = 12,
+    CornerRadius = 10,
+    LeftColumnWidth = nil,
+    ColumnGap = 12,
+    SectionGap = 10,
     CompactControls = true,
 
     BackgroundTransparency = 0,
@@ -2273,7 +2272,7 @@ function Tab:Section(config)
         Parent = parent,
     })
     Corner(frame, config.Corner or theme.SectionRadius)
-    local border = FineStroke(frame, config.BorderColor or theme.Border, 0.42)
+    local border = FineStroke(frame, config.BorderColor or theme.Border, 0.72)
     BindTheme(self.Window, frame, "BackgroundColor3", "Surface", config.BackgroundColor)
     BindTheme(self.Window, border, "Color", "Border", config.BorderColor)
 
@@ -2325,7 +2324,7 @@ function Tab:Section(config)
     local headerLine = New("Frame", {
         Name = "HeaderLine",
         BackgroundColor3 = theme.Border,
-        BackgroundTransparency = 0.35,
+        BackgroundTransparency = 0.75,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(10, headerHeight),
         Size = UDim2.new(1, -20, 0, 1),
@@ -2384,11 +2383,11 @@ function Window:_setActiveTab(tab)
         local selected = t == tab
         t.Container.Visible = selected
         Tween(t.ButtonLabel, 0.22, {
-            TextColor3 = selected and self.Theme.Accent or self.Theme.SubText
+            TextColor3 = selected and self.Theme.Text or self.Theme.SubText
         }, EASE_SOFT, Enum.EasingDirection.Out)
         if t.ButtonIcon then
             Tween(t.ButtonIcon, 0.22, {
-                ImageColor3 = selected and self.Theme.Accent or self.Theme.Icon
+                ImageColor3 = selected and self.Theme.Text or self.Theme.Icon
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Button then
@@ -2398,7 +2397,13 @@ function Window:_setActiveTab(tab)
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Accent then
-            Tween(t.Accent, 0.22, { BackgroundTransparency = selected and 0 or 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+            Tween(t.Accent, 0.22, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+        end
+        if t.DocumentButton then
+            Tween(t.DocumentButton, 0.18, {
+                BackgroundTransparency = selected and 0 or 0.35,
+                TextColor3 = selected and self.Theme.Text or self.Theme.SubText,
+            }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end
 
@@ -2410,7 +2415,6 @@ end
 -- Keeps the sidebar readable when a tab/display name is wider than the default width.
 -- By default the main window grows together with the sidebar, preserving the content area width.
 function Window:_applySidebarWidth(targetWidth, animated)
-    if self.RealLayout then return self end
     local minWidth = self.Config.SidebarWidth or Defaults.SidebarWidth
     local maxWidth = self.Config.MaxSidebarWidth or Defaults.MaxSidebarWidth
     targetWidth = math.floor(clamp(tonumber(targetWidth) or minWidth, minWidth, maxWidth) + 0.5)
@@ -2460,8 +2464,7 @@ function Window:_applySidebarWidth(targetWidth, animated)
 end
 
 function Window:_fitSidebarText(text, textSize, font, hasIcon, extraPadding)
-    if self.RealLayout then return self end
-    if self.Config.AutoFitSidebar == false then return self end
+    if self.RealStyle or self.Config.AutoFitSidebar == false then return self end
     text = tostring(text or "")
     if text == "" then return self end
 
@@ -2488,9 +2491,8 @@ function Window:TabDivider(config)
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, config.Height or 22),
         LayoutOrder = self.SidebarOrder + 1,
-        Parent = self.RealLayout and self.TabStrip or self.SidebarList,
+        Parent = self.SidebarList,
     })
-    if self.RealLayout then holder.Size = UDim2.fromOffset(10, 30) end
     self.SidebarOrder += 1
 
     if config.Title then
@@ -2538,12 +2540,8 @@ function Window:Tab(config)
         LayoutOrder = self.SidebarOrder,
         Text = "",
         AutoButtonColor = false,
-        Parent = self.RealLayout and self.TabStrip or self.SidebarList,
+        Parent = self.SidebarList,
     })
-    if self.RealLayout then
-        local measured = TextService:GetTextSize(title, config.TextSize or 12, theme.FontMedium, Vector2.new(1000, 30))
-        button.Size = UDim2.fromOffset(math.clamp(measured.X + (config.Icon and 46 or 30), 90, 210), 32)
-    end
     Corner(button, config.Corner or theme.ControlRadius)
 
     local icon
@@ -2580,11 +2578,6 @@ function Window:Tab(config)
         Parent = button,
     })
     Corner(accent, 99)
-    if self.RealLayout then
-        accent.AnchorPoint = Vector2.new(0.5, 1)
-        accent.Position = UDim2.new(0.5, 0, 1, 0)
-        accent.Size = UDim2.new(1, -24, 0, 2)
-    end
 
     local container = New("Frame", {
         Name = title .. "_Container",
@@ -2705,6 +2698,25 @@ function Window:Tab(config)
     button.MouseButton1Up:Connect(function() ReleaseScale(button) end)
     button.MouseButton1Click:Connect(function() self:_setActiveTab(tab) end)
 
+    if self.RealStyle and self.RealTabStrip then
+        local documentTab = New('TextButton', {
+            Name='Document_' .. title, Text=title, Font=theme.FontMedium,
+            TextSize=11, TextColor3=theme.SubText,
+            BackgroundColor3=theme.Surface2, BackgroundTransparency=0.35,
+            BorderSizePixel=0, AutoButtonColor=false,
+            Size=UDim2.fromOffset(math.clamp(#title * 7 + 34, 95, 174),27),
+            LayoutOrder=self.SidebarOrder, Parent=self.RealTabStrip,
+        })
+        Corner(documentTab,5)
+        tab.DocumentButton = documentTab
+        documentTab.MouseButton1Click:Connect(function() self:_setActiveTab(tab) end)
+        documentTab.MouseEnter:Connect(function()
+            if self.ActiveTab ~= tab then documentTab.BackgroundTransparency=0 end
+        end)
+        documentTab.MouseLeave:Connect(function()
+            if self.ActiveTab ~= tab then documentTab.BackgroundTransparency=0.35 end
+        end)
+    end
     if not self.ActiveTab then self:_setActiveTab(tab) end
     return tab
 end
@@ -3501,34 +3513,6 @@ end
 
 function Window:_UpdateScriptLayout()
     if not self.ScriptExplorer or self.Destroyed then return end
-    if self.RealLayout then
-        local width = self.Config.ScriptExplorerWidth or 176
-        width = math.min(width, math.max(138, math.floor(self.Main.AbsoluteSize.X * 0.24)))
-        self._scriptRightInset = 0
-        self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
-        self.ScriptExplorer.Position = UDim2.fromOffset(0, 47)
-        self.ScriptExplorer.Size = UDim2.new(0, width, 1, -47)
-        self.Topbar.Position = UDim2.fromOffset(15, 4)
-        self.Topbar.Size = UDim2.new(1, -62, 0, 39)
-        self.ContentHost.Position = UDim2.fromOffset(width + 14, 96)
-        self.ContentHost.Size = UDim2.new(1, -(width + 28), 1, -108)
-        if self.TabStrip then
-            self.TabStrip.Position = UDim2.fromOffset(width + 9, 51)
-            self.TabStrip.Size = UDim2.new(1, -(width + 20), 0, 36)
-        end
-        if self.ScriptEditor then
-            self.ScriptEditor.Position = self.ContentHost.Position
-            self.ScriptEditor.Size = self.ContentHost.Size
-        end
-        if self.BlueprintEditor then
-            self.BlueprintEditor.Position = self.ContentHost.Position
-            self.BlueprintEditor.Size = self.ContentHost.Size
-            self:_LayoutBlueprintExplorer()
-        end
-        self.CloseButton.Position = UDim2.new(1, -12, 0, 13)
-        if self._PositionGlobalSearch then self._PositionGlobalSearch() end
-        return
-    end
     local desired = self.Config.ScriptExplorerWidth or 192
     local available = self.Main.AbsoluteSize.X - self.SidebarWidth - 336
     local width = math.floor(clamp(available, math.min(148, desired), desired))
@@ -4300,13 +4284,13 @@ function Window:_CreateScriptExplorer()
         AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 8),
         Size = UDim2.new(0, self.Config.ScriptExplorerWidth or 192, 1, -16), ZIndex = 10, Parent = self.Main,
     })
-    Corner(frame, 0)
-    local border = FineStroke(frame, theme.SidebarDivider, 0.86)
+    Corner(frame, 6)
+    local border = FineStroke(frame, theme.SidebarDivider, 0.35)
     BindTheme(self, frame, "BackgroundColor3", "Sidebar")
     BindTheme(self, border, "Color", "SidebarDivider")
     self.ScriptExplorer = frame
     local title = New("TextLabel", {
-        BackgroundTransparency = 1, Text = "Explorer", Font = theme.FontBold, TextSize = 12,
+        BackgroundTransparency = 1, Text = "Explorer", Font = theme.FontMedium, TextSize = 12,
         TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
         Position = UDim2.fromOffset(12, 5), Size = UDim2.new(1, -52, 0, 34), ZIndex = 12, Parent = frame,
     })
@@ -6588,13 +6572,7 @@ function PebbleUI:CreateWindow(config)
     local self = setmetatable({}, Window)
 
     self.Config = config
-    self.RealLayout = config.RealLayout ~= false
-    if self.RealLayout and config.ScriptExplorer == nil then config.ScriptExplorer = true end
-    if self.RealLayout and config.ScriptExplorerWidth == nil then config.ScriptExplorerWidth = 176 end
-    if self.RealLayout then
-        config.AutoFitSidebar = false
-        config.ExpandWindowForSidebar = false
-    end
+    self.RealStyle = config.RealStyle ~= false
     self.Theme = merge(DefaultTheme, config.Theme or {})
     if config.SelectColor then self.Theme.Accent = config.SelectColor end
 
@@ -6623,21 +6601,12 @@ function PebbleUI:CreateWindow(config)
     self.BackgroundTransparency = clamp01(bgTransparency)
 
     local size = config.Size or Defaults.Size
-    if not self.RealLayout and config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
+    if config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
         local width = size.X.Offset + (config.ScriptExplorerWidth or 192) + 12
         if size.X.Scale == 0 then width = math.min(width, (config.MaxSize or Defaults.MaxSize).X) end
         size = UDim2.new(size.X.Scale, width, size.Y.Scale, size.Y.Offset)
     end
-    if self.RealLayout and size.X.Scale == 0 and size.Y.Scale == 0 then
-        local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize
-        if viewport and viewport.X > 0 and viewport.Y > 0 then
-            local factor = math.min(1, (viewport.X - 30) / math.max(1, size.X.Offset), (viewport.Y - 70) / math.max(1, size.Y.Offset))
-            if factor < 1 then
-                size = UDim2.fromOffset(math.floor(size.X.Offset * factor), math.floor(size.Y.Offset * factor))
-            end
-        end
-    end
-    local sidebarWidth = self.RealLayout and 0 or (config.SidebarWidth or Defaults.SidebarWidth)
+    local sidebarWidth = config.SidebarWidth or Defaults.SidebarWidth
     local topHeight = config.TopbarHeight or Defaults.TopbarHeight
     local corner = config.CornerRadius or Defaults.CornerRadius
     self.SidebarWidth = sidebarWidth
@@ -6707,7 +6676,6 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
-    if self.RealLayout then sidebar.Visible = false end
 
     local brand = New("Frame", {
         Name = "Brand", BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -6926,23 +6894,6 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.Topbar = topbar
-    if self.RealLayout then
-        topbar.Position = UDim2.fromOffset(12, 4)
-        topbar.Size = UDim2.new(1, -60, 0, 40)
-        local strip = New("ScrollingFrame", {
-            Name = "TabStrip", BackgroundColor3 = self.Theme.BackgroundTop,
-            BorderSizePixel = 0, Position = UDim2.fromOffset((config.ScriptExplorerWidth or 176) + 9, 51),
-            Size = UDim2.new(1, -((config.ScriptExplorerWidth or 176) + 20), 0, 36),
-            ScrollBarThickness = 0, ScrollingDirection = Enum.ScrollingDirection.X,
-            AutomaticCanvasSize = Enum.AutomaticSize.X, CanvasSize = UDim2.new(),
-            ZIndex = 5, Parent = main,
-        })
-        local stripList = List(strip, 4, Enum.FillDirection.Horizontal)
-        stripList.VerticalAlignment = Enum.VerticalAlignment.Bottom
-        Padding(strip, 3, 3, 0, 0)
-        self.TabStrip = strip
-        BindTheme(self, strip, "BackgroundColor3", "BackgroundTop")
-    end
 
     local titleLabel = New("TextLabel", {
         BackgroundTransparency = 1,
@@ -6962,7 +6913,7 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, titleLabel, "Font", "FontDisplay")
     local topbarLine = New("Frame", {
         Name = "TopbarLine", BackgroundColor3 = self.Theme.Border,
-        BackgroundTransparency = 0.82, BorderSizePixel = 0,
+        BackgroundTransparency = 0.35, BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 1), Parent = topbar,
     })
     BindTheme(self, topbarLine, "BackgroundColor3", "Border")
@@ -7195,10 +7146,18 @@ function PebbleUI:CreateWindow(config)
     local function positionSearch()
         if not closeBtn.Parent then return end
         local inset = self._scriptRightInset or 0
-        searchBar.Position = UDim2.new(1, -(44 + inset), 0, 13)
-        searchResults.Position = UDim2.new(1, -(44 + inset), 0, 41)
-        local available = closeBtn.AbsolutePosition.X - (topbar.AbsolutePosition.X + 110)
-        searchBar.Size = UDim2.fromOffset(math.max(100, math.min(searchWidth, available)), 24)
+        if self.RealStyle then
+            searchBar.AnchorPoint = Vector2.new(0, 0)
+            searchBar.Position = UDim2.fromOffset(16, 131)
+            searchBar.Size = UDim2.new(0, math.max(92, self.SidebarWidth - 32), 0, 29)
+            searchResults.AnchorPoint = Vector2.new(0, 0)
+            searchResults.Position = UDim2.fromOffset(16, 164)
+        else
+            searchBar.Position = UDim2.new(1, -(44 + inset), 0, 13)
+            searchResults.Position = UDim2.new(1, -(44 + inset), 0, 41)
+            local available = closeBtn.AbsolutePosition.X - (topbar.AbsolutePosition.X + 110)
+            searchBar.Size = UDim2.fromOffset(math.max(100, math.min(searchWidth, available)), 24)
+        end
     end
     self._PositionGlobalSearch = positionSearch
     main:GetPropertyChangedSignal("AbsoluteSize"):Connect(positionSearch)
@@ -7212,6 +7171,84 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.ContentHost = contentHost
+
+    if self.RealStyle then
+        -- Real-inspired workbench: framed Explorer, top document area, bottom status.
+        sidebar.Position = UDim2.fromOffset(0, 47)
+        sidebar.Size = UDim2.new(0, sidebarWidth, 1, -73)
+        sidebar.BackgroundTransparency = 0
+        sidebarStroke.Transparency = 1
+        sidebar.ClipsDescendants = false
+        brand.Position = UDim2.fromOffset(13, 3)
+        brand.Size = UDim2.new(1, -26, 0, 38)
+        avatarHolder.Size = UDim2.fromOffset(25, 25)
+        brandLabel.Position = UDim2.fromOffset(34, 0)
+        brandLabel.Size = UDim2.new(1, -34, 1, 0)
+        brandLabel.TextColor3 = self.Theme.Text
+        sidebarList.Position = UDim2.fromOffset(9, 130)
+        sidebarList.Size = UDim2.new(1, -18, 1, -140)
+        topbar.Position = UDim2.fromOffset(sidebarWidth + 9, 47)
+        topbar.Size = UDim2.new(1, -(sidebarWidth + 18), 0, topHeight)
+        titleLabel.Text = 'Workspace  /  ' .. self.Title
+        titleLabel.Font = self.Theme.FontMedium
+        titleLabel.TextSize = 12
+        titleLabel.TextColor3 = self.Theme.SubText
+        titleLabel.Size = UDim2.new(1, -20, 0, 29)
+        local documentTabs = New('ScrollingFrame', {
+            Name='DocumentTabs', BackgroundTransparency=1, BorderSizePixel=0,
+            ScrollBarThickness=0, ScrollingDirection=Enum.ScrollingDirection.X,
+            AutomaticCanvasSize=Enum.AutomaticSize.X, CanvasSize=UDim2.new(),
+            Position=UDim2.fromOffset(0,32), Size=UDim2.new(1,-8,0,31), Parent=topbar,
+        })
+        List(documentTabs, 4, Enum.FillDirection.Horizontal)
+        self.RealTabStrip = documentTabs
+        topbarLine.BackgroundTransparency = 0.76
+        contentHost.Position = UDim2.fromOffset(sidebarWidth + 15, topHeight + 57)
+        contentHost.Size = UDim2.new(1, -(sidebarWidth + 30), 1, -(topHeight + 91))
+        closeBtn.Position = UDim2.new(1, -12, 0, 10)
+        closeBtn.BackgroundTransparency = 1
+        closeStroke.Transparency = 1
+        local head = New('Frame', {Name='RealHeader', BackgroundColor3=self.Theme.Sidebar,
+            BorderSizePixel=0, Size=UDim2.new(1,0,0,47), Parent=main})
+        local headerIcon = CreateIcon('code-2', 17, self.Theme.Text, 5)
+        headerIcon.Position = UDim2.fromOffset(18, 15)
+        headerIcon.Parent = head
+        New('TextLabel', {Name='WorkbenchTitle', Text=config.WorkbenchTitle or 'Pebble',
+            Font=self.Theme.FontBold, TextSize=16, TextColor3=self.Theme.Text,
+            TextXAlignment=Enum.TextXAlignment.Left, BackgroundTransparency=1,
+            Position=UDim2.fromOffset(43,0), Size=UDim2.new(0,175,1,0), Parent=head})
+        local headerLine = New('Frame',{BackgroundColor3=self.Theme.Border,BorderSizePixel=0,
+            Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),Parent=head})
+        BindTheme(self,head,'BackgroundColor3','Sidebar')
+        BindTheme(self,headerLine,'BackgroundColor3','Border')
+        local explorer = New('TextLabel',{Name='ExplorerTitle',BackgroundTransparency=1,
+            Text='Explorer',Font=self.Theme.FontBold,TextSize=15,TextColor3=self.Theme.Text,
+            TextXAlignment=Enum.TextXAlignment.Left,Position=UDim2.fromOffset(16,48),
+            Size=UDim2.new(1,-32,0,32),Parent=sidebar})
+        BindTheme(self,explorer,'TextColor3','Text')
+        local bottom = New('Frame',{Name='StatusBar',BackgroundColor3=self.Theme.Sidebar,
+            BorderSizePixel=0,AnchorPoint=Vector2.new(0,1),Position=UDim2.new(0,0,1,0),
+            Size=UDim2.new(1,0,0,26),Parent=main})
+        local bottomText = New('TextLabel',{BackgroundTransparency=1,Text='◈  Pebble UI     •     Ready',
+            Font=self.Theme.FontMedium,TextSize=10,TextColor3=self.Theme.SubText,
+            Position=UDim2.fromOffset(14,0),Size=UDim2.new(0.7,0,1,0),
+            TextXAlignment=Enum.TextXAlignment.Left,Parent=bottom})
+        local status = New('TextLabel',{BackgroundTransparency=1,Text='●  ONLINE',
+            Font=self.Theme.FontMedium,TextSize=10,TextColor3=Color3.fromRGB(74,195,123),
+            AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,-14,0,0),
+            Size=UDim2.fromOffset(100,26),TextXAlignment=Enum.TextXAlignment.Right,Parent=bottom})
+        self.StatusBar = bottom
+        self.StatusLabel = status
+        searchInput.PlaceholderText = 'Search files...'
+        searchBar.BackgroundColor3 = self.Theme.Input
+        searchBorder.Transparency = 1
+        searchBar.ZIndex = 80
+        searchInput.ZIndex = 81
+        searchIcon.ZIndex = 81
+        searchResults.ZIndex = 90
+        -- The search remains interactive and searches tabs, sections, and controls.
+        task.defer(positionSearch)
+    end
 
     -- The profile card follows the same auto-fit rules as tabs, so long display names stay readable.
     self:_fitSidebarText(displayName, 12, self.Theme.FontDisplay or self.Theme.FontBold, true, 12)
