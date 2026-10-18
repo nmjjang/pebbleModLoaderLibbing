@@ -6891,8 +6891,17 @@ function PebbleUI:CreateWindow(config)
             if main.Parent then fit(main.AbsoluteSize.X, main.AbsoluteSize.Y, true) end
         end)
         if config.Resizable ~= false then
-            -- Minimal three-line diagonal grip: no panel, subtle until hover/drag.
-            -- The hit area is intentionally bigger than the visible strokes.
+            -- Grip rendered as a ScreenGui sibling so Main.ClipsDescendants
+            -- and other panels cannot hide or intercept the resize handle.
+            local gripLayer = New("Frame", {
+                Name = "ResizeGripLayer",
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                Size = UDim2.fromScale(1, 1),
+                ZIndex = 9999,
+                Active = false,
+                Parent = screen,
+            })
             local grip = New("TextButton", {
                 Name = "ResizeGrip",
                 Text = "",
@@ -6900,12 +6909,30 @@ function PebbleUI:CreateWindow(config)
                 BackgroundTransparency = 1,
                 BorderSizePixel = 0,
                 AnchorPoint = Vector2.new(1, 1),
-                Position = UDim2.new(1, -2, 1, -2),
-                Size = UDim2.fromOffset(32, 32),
-                ZIndex = 4500,
+                Size = UDim2.fromOffset(34, 34),
+                ZIndex = 10000,
                 Active = true,
-                Parent = main,
+                Parent = gripLayer,
             })
+            local function updateGripPosition()
+                if not grip.Parent or not main.Parent then return end
+                -- Absolute coordinates avoid UIScale and AnchorPoint drift.
+                local bottomRight = main.AbsolutePosition + main.AbsoluteSize
+                local localPoint = bottomRight - gripLayer.AbsolutePosition
+                grip.Position = UDim2.fromOffset(localPoint.X - 2, localPoint.Y - 2)
+                grip.Visible = main.Visible and screen.Enabled
+            end
+            table.insert(self._scriptConnections,
+                main:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateGripPosition))
+            table.insert(self._scriptConnections,
+                main:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateGripPosition))
+            table.insert(self._scriptConnections,
+                main:GetPropertyChangedSignal("Visible"):Connect(updateGripPosition))
+            table.insert(self._scriptConnections,
+                gripLayer:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateGripPosition))
+            table.insert(self._scriptConnections,
+                screen:GetPropertyChangedSignal("Enabled"):Connect(updateGripPosition))
+            task.defer(updateGripPosition)
             local gripLines = {}
             for i = 0, 2 do
                 local line = New("Frame", {
@@ -6914,11 +6941,10 @@ function PebbleUI:CreateWindow(config)
                     BackgroundTransparency = 0.65,
                     BorderSizePixel = 0,
                     AnchorPoint = Vector2.new(0.5, 0.5),
-                    -- Parallel diagonal strokes, tucked into the bottom-right.
-                    Position = UDim2.fromOffset(18 + i * 4, 18 + i * 4),
-                    Size = UDim2.fromOffset(12 - i * 3, 2),
+                    Position = UDim2.fromOffset(15 + i * 5, 15 + i * 5),
+                    Size = UDim2.fromOffset(15 - i * 3, 2),
                     Rotation = -45,
-                    ZIndex = 4501,
+                    ZIndex = 10001,
                     Parent = grip,
                 })
                 Corner(line, 99)
@@ -6974,6 +7000,7 @@ function PebbleUI:CreateWindow(config)
                 top = clamp(top, margin, math.max(margin, viewport.Y - margin - h))
                 main.Size = UDim2.fromOffset(w, h)
                 main.Position = UDim2.fromOffset(left + w / 2, top + h / 2)
+                updateGripPosition()
             end)
             local ended = UserInputService.InputEnded:Connect(function(input)
                 if active and ((touchInput and input == touchInput) or (not touchInput and input.UserInputType == Enum.UserInputType.MouseButton1)) then
@@ -6984,6 +7011,10 @@ function PebbleUI:CreateWindow(config)
             end)
             table.insert(self._scriptConnections, changed)
             table.insert(self._scriptConnections, ended)
+            screen.Destroying:Connect(function()
+                active = false
+                if gripLayer.Parent then gripLayer:Destroy() end
+            end)
         end
         local camera = workspace.CurrentCamera
         if camera then
