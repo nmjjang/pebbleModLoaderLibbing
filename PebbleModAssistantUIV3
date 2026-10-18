@@ -6614,7 +6614,7 @@ local function AttachParticleBackground(window, parent, options)
             BackgroundColor3 = particleColor(),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            AnchorPoint = Vector2.new(0, 0.5),
+            AnchorPoint = Vector2.new(0.5, 0.5),
             Size = UDim2.fromOffset(0, lineThickness),
             Rotation = 0,
             Visible = false,
@@ -6672,7 +6672,7 @@ local function AttachParticleBackground(window, parent, options)
                     local line = lines[used]
                     local fade = 1 - (distance / radius)
                     line.Visible = true
-                    line.Position = UDim2.fromOffset(ax, ay)
+                    line.Position = UDim2.fromOffset((ax + bx) / 2, (ay + by) / 2)
                     line.Size = UDim2.fromOffset(math.max(2, distance), lineThickness)
                     line.Rotation = math.deg((math.atan2 and math.atan2(dy, dx)) or math.atan(dy, dx))
                     line.BackgroundTransparency = 1 - (lineOpacity * fade)
