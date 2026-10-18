@@ -6178,6 +6178,7 @@ local function PlayStartupIntro(window)
     local main = window.Main
     local theme = window.Theme
     local duration = math.max(0.15, tonumber(config.LoadingDuration) or 2.4)
+    local introFadeDuration = math.max(0.08, tonumber(config.LoadingIntroFadeDuration) or 0.28)
     local titleText = tostring(config.LoadingTitle or window.Title)
     local iconName = config.LoadingIcon or "cat"
 
@@ -6188,7 +6189,7 @@ local function PlayStartupIntro(window)
         AnchorPoint = main.AnchorPoint,
         Position = main.Position,
         Size = main.Size,
-        GroupTransparency = 0,
+        GroupTransparency = 1, -- A janelona preta nasce invisivel e faz fade-in primeiro.
         ZIndex = 10000,
         Active = true,
         Parent = window.ScreenGui,
@@ -6279,6 +6280,12 @@ local function PlayStartupIntro(window)
         end
         if not cover.Parent then return end
         RunService.RenderStepped:Wait()
+
+        -- Primeiro aparece a janelona preta inteira com um fade-in curto.
+        local introFade = Tween(cover, introFadeDuration, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
+        introFade.Completed:Wait()
+        if not cover.Parent then return end
+        task.wait(0.03)
 
         -- Preload evita que o icon apareca no meio do slide por atraso da textura.
         if logo.Image ~= "" then
