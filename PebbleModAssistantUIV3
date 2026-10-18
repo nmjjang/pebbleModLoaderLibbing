@@ -1,9 +1,5 @@
 local PebbleUI = { Version = "1.6.1-particle-performance" }
-
---============================================================
 -- Services
---============================================================
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ContextActionService = game:GetService("ContextActionService")
@@ -12,18 +8,12 @@ local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
-
 assert(RunService:IsClient(), "PebbleUI must be loaded on the client.")
 local LocalPlayer = Players.LocalPlayer
 assert(LocalPlayer, "Local player unavailable.")
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
---============================================================
 -- Lucide
---============================================================
-
 local LucideIcons = {}
-
 do
     local ok, result = pcall(function()
         return loadstring(game:HttpGet(
@@ -36,26 +26,19 @@ do
         warn("[PebbleUI] Failed to load Lucide:", result)
     end
 end
-
 local function GetIcon(name)
     if typeof(name) ~= "string" or name == "" then return "" end
     if string.match(name, "^rbxassetid://") then return name end
     return LucideIcons[name] or ""
 end
-
---============================================================
 -- Utilities
---============================================================
-
 local function clamp(v, a, b) return math.max(a, math.min(b, v)) end
 local function clamp01(v) return math.clamp(tonumber(v) or 0, 0, 1) end
-
 local function safeCallback(cb, ...)
     if type(cb) ~= "function" then return end
     local ok, err = pcall(cb, ...)
     if not ok then warn("[PebbleUI] Callback error:", err) end
 end
-
 local function copyTable(t)
     local out = {}
     for k, v in pairs(t or {}) do
@@ -63,7 +46,6 @@ local function copyTable(t)
     end
     return out
 end
-
 local function merge(base, override)
     local out = copyTable(base)
     for k, v in pairs(override or {}) do
@@ -75,20 +57,17 @@ local function merge(base, override)
     end
     return out
 end
-
 local function New(className, props)
     local obj = Instance.new(className)
     for k, v in pairs(props or {}) do obj[k] = v end
     return obj
 end
-
 local function Corner(parent, radius)
     return New("UICorner", {
         CornerRadius = UDim.new(0, radius or 4),
         Parent = parent,
     })
 end
-
 local function Stroke(parent, color, thickness, transparency)
     return New("UIStroke", {
         Color = color or Color3.fromRGB(60, 60, 60),
@@ -99,7 +78,6 @@ local function Stroke(parent, color, thickness, transparency)
         Parent = parent,
     })
 end
-
 local function Padding(parent, l, r, t, b)
     return New("UIPadding", {
         PaddingLeft = UDim.new(0, l or 0),
@@ -109,7 +87,6 @@ local function Padding(parent, l, r, t, b)
         Parent = parent,
     })
 end
-
 local function List(parent, gap, fill)
     return New("UIListLayout", {
         SortOrder = Enum.SortOrder.LayoutOrder,
@@ -118,8 +95,6 @@ local function List(parent, gap, fill)
         Parent = parent,
     })
 end
-
--- ============ DISCREET SCROLLBAR ============
 -- Applies a "thin and gray" style to a ScrollingFrame
 local function StyleScrollBar(sf, opts)
     opts = opts or {}
@@ -130,34 +105,45 @@ local function StyleScrollBar(sf, opts)
     sf.VerticalScrollBarPosition = opts.Position or Enum.VerticalScrollBarPosition.Right
     return sf
 end
-
--- ============ ANIMATION HELPERS ============
-
 local EASE_OUT    = Enum.EasingStyle.Quint
 local EASE_SOFT   = Enum.EasingStyle.Quart
 local EASE_SETTLE = Enum.EasingStyle.Quart
-
+local activeTweens = setmetatable({}, { __mode = "k" })
 local function Tween(obj, duration, props, style, direction)
-    local t = TweenService:Create(
-        obj,
-        TweenInfo.new(duration or 0.28,
-            style or EASE_OUT,
-            direction or Enum.EasingDirection.Out),
-        props
-    )
-    t:Play()
-    return t
+    if not obj or not obj.Parent then return end
+    local prior = activeTweens[obj]
+    if prior then
+        for property in pairs(props) do
+            local old = prior[property]
+            if old then old:Cancel(); prior[property] = nil end
+        end
+    else
+        prior = {}
+        activeTweens[obj] = prior
+    end
+    local unchanged = true
+    for property, value in pairs(props) do
+        if obj[property] ~= value then unchanged = false; break end
+    end
+    if unchanged then return end
+    local tween = TweenService:Create(obj, TweenInfo.new(duration or 0.28,
+        style or EASE_OUT, direction or Enum.EasingDirection.Out), props)
+    for property in pairs(props) do prior[property] = tween end
+    tween:Play()
+    tween.Completed:Once(function()
+        if activeTweens[obj] ~= prior then return end
+        for property in pairs(props) do
+            if prior[property] == tween then prior[property] = nil end
+        end
+    end)
+    return tween
 end
-
 local function HoverTween(obj, duration, props)
     return Tween(obj, duration or 0.22, props, EASE_SOFT, Enum.EasingDirection.Out)
 end
-
 local function SettleTween(obj, props)
     return Tween(obj, 0.32, props, EASE_SETTLE, Enum.EasingDirection.Out)
 end
-
--- ============ SUBTLE MOTION HELPERS ============
 -- Centralized micro-interactions used across the whole library.
 local function EnsureScale(obj)
     local scale = obj:FindFirstChildOfClass("UIScale")
@@ -166,8 +152,8 @@ local function EnsureScale(obj)
     end
     return scale
 end
-
 local function PopIn(obj, delayTime)
+    if PebbleUI.LowMotion then return end
     local scale = EnsureScale(obj)
     scale.Scale = 0.992
     task.delay(delayTime or 0, function()
@@ -175,29 +161,24 @@ local function PopIn(obj, delayTime)
         Tween(scale, 0.22, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
     end)
 end
-
 local function HoverScale(obj, overScale)
     local scale = EnsureScale(obj)
     Tween(scale, 0.18, { Scale = overScale or 1.003 }, EASE_SOFT, Enum.EasingDirection.Out)
 end
-
 local function RestScale(obj)
     local scale = EnsureScale(obj)
     Tween(scale, 0.22, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
 end
-
 local function PressScale(obj)
     local scale = EnsureScale(obj)
     Tween(scale, 0.09, { Scale = 0.99 }, EASE_SOFT, Enum.EasingDirection.Out)
 end
-
 local function ReleaseScale(obj)
     local scale = EnsureScale(obj)
     Tween(scale, 0.18, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
 end
-
 local function Ripple(button, inputPosition, color)
-    if not button or not button.Parent then return end
+    if PebbleUI.LowMotion or not button or not button.Parent then return end
     button.ClipsDescendants = true
     local size = math.max(button.AbsoluteSize.X, button.AbsoluteSize.Y) * 1.5
     local pos = inputPosition
@@ -207,7 +188,6 @@ local function Ripple(button, inputPosition, color)
         x = pos.X - button.AbsolutePosition.X
         y = pos.Y - button.AbsolutePosition.Y
     end
-
     local ripple = New("Frame", {
         Name = "Ripple",
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -228,39 +208,30 @@ local function Ripple(button, inputPosition, color)
         if ripple then ripple:Destroy() end
     end)
 end
-
 local function FineStroke(parent, color, transparency)
     return Stroke(parent, color, 1, transparency == nil and 0.2 or transparency)
 end
-
---============================================================
 -- Theme
---============================================================
-
 local DefaultTheme = {
     -- Default dark skin: base / panel / raised with blue accent.
     Font = Enum.Font.Gotham,
     FontBold = Enum.Font.GothamBold,
     FontMedium = Enum.Font.GothamMedium,
     FontDisplay = Enum.Font.GothamBold,
-
     BackgroundTop     = Color3.fromRGB(15, 16, 19),
     BackgroundBottom  = Color3.fromRGB(15, 16, 19),
     Sidebar           = Color3.fromRGB(27, 29, 32),
     SidebarDivider    = Color3.fromRGB(55, 59, 63),
-
     Surface           = Color3.fromRGB(27, 29, 32),
     Surface2          = Color3.fromRGB(37, 39, 42),
     SurfaceHover      = Color3.fromRGB(45, 48, 52),
     Input             = Color3.fromRGB(15, 16, 19),
     Popup             = Color3.fromRGB(27, 29, 32),
     CodeBackground    = Color3.fromRGB(15, 16, 19),
-
     Text              = Color3.fromRGB(230, 232, 236),
     SubText           = Color3.fromRGB(154, 158, 165),
     MutedText         = Color3.fromRGB(128, 132, 140),
     DimText           = Color3.fromRGB(109, 113, 121),
-
     Accent            = Color3.fromRGB(65, 151, 220),
     AccentHover       = Color3.fromRGB(86, 170, 235),
     AccentText        = Color3.fromRGB(255, 255, 255),
@@ -270,24 +241,19 @@ local DefaultTheme = {
     SliderTrack       = Color3.fromRGB(55, 59, 63),
     SliderFill        = Color3.fromRGB(65, 151, 220),
     SliderKnob        = Color3.fromRGB(230, 232, 236),
-
     Stroke            = Color3.fromRGB(55, 59, 63),
     Border            = Color3.fromRGB(55, 59, 63),
     CheckboxBorder    = Color3.fromRGB(80, 85, 90),
-
     Icon              = Color3.fromRGB(154, 158, 165),
     IconSelected      = Color3.fromRGB(230, 232, 236),
-
     Success           = Color3.fromRGB(134, 207, 172),
     Warning           = Color3.fromRGB(223, 185, 107),
     Danger            = Color3.fromRGB(239, 115, 139),
     Overlay           = Color3.fromRGB(0, 0, 0),
-
     TopbarText        = Color3.fromRGB(230, 232, 236),
     TopbarTextHover   = Color3.fromRGB(255, 255, 255),
     TopbarIcon        = Color3.fromRGB(154, 158, 165),
     TopbarIconHover   = Color3.fromRGB(230, 232, 236),
-
     -- Legacy keys remain available to existing custom themes.
     Sky               = Color3.fromRGB(65, 151, 220),
     SkySoft           = Color3.fromRGB(37, 39, 42),
@@ -296,7 +262,6 @@ local DefaultTheme = {
     Mint              = Color3.fromRGB(134, 207, 172),
     Paper             = Color3.fromRGB(27, 29, 32),
     Shadow            = Color3.fromRGB(0, 0, 0),
-
     SyntaxKeyword     = Color3.fromRGB(174, 156, 235),
     SyntaxString      = Color3.fromRGB(173, 203, 149),
     SyntaxNumber      = Color3.fromRGB(216, 177, 135),
@@ -304,7 +269,6 @@ local DefaultTheme = {
     SyntaxBuiltin     = Color3.fromRGB(112, 183, 217),
     SyntaxFunction    = Color3.fromRGB(144, 207, 222),
     SyntaxSelection   = Color3.fromRGB(87, 119, 174),
-
     ControlRadius     = 4,
     SectionRadius     = 5,
     PopupRadius       = 6,
@@ -312,19 +276,20 @@ local DefaultTheme = {
     ScrollbarTransparency = 0.6,
     ScrollbarThickness    = 2,
 }
-
 PebbleUI.Theme = DefaultTheme
-
+PebbleUI.LowMotion = false
+function PebbleUI:SetPerformanceMode(enabled)
+    self.LowMotion = enabled == true
+    return self
+end
 local Defaults = {
     Title = "Pebble UI",
     Version = "v1.6.0",
     Icon = "sparkles",
-
     Size = UDim2.fromOffset(780, 520),
     Position = UDim2.fromScale(0.5, 0.5),
     MinSize = Vector2.new(600, 380),
     MaxSize = Vector2.new(1400, 900),
-
     TopbarHeight = 42,
     SidebarWidth = 140,
     CollapsedSidebarWidth = 64,
@@ -336,35 +301,22 @@ local Defaults = {
     ColumnGap = 12,
     SectionGap = 10,
     CompactControls = true,
-
     BackgroundTransparency = 0,
-
     ToggleKey = Enum.KeyCode.RightShift,
     Draggable = true,
     Resizable = true,
 }
-
---============================================================
 -- Classes
---============================================================
-
 local Window = {}
 Window.__index = Window
-
 local Tab = {}
 Tab.__index = Tab
-
 local Section = {}
 Section.__index = Section
-
---============================================================
 -- Theme binding
---============================================================
-
 local function ThemeValue(window, key)
     return (window.Theme and window.Theme[key]) or DefaultTheme[key]
 end
-
 local function BindTheme(window, instance, prop, key, override)
     if override ~= nil then
         instance[prop] = override
@@ -374,11 +326,9 @@ local function BindTheme(window, instance, prop, key, override)
     if v ~= nil then instance[prop] = v end
     table.insert(window._themeBindings, { Instance = instance, Property = prop, Key = key })
 end
-
 local function WatchTheme(window, instance, render)
     table.insert(window._themeRenderers, { Instance = instance, Render = render })
 end
-
 function Window:_RefreshTheme()
     for i = #self._themeBindings, 1, -1 do
         local b = self._themeBindings[i]
@@ -398,11 +348,7 @@ function Window:_RefreshTheme()
         end
     end
 end
-
---============================================================
 -- Icon helper
---============================================================
-
 local function CreateIcon(name, size, color, zIndex)
     local icon = New("ImageLabel", {
         Name = "Icon_" .. tostring(name),
@@ -415,11 +361,7 @@ local function CreateIcon(name, size, color, zIndex)
     })
     return icon
 end
-
---============================================================
 -- Row helper
---============================================================
-
 local function RowHeight(config, base)
     if config.Size then return nil end
     if config.Height then return config.Height end
@@ -428,7 +370,6 @@ local function RowHeight(config, base)
     end
     return base or 30
 end
-
 local function MakeRow(section, config, height)
     local window = section.Window
     local theme = window.Theme
@@ -440,7 +381,6 @@ local function MakeRow(section, config, height)
         ZIndex = config.ZIndex or 2,
     })
     row.Parent = section.Content
-
     local iconOffset = 0
     if config.Icon then
         local icon = CreateIcon(config.Icon, config.IconSize or 13,
@@ -451,9 +391,7 @@ local function MakeRow(section, config, height)
         icon.Parent = row
         iconOffset = (config.IconSize or 13) + 7
     end
-
     local hasDesc = (config.Desc or config.Description) ~= nil
-
     local title = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or config.Name or "Element",
@@ -471,7 +409,6 @@ local function MakeRow(section, config, height)
     title.Parent = row
     BindTheme(window, title, "TextColor3", "Text", config.TextColor)
     BindTheme(window, title, "Font", "FontMedium", config.Font)
-
     local desc
     if hasDesc then
         desc = New("TextLabel", {
@@ -491,14 +428,9 @@ local function MakeRow(section, config, height)
         BindTheme(window, desc, "TextColor3", "SubText", config.DescColor)
         BindTheme(window, desc, "Font", "Font")
     end
-
     return row, title, desc
 end
-
---============================================================
 -- Lock API
---============================================================
-
 local function AttachLockAPI(element, state, render)
     element.Locked = state.Locked == true
     local function update()
@@ -519,31 +451,25 @@ local function AttachLockAPI(element, state, render)
     update()
     return element
 end
-
---============================================================
 -- Section
---============================================================
-
 function Section:_nextOrder()
     self.Order += 1
     return self.Order
 end
-
 function Section:_recalculateHeight()
+    if self._heightQueued then return end
+    self._heightQueued = true
     task.defer(function()
+        self._heightQueued = false
         if not self.Frame.Parent then return end
-        local contentH = self.Layout.AbsoluteContentSize.Y
-        local target = self.HeaderHeight + self.PaddingBottom + contentH
-        Tween(self.Frame, 0.25, {
-            Size = UDim2.new(1, 0, 0, target)
-        }, EASE_SOFT, Enum.EasingDirection.Out)
+        local height = self.HeaderHeight + self.PaddingBottom + self.Layout.AbsoluteContentSize.Y
+        if self._lastHeight ~= height then
+            self._lastHeight = height
+            self.Frame.Size = UDim2.new(1, 0, 0, height)
+        end
     end)
 end
-
---============================================================
 -- Divider / Space / Tag / Paragraph / Code
---============================================================
-
 function Section:Divider(config)
     config = config or {}
     local holder = New("Frame", {
@@ -564,7 +490,6 @@ function Section:Divider(config)
     })
     return { __type = "Divider", UI = holder }
 end
-
 function Section:Space(height)
     local holder = New("Frame", {
         Name = "Space",
@@ -575,7 +500,6 @@ function Section:Space(height)
     })
     return { __type = "Space", UI = holder }
 end
-
 function Section:Tag(config)
     config = config or {}
     local theme = self.Window.Theme
@@ -600,7 +524,6 @@ function Section:Tag(config)
         Parent = holder,
     })
     Corner(tag, config.Corner or theme.ControlRadius)
-
     BindTheme(self.Window, tag, "BackgroundColor3", "Accent", config.Color)
     BindTheme(self.Window, tag, "TextColor3", "AccentText", config.TextColor)
     BindTheme(self.Window, tag, "Font", "FontMedium")
@@ -609,7 +532,6 @@ function Section:Tag(config)
     function obj:Get() return self.Value end
     return obj
 end
-
 function Section:Paragraph(config)
     config = config or {}
     local theme = self.Window.Theme
@@ -641,7 +563,6 @@ function Section:Paragraph(config)
     function obj:Get() return self.Value end
     return obj
 end
-
 function Section:Code(config)
     config = config or {}
     local theme = self.Window.Theme
@@ -656,7 +577,6 @@ function Section:Code(config)
     })
     Corner(holder, config.Corner or theme.ControlRadius)
     Padding(holder, 10, 10, 8, 8)
-
     local code = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Code or config.Text or 'print("Hello")',
@@ -679,11 +599,7 @@ function Section:Code(config)
     function obj:Get() return self.Value end
     return obj
 end
-
---============================================================
 -- Button
---============================================================
-
 function Section:Button(config)
     config = config or {}
     local window = self.Window
@@ -693,7 +609,6 @@ function Section:Button(config)
     local hoverKey = primary and "AccentHover" or "ButtonHover"
     local textKey = primary and "AccentText" or "ButtonText"
     local h = RowHeight(config, 28)
-
     local btn = New("TextButton", {
         Name = config.Title or "Button",
         BackgroundColor3 = config.Color or theme[colorKey],
@@ -709,7 +624,6 @@ function Section:Button(config)
     local border = FineStroke(btn, config.BorderColor or theme.Border, 0.18)
     BindTheme(window, btn, "BackgroundColor3", colorKey, config.Color)
     BindTheme(window, border, "Color", "Border", config.BorderColor)
-
     local iconOffset = 0
     if config.Icon then
         local icon = CreateIcon(config.Icon, config.IconSize or 14,
@@ -720,7 +634,6 @@ function Section:Button(config)
         BindTheme(window, icon, "ImageColor3", textKey, config.IconColor)
         iconOffset = (config.IconSize or 14) + 9
     end
-
     local label = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or "Button",
@@ -733,12 +646,10 @@ function Section:Button(config)
         ZIndex = btn.ZIndex + 2,
         Parent = btn,
     })
-
     BindTheme(window, label, "TextColor3", textKey, config.TextColor)
     BindTheme(window, label, "Font", "FontMedium", config.Font)
     local state = { Locked = config.Locked or false }
     local obj = { __type = "Button", UIElements = { Button = btn, Label = label } }
-
     btn.MouseEnter:Connect(function()
         if state.Locked then return end
         HoverTween(btn, 0.18, { BackgroundColor3 = config.HoverColor or theme[hoverKey] })
@@ -748,7 +659,6 @@ function Section:Button(config)
         HoverTween(btn, 0.24, { BackgroundColor3 = config.Color or theme[colorKey] })
         RestScale(btn)
     end)
-
     btn.InputBegan:Connect(function(input)
         if state.Locked then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -766,7 +676,6 @@ function Section:Button(config)
         if state.Locked then return end
         safeCallback(config.Callback)
     end)
-
     local function renderLocked()
         local locked = obj.Locked
         state.Locked = locked
@@ -775,43 +684,32 @@ function Section:Button(config)
     end
     AttachLockAPI(obj, state, renderLocked)
     WatchTheme(window, btn, renderLocked)
-
     function obj:SetText(t) label.Text = tostring(t); return self end
     PopIn(btn, 0.02)
     return obj
 end
-
---============================================================
 -- Checkbox
---============================================================
-
 function Section:Checkbox(config)
     config = config or {}
     local window = self.Window
     local theme = window.Theme
-
     local keyConfig = config.Keybind
     if keyConfig == nil or keyConfig == true then
         keyConfig = {}
     elseif typeof(keyConfig) == "EnumItem" or type(keyConfig) == "string" then
         keyConfig = { Value = keyConfig }
     end
-
     local hasKeybind = keyConfig ~= false
     local hasValueText = config.ValueText ~= nil
-
     local boxSize = config.BoxSize or 13
     local leftAligned = config.CheckboxSide ~= "Right"
     local keyWidth = hasKeybind and ((type(keyConfig) == "table" and keyConfig.Width) or config.KeybindWidth or 34) or 0
     local keyGap = config.KeybindGap or 7
     local boxRightPadding = config.BoxRightPadding or 0
-
     local reserve = leftAligned and 0 or (boxSize + boxRightPadding + 10)
     if hasKeybind then reserve += keyWidth + keyGap end
     if hasValueText then reserve += (config.ValueWidth or 48) + 6 end
-
     config.RightReserve = config.RightReserve or reserve
-
     local row, title, desc = MakeRow(self, config, RowHeight(config, 26))
     if leftAligned then
         local shift = boxSize + 8
@@ -826,7 +724,6 @@ function Section:Checkbox(config)
             desc.Size = UDim2.new(desc.Size.X.Scale, desc.Size.X.Offset - shift, desc.Size.Y.Scale, desc.Size.Y.Offset)
         end
     end
-
     local box = New("TextButton", {
         Name = "Checkbox",
         AnchorPoint = Vector2.new(leftAligned and 0 or 1, 0.5),
@@ -840,20 +737,16 @@ function Section:Checkbox(config)
         Parent = row,
     })
     Corner(box, config.Corner or 3)
-
     local boxStroke = Stroke(box,
         config.BorderColor or theme.CheckboxBorder,
         config.BorderThickness or 1,
         config.BorderTransparency == nil and 0 or config.BorderTransparency)
-
     local state = {
         Value = config.Default == true,
         Locked = config.Locked or false,
         CheckboxIcon = config.CheckboxIcon or config.CheckIcon or "check",
     }
-
     local checkIcon
-
     local function rebuildCheckIcon()
         if checkIcon then checkIcon:Destroy(); checkIcon = nil end
         if state.CheckboxIcon == nil or state.CheckboxIcon == false or state.CheckboxIcon == "" then return end
@@ -866,18 +759,15 @@ function Section:Checkbox(config)
         checkIcon.Parent = box
     end
     rebuildCheckIcon()
-
     local obj = {
         __type = "Checkbox",
         UIElements = { Row = row, Title = title, Box = box, Border = boxStroke, Check = checkIcon },
     }
-
     local function render(animated)
         local activeColor = config.ActiveColor or theme.Accent
         local inactiveColor = config.BoxColor or theme.Input
         local activeBorderColor = config.ActiveBorderColor or activeColor
         local inactiveBorderColor = config.BorderColor or theme.CheckboxBorder
-
         if animated then
             HoverTween(box, 0.2, { BackgroundColor3 = state.Value and activeColor or inactiveColor })
             HoverTween(boxStroke, 0.2, { Color = state.Value and activeBorderColor or inactiveBorderColor })
@@ -892,7 +782,6 @@ function Section:Checkbox(config)
         title.TextColor3 = state.Locked and theme.MutedText or (config.TextColor or theme.Text)
         box.BackgroundTransparency = state.Locked and 0.5 or 0
     end
-
     function obj:Set(v, fireCallback)
         state.Value = v == true
         render(true)
@@ -901,7 +790,6 @@ function Section:Checkbox(config)
     end
     function obj:Get() return state.Value end
     function obj:Toggle(fire) return self:Set(not state.Value, fire ~= false) end
-
     local function toggleCheckbox()
         if state.Locked then return end
         PressScale(box)
@@ -921,13 +809,9 @@ function Section:Checkbox(config)
     })
     labelHitArea.MouseButton1Click:Connect(toggleCheckbox)
     obj.UIElements.HitArea = labelHitArea
-
     local rightCursor = leftAligned and 0 or (boxRightPadding + boxSize + keyGap)
-
-    --========== KEYBIND ==========
     if hasKeybind then
         keyConfig = keyConfig or {}
-
         local display = New("TextButton", {
             Name = "CheckboxKeybind",
             AnchorPoint = Vector2.new(1, 0.5),
@@ -947,9 +831,7 @@ function Section:Checkbox(config)
             ZIndex = keyConfig.ZIndex or 8,
             Parent = row,
         })
-
         rightCursor += keyWidth + 6
-
         local initialKey = keyConfig.Value or keyConfig.Default
         local keyState = {
             Value = initialKey,
@@ -958,22 +840,17 @@ function Section:Checkbox(config)
             Locked = keyConfig.Locked == true,
             Blacklist = keyConfig.Blacklist or {},
         }
-
         local keyObj = { __type = "Keybind", UIElements = { Display = display, Row = row } }
-
         local function normalizeKey(v)
             if typeof(v) == "EnumItem" then return v end
             if type(v) == "string" then return Enum.KeyCode[v] end
             return nil
         end
-
         keyState.Value = normalizeKey(keyState.Value)
-
         local function keyName(v)
             if typeof(v) == "EnumItem" then return v.Name end
             return keyConfig.EmptyText or keyConfig.Display or "="
         end
-
         local function renderKey()
             if keyState.Picking then
                 display.Text = keyConfig.PickingText or "..."
@@ -986,7 +863,6 @@ function Section:Checkbox(config)
                 display.TextColor3 = keyConfig.TextColor or theme.DimText
             end
         end
-
         function keyObj:Set(v, fire)
             keyState.Value = normalizeKey(v)
             keyState.Picking = false
@@ -1010,7 +886,6 @@ function Section:Checkbox(config)
             safeCallback(keyConfig.OnPicking, true)
             return self
         end
-
         display.MouseEnter:Connect(function()
             if not state.Locked and not keyState.Locked and not keyState.Picking then
                 HoverTween(display, 0.2, { TextColor3 = keyConfig.HoverColor or theme.Text })
@@ -1018,7 +893,6 @@ function Section:Checkbox(config)
         end)
         display.MouseLeave:Connect(renderKey)
         display.MouseButton1Click:Connect(function() keyObj:Pick() end)
-
         local keyConn
         keyConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
             if not row.Parent then
@@ -1027,7 +901,6 @@ function Section:Checkbox(config)
             end
             local key = input.KeyCode
             if key == Enum.KeyCode.Unknown then return end
-
             if keyState.Picking then
                 if key == Enum.KeyCode.Escape then
                     keyState.Value = keyState.PreviousValue
@@ -1046,7 +919,6 @@ function Section:Checkbox(config)
                     if normalizeKey(b) == key then blocked = true break end
                 end
                 if blocked then return end
-
                 keyState.Value = key
                 keyState.Picking = false
                 renderKey()
@@ -1054,28 +926,21 @@ function Section:Checkbox(config)
                 safeCallback(keyConfig.OnPicking, false)
                 return
             end
-
             if gameProcessed or state.Locked or keyState.Locked then return end
-
             if keyState.Value and key == keyState.Value then
                 obj:Set(not state.Value, true)
                 safeCallback(keyConfig.OnTriggered, state.Value, key)
             end
         end)
-
         obj.Keybind = keyObj
         obj.UIElements.Keybind = display
-
         function obj:SetKeybind(v, fire) keyObj:Set(v, fire); return self end
         function obj:GetKeybind() return keyObj:Get() end
         function obj:ClearKeybind(fire) keyObj:Clear(fire); return self end
-
         BindTheme(window, display, "Font", "Font", keyConfig.Font)
         WatchTheme(window, display, renderKey)
         renderKey()
     end
-
-    --========== VALUE TEXT ==========
     if hasValueText then
         local valueWidth = config.ValueWidth or 48
         local valueLabel = New("TextLabel", {
@@ -1096,43 +961,32 @@ function Section:Checkbox(config)
         obj.UIElements.ValueText = valueLabel
         function obj:SetValueText(v) valueLabel.Text = tostring(v); return self end
     end
-
     AttachLockAPI(obj, state, function() render(false) end)
     WatchTheme(window, row, function() render(false) end)
     render(false)
     return obj
 end
-
 function Section:Toggle(config)
     local obj = self:Checkbox(config or {})
     obj.__type = "Toggle"
     return obj
 end
-
---============================================================
 -- Slider
---============================================================
-
 function Section:Slider(config)
     config = config or {}
     local window = self.Window
     local theme = window.Theme
-
     local min = tonumber(config.Min) or 0
     local max = tonumber(config.Max) or 100
     if min > max then min, max = max, min end
-
     local step = tonumber(config.Step) or tonumber(config.Increment) or 1
     if step <= 0 then step = 1 end
-
     local function snap(v)
         v = clamp(tonumber(v) or min, min, max)
         local s = math.floor(((v - min) / step) + 0.5)
         return clamp(min + (s * step), min, max)
     end
-
     local default = snap(tonumber(config.Default or config.Value) or min)
-
     local holder = New("Frame", {
         Name = config.Title or "Slider",
         BackgroundTransparency = 1,
@@ -1140,7 +994,6 @@ function Section:Slider(config)
         LayoutOrder = self:_nextOrder(),
         Parent = self.Content,
     })
-
     local title = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or "Slider",
@@ -1151,7 +1004,6 @@ function Section:Slider(config)
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = holder,
     })
-
     -- Clicking the visible number enters direct numeric editing.
     local valueLabel = New("TextButton", {
         Name = "SliderValueButton",
@@ -1188,7 +1040,6 @@ function Section:Slider(config)
         Parent = holder,
     })
     Corner(valueInput, 4)
-
     -- A generous hit area keeps the thin visual rail easy to drag.
     local track = New("TextButton", {
         Name = "SliderHitArea",
@@ -1210,7 +1061,6 @@ function Section:Slider(config)
         Parent = track,
     })
     Corner(rail, 2)
-
     local fill = New("Frame", {
         BackgroundColor3 = config.FillColor or theme.SliderFill,
         BorderSizePixel = 0,
@@ -1218,7 +1068,6 @@ function Section:Slider(config)
         Parent = rail,
     })
     Corner(fill, 99)
-
     local knob = New("Frame", {
         BackgroundColor3 = config.KnobColor or theme.SliderKnob,
         BorderSizePixel = 0,
@@ -1238,18 +1087,15 @@ function Section:Slider(config)
     BindTheme(window, valueInput, "Font", "Font", config.Font)
     BindTheme(window, title, "Font", "Font", config.Font)
     BindTheme(window, valueLabel, "Font", "Font", config.Font)
-
     local state = {
         Value = default,
         Locked = config.Locked or false,
         Dragging = false,
     }
-
     local obj = {
         __type = "Slider",
         UIElements = { Holder = holder, Title = title, Track = track, Rail = rail, Fill = fill, Knob = knob, Value = valueLabel, ValueInput = valueInput },
     }
-
     local function format(v)
         if config.Format then
             local ok, r = pcall(config.Format, v)
@@ -1258,29 +1104,33 @@ function Section:Slider(config)
         if step < 1 then return string.format("%.2f", v) end
         return tostring(v)
     end
-
     local lastText = ""
     local function render()
         local range = max - min
         local ratio = range == 0 and 0 or clamp((state.Value - min) / range, 0, 1)
-        Tween(fill, 0.18, { Size = UDim2.new(ratio, 0, 1, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
-        Tween(knob, 0.18, { Position = UDim2.new(ratio, 0, 0.5, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
-
+        local fillSize = UDim2.new(ratio, 0, 1, 0)
+        local knobPosition = UDim2.new(ratio, 0, 0.5, 0)
+        if state.Dragging then
+            fill.Size, knob.Position = fillSize, knobPosition
+        else
+            Tween(fill, 0.12, { Size = fillSize })
+            Tween(knob, 0.12, { Position = knobPosition })
+        end
         local newText = (config.Prefix or "") .. format(state.Value) .. (config.Suffix or "")
         if newText ~= lastText then
             lastText = newText
             valueLabel.Text = newText
         end
     end
-
     function obj:Set(v, fire)
-        state.Value = snap(tonumber(v) or state.Value)
+        local value = snap(tonumber(v) or state.Value)
+        if value == state.Value then return self end
+        state.Value = value
         render()
-        if fire ~= false then safeCallback(config.Callback, state.Value) end
+        if fire ~= false then safeCallback(config.Callback, value) end
         return self
     end
     function obj:Get() return state.Value end
-
     local editStartingValue = default
     local editing = false
     local function stopEditing(enterPressed)
@@ -1308,13 +1158,11 @@ function Section:Slider(config)
     valueInput.FocusLost:Connect(function(enterPressed)
         stopEditing(enterPressed)
     end)
-
     local function updateFromX(x)
         local width = math.max(1, track.AbsoluteSize.X)
         local ratio = clamp((x - track.AbsolutePosition.X) / width, 0, 1)
         obj:Set(min + ((max - min) * ratio), true)
     end
-
     track.MouseEnter:Connect(function()
         Tween(knob, 0.22, {
             Size = UDim2.fromOffset((config.KnobSize or 6) + 3, (config.KnobSize or 6) + 3)
@@ -1327,7 +1175,6 @@ function Section:Slider(config)
             }, EASE_OUT, Enum.EasingDirection.Out)
         end
     end)
-
     track.InputBegan:Connect(function(input)
         if state.Locked then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -1357,7 +1204,6 @@ function Section:Slider(config)
             end
         end
     end)
-
     local function renderLocked()
         if state.Locked then
             state.Dragging = false
@@ -1373,16 +1219,11 @@ function Section:Slider(config)
     render()
     return obj
 end
-
---============================================================
 -- Input
---============================================================
-
 function Section:Input(config)
     config = config or {}
     local window = self.Window
     local theme = window.Theme
-
     local compact = config.Compact
     if compact == nil then compact = window.Config.CompactControls ~= false end
     local holder = New("Frame", {
@@ -1392,7 +1233,6 @@ function Section:Input(config)
         LayoutOrder = self:_nextOrder(),
         Parent = self.Content,
     })
-
     local title = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or "Input",
@@ -1404,7 +1244,6 @@ function Section:Input(config)
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = holder,
     })
-
     local box = New("TextBox", {
         BackgroundColor3 = config.BackgroundColor or theme.Input,
         BorderSizePixel = 0,
@@ -1430,7 +1269,6 @@ function Section:Input(config)
     BindTheme(window, box, "PlaceholderColor3", "DimText", config.PlaceholderColor)
     BindTheme(window, box, "BackgroundColor3", "Input", config.BackgroundColor)
     BindTheme(window, inputStroke, "Color", "Border")
-
     box.Focused:Connect(function()
         Tween(box, 0.22, { BackgroundColor3 = config.FocusColor or theme.Surface2 }, EASE_OUT, Enum.EasingDirection.Out)
         Tween(inputStroke, 0.22, { Color = theme.Accent, Transparency = 0.05 }, EASE_SOFT, Enum.EasingDirection.Out)
@@ -1439,10 +1277,8 @@ function Section:Input(config)
         Tween(box, 0.25, { BackgroundColor3 = config.BackgroundColor or theme.Input }, EASE_OUT, Enum.EasingDirection.Out)
         Tween(inputStroke, 0.25, { Color = theme.Border, Transparency = 0.25 }, EASE_SOFT, Enum.EasingDirection.Out)
     end)
-
     local state = { Value = box.Text, Locked = config.Locked or false }
     local obj = { __type = "Input", UIElements = { Holder = holder, Title = title, Input = box } }
-
     function obj:Set(v, fire)
         state.Value = tostring(v or "")
         box.Text = state.Value
@@ -1450,13 +1286,11 @@ function Section:Input(config)
         return self
     end
     function obj:Get() return state.Value end
-
     box.FocusLost:Connect(function(enter)
         if state.Locked then return end
         state.Value = box.Text
         safeCallback(config.Callback, state.Value, enter)
     end)
-
     local function renderLocked()
         box.TextEditable = not state.Locked
         if state.Locked and box:IsFocused() then box:ReleaseFocus() end
@@ -1467,11 +1301,7 @@ function Section:Input(config)
     WatchTheme(window, holder, renderLocked)
     return obj
 end
-
---============================================================
 -- Keybind standalone
---============================================================
-
 function Section:Keybind(config)
     config = config or {}
     local window = self.Window
@@ -1482,9 +1312,7 @@ function Section:Keybind(config)
     local emptyText = config.Display or config.Text or "="
     local requestedReserve = config.RightReserve or 0
     config.RightReserve = math.max(requestedReserve, displayMinWidth + displayRightPadding + 10)
-
     local row, title, desc = MakeRow(self, config, RowHeight(config, math.max(26, displayHeight)))
-
     local display = New("TextButton", {
         Name = "StandaloneKeybind",
         BackgroundColor3 = config.KeyBackgroundColor or theme.Surface2,
@@ -1505,18 +1333,14 @@ function Section:Keybind(config)
     })
     Corner(display, config.DisplayCorner or theme.ControlRadius)
     local displayStroke = FineStroke(display, config.KeyBorderColor or theme.Border, 0.55)
-
     local state = {
         Value = config.Value or config.Default or nil,
         Locked = config.Locked or false,
         Picking = false,
         Blacklist = config.Blacklist or { Enum.KeyCode.Escape },
     }
-
     local obj = { __type = "Keybind", UIElements = { Row = row, Title = title, Display = display, Border = displayStroke } }
-
     local hovered = false
-
     local function render()
         if state.Picking then
             display.Text = "..."
@@ -1525,7 +1349,6 @@ function Section:Keybind(config)
             display.Text = typeof(state.Value) == "EnumItem" and state.Value.Name or emptyText
             display.TextColor3 = config.KeyTextColor or theme.Accent
         end
-
         -- Keep short keys square; allow longer names to fit without overlapping the labels.
         local textBounds = TextService:GetTextSize(display.Text, display.TextSize,
             display.Font, Vector2.new(10000, displayHeight))
@@ -1536,13 +1359,11 @@ function Section:Keybind(config)
         if desc then
             desc.Size = UDim2.new(1, -(desc.Position.X.Offset + reserve), desc.Size.Y.Scale, desc.Size.Y.Offset)
         end
-
         local highlighted = state.Picking or (hovered and not state.Locked)
         display.BackgroundColor3 = highlighted and (config.KeyHoverColor or theme.SurfaceHover)
             or (config.KeyBackgroundColor or theme.Surface2)
         displayStroke.Transparency = highlighted and 0.18 or 0.55
     end
-
     display.MouseEnter:Connect(function()
         hovered = true
         render()
@@ -1551,7 +1372,6 @@ function Section:Keybind(config)
         hovered = false
         render()
     end)
-
     function obj:Set(v, fire)
         state.Value = v
         render()
@@ -1559,13 +1379,11 @@ function Section:Keybind(config)
         return self
     end
     function obj:Get() return state.Value end
-
     display.MouseButton1Click:Connect(function()
         if state.Locked then return end
         state.Picking = true
         render()
     end)
-
     local conn
     conn = UserInputService.InputBegan:Connect(function(input, gp)
         if not row.Parent then conn:Disconnect() return end
@@ -1577,7 +1395,6 @@ function Section:Keybind(config)
         render()
         safeCallback(config.Callback, key)
     end)
-
     BindTheme(window, display, "Font", "FontMedium", config.KeyFont)
     BindTheme(window, displayStroke, "Color", "Border", config.KeyBorderColor)
     local function renderLocked()
@@ -1591,21 +1408,15 @@ function Section:Keybind(config)
     render()
     return obj
 end
-
---============================================================
 -- Dropdown
---============================================================
-
 function Section:Dropdown(config)
     config = config or {}
     local window = self.Window
     local theme = window.Theme
-
     local values = config.Values or {}
     local multi = config.Multi == true
     local current = config.Value or config.Default
     if multi and type(current) ~= "table" then current = {} end
-
     local compact = config.Compact
     if compact == nil then compact = window.Config.CompactControls ~= false end
     local holder = New("Frame", {
@@ -1615,7 +1426,6 @@ function Section:Dropdown(config)
         LayoutOrder = self:_nextOrder(),
         Parent = self.Content,
     })
-
     local title = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or "Dropdown",
@@ -1627,7 +1437,6 @@ function Section:Dropdown(config)
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = holder,
     })
-
     local selector = New("TextButton", {
         Name = "Selector",
         BackgroundColor3 = config.BackgroundColor or theme.Input,
@@ -1645,7 +1454,6 @@ function Section:Dropdown(config)
     BindTheme(window, selector, "BackgroundColor3", "Input", config.BackgroundColor)
     BindTheme(window, selectorStroke, "Color", "Border", config.BorderColor)
     BindTheme(window, title, "Font", "Font", config.Font)
-
     local valueLabel = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = "",
@@ -1659,7 +1467,6 @@ function Section:Dropdown(config)
         ZIndex = selector.ZIndex + 1,
         Parent = selector,
     })
-
     BindTheme(window, valueLabel, "TextColor3", "SubText", config.ValueColor)
     BindTheme(window, valueLabel, "Font", "Font")
     local chev = CreateIcon("chevron-down", 14, theme.MutedText, selector.ZIndex + 2)
@@ -1667,7 +1474,6 @@ function Section:Dropdown(config)
     chev.Position = UDim2.new(1, -8, 0.5, 0)
     chev.Parent = selector
     BindTheme(window, chev, "ImageColor3", "MutedText")
-
     local menu = New("Frame", {
         Name = "DropdownMenu",
         BackgroundColor3 = config.MenuColor or theme.Popup,
@@ -1683,7 +1489,6 @@ function Section:Dropdown(config)
     local menuStroke = FineStroke(menu, theme.Border, 0.18)
     BindTheme(window, menu, "BackgroundColor3", "Popup", config.MenuColor)
     BindTheme(window, menuStroke, "Color", "Border")
-
     local scroll = New("ScrollingFrame", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -1696,7 +1501,6 @@ function Section:Dropdown(config)
     StyleScrollBar(scroll, { Thickness = theme.ScrollbarThickness, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
     Padding(scroll, 5, 5, 5, 5)
     List(scroll, 4)
-
     selector.MouseEnter:Connect(function()
         Tween(selectorStroke, 0.18, { Color = theme.Accent, Transparency = 0.12 }, EASE_SOFT, Enum.EasingDirection.Out)
         HoverScale(selector, 1.002)
@@ -1705,21 +1509,17 @@ function Section:Dropdown(config)
         Tween(selectorStroke, 0.22, { Color = theme.Border, Transparency = 0.25 }, EASE_SOFT, Enum.EasingDirection.Out)
         RestScale(selector)
     end)
-
     local state = {
         Value = current,
         Values = values,
         Open = false,
         Locked = config.Locked or false,
     }
-
     local obj = {
         __type = "Dropdown",
         UIElements = { Holder = holder, Title = title, Selector = selector, Value = valueLabel, Menu = menu, Scroll = scroll },
     }
-
     local followConn = nil
-
     local function valueToText()
         if multi then
             if #state.Value == 0 then return config.Placeholder or "Select..." end
@@ -1730,15 +1530,12 @@ function Section:Dropdown(config)
         if state.Value == nil then return config.Placeholder or "Select..." end
         return tostring(state.Value)
     end
-
     local function renderValue() valueLabel.Text = valueToText() end
-
     local function getMenuHeight()
         local c = math.min(#state.Values, config.MaxVisible or 6)
         if c <= 0 then return 10 end
         return c * (config.ItemHeight or 24) + math.max(0, c - 1) * 4 + 10
     end
-
     local function updateMenuPosition()
         if not state.Open or not selector.Parent or not menu.Parent then return end
         local sp = selector.AbsolutePosition
@@ -1747,44 +1544,35 @@ function Section:Dropdown(config)
         local gap = config.MenuGap or 6
         local targetH = getMenuHeight()
         local w = ss.X
-
         local x = sp.X
         local belowY = sp.Y + ss.Y + gap
         local aboveY = sp.Y - targetH - gap
         local y = belowY
-
         if belowY + targetH > screenSize.Y and aboveY >= 0 then y = aboveY end
         if x + w > screenSize.X then x = math.max(0, screenSize.X - w) end
         x = math.max(0, x)
-
         menu.Position = UDim2.fromOffset(x, y)
         menu.Size = UDim2.fromOffset(w, menu.Size.Y.Offset)
     end
-
     local function stopFollowing()
         if followConn then followConn:Disconnect(); followConn = nil end
     end
-
     local function closeMenu(instant)
         if not state.Open and not menu.Visible then return end
         state.Open = false
         stopFollowing()
         if window.ActiveDropdown == obj then window.ActiveDropdown = nil end
-
         Tween(chev, 0.28, { Rotation = 0 }, EASE_SOFT, Enum.EasingDirection.Out)
-
         if instant then
             menu.Size = UDim2.fromOffset(menu.Size.X.Offset, 0)
             menu.Visible = false
             return
         end
-
         Tween(menu, 0.22, { Size = UDim2.fromOffset(menu.Size.X.Offset, 0) }, EASE_SOFT, Enum.EasingDirection.Out)
         task.delay(0.24, function()
             if not state.Open and menu.Parent then menu.Visible = false end
         end)
     end
-
     local function openMenu()
         if state.Locked or state.Open then return end
         if window.ActiveDropdown and window.ActiveDropdown ~= obj then
@@ -1793,15 +1581,12 @@ function Section:Dropdown(config)
         window.ActiveDropdown = obj
         state.Open = true
         menu.Visible = true
-
         Tween(chev, 0.28, { Rotation = 180 }, EASE_SOFT, Enum.EasingDirection.Out)
-
         local targetH = getMenuHeight()
         local w = selector.AbsoluteSize.X
         menu.Size = UDim2.fromOffset(w, 0)
         updateMenuPosition()
         Tween(menu, 0.26, { Size = UDim2.fromOffset(w, targetH) }, EASE_SOFT, Enum.EasingDirection.Out)
-
         stopFollowing()
         followConn = RunService.RenderStepped:Connect(function()
             if not state.Open or not selector.Parent or not menu.Parent
@@ -1812,7 +1597,6 @@ function Section:Dropdown(config)
             updateMenuPosition()
         end)
     end
-
     local function clearMenu()
         for _, c in ipairs(scroll:GetChildren()) do
             if not c:IsA("UIListLayout") and not c:IsA("UIPadding") then
@@ -1820,7 +1604,6 @@ function Section:Dropdown(config)
             end
         end
     end
-
     local function rebuild()
         clearMenu()
         for i, value in ipairs(state.Values) do
@@ -1844,14 +1627,12 @@ function Section:Dropdown(config)
             BindTheme(window, item, "TextColor3", "Text")
             BindTheme(window, item, "Font", "Font")
             BindTheme(window, item, "BackgroundColor3", "Surface2", config.ItemColor)
-
             item.MouseEnter:Connect(function()
                 HoverTween(item, 0.22, { BackgroundColor3 = config.ItemHoverColor or theme.SurfaceHover })
             end)
             item.MouseLeave:Connect(function()
                 HoverTween(item, 0.26, { BackgroundColor3 = config.ItemColor or theme.Surface2 })
             end)
-
             item.MouseButton1Click:Connect(function()
                 if state.Locked then return end
                 if multi then
@@ -1874,7 +1655,6 @@ function Section:Dropdown(config)
             Tween(menu, 0.24, { Size = UDim2.fromOffset(selector.AbsoluteSize.X, getMenuHeight()) }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end
-
     function obj:Open() openMenu(); return self end
     function obj:Close() closeMenu(false); return self end
     function obj:Toggle()
@@ -1895,18 +1675,15 @@ function Section:Dropdown(config)
         renderValue()
         return self
     end
-
     selector.MouseButton1Click:Connect(function()
         if state.Locked then return end
         obj:Toggle()
     end)
-
     holder.Destroying:Connect(function()
         stopFollowing()
         if window.ActiveDropdown == obj then window.ActiveDropdown = nil end
         if menu then menu:Destroy() end
     end)
-
     local function renderLocked()
         if state.Locked then closeMenu(true) end
         title.TextColor3 = state.Locked and theme.MutedText or (config.TextColor or theme.Text)
@@ -1919,21 +1696,15 @@ function Section:Dropdown(config)
     renderValue()
     return obj
 end
-
---============================================================
 -- Colorpicker
---============================================================
-
 function Section:Colorpicker(config)
     config = config or {}
     local window = self.Window
     local theme = window.Theme
     config.RightReserve = config.RightReserve or 40
-
     local row, title = MakeRow(self, config, RowHeight(config, 26))
     local initial = config.Default or config.Value or Color3.new(1, 1, 1)
     local h, s, v = Color3.toHSV(initial)
-
     local swatch = New("TextButton", {
         Name = "ColorSwatch",
         AnchorPoint = Vector2.new(1, 0.5),
@@ -1951,15 +1722,12 @@ function Section:Colorpicker(config)
     Corner(swatch, config.Corner or theme.ControlRadius)
     local swatchStroke = FineStroke(swatch, theme.Border, 0.12)
     BindTheme(window, swatchStroke, "Color", "Border")
-
     local state = { Value = initial, Locked = config.Locked or false, Open = false }
-
     local popupWidth = config.PopupWidth or 240
     local fieldHeight = config.FieldHeight or 120
     local bottomHeight = config.BottomHeight or 42
     local hueHeight = config.HueHeight or 8
     local popupHeight = fieldHeight + bottomHeight
-
     local popup = New("Frame", {
         Name = "ColorpickerPopup",
         BackgroundColor3 = config.PopupBackground or theme.Popup,
@@ -1975,7 +1743,6 @@ function Section:Colorpicker(config)
     local popupStroke = FineStroke(popup, theme.Border, 0.12)
     BindTheme(window, popup, "BackgroundColor3", "Popup", config.PopupBackground)
     BindTheme(window, popupStroke, "Color", "Border")
-
     local svArea = New("TextButton", {
         BackgroundColor3 = Color3.fromHSV(h, 1, 1),
         BorderSizePixel = 0,
@@ -1986,7 +1753,6 @@ function Section:Colorpicker(config)
         ZIndex = popup.ZIndex + 1,
         Parent = popup,
     })
-
     local whiteLayer = New("Frame", {
         BackgroundColor3 = Color3.new(1, 1, 1),
         BorderSizePixel = 0,
@@ -2001,7 +1767,6 @@ function Section:Colorpicker(config)
         }),
         Parent = whiteLayer,
     })
-
     local blackLayer = New("Frame", {
         BackgroundColor3 = Color3.new(0, 0, 0),
         BorderSizePixel = 0,
@@ -2017,7 +1782,6 @@ function Section:Colorpicker(config)
         }),
         Parent = blackLayer,
     })
-
     local svPicker = New("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Size = UDim2.fromOffset(18, 18),
@@ -2027,7 +1791,6 @@ function Section:Colorpicker(config)
     })
     Corner(svPicker, 99)
     Stroke(svPicker, Color3.new(1, 1, 1), 2, 0)
-
     local hueBar = New("TextButton", {
         BackgroundColor3 = Color3.new(1, 1, 1),
         BorderSizePixel = 0,
@@ -2052,7 +1815,6 @@ function Section:Colorpicker(config)
         }),
         Parent = hueBar,
     })
-
     local hueKnob = New("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Size = UDim2.fromOffset(16, 16),
@@ -2063,7 +1825,6 @@ function Section:Colorpicker(config)
     })
     Corner(hueKnob, 99)
     Stroke(hueKnob, Color3.new(1, 1, 1), 2, 0)
-
     local closeBtn = New("TextButton", {
         AnchorPoint = Vector2.new(1, 0),
         Position = UDim2.new(1, -5, 0, 5),
@@ -2085,12 +1846,10 @@ function Section:Colorpicker(config)
     BindTheme(window, closeBtn, "BackgroundColor3", "Accent")
     BindTheme(window, closeBtn, "TextColor3", "AccentText")
     BindTheme(window, closeStroke, "Color", "AccentHover")
-
     local obj = {
         __type = "Colorpicker",
         UIElements = { Row = row, Title = title, Swatch = swatch, Popup = popup },
     }
-
     local function updatePopupPosition()
         local screenSize = window.ScreenGui.AbsoluteSize
         if screenSize.X <= 0 then
@@ -2103,7 +1862,6 @@ function Section:Colorpicker(config)
         local gap = 6
         local x = sp.X + ss.X - popupWidth
         local y = sp.Y + ss.Y + gap
-
         if y + popupHeight > screenSize.Y - margin then
             y = sp.Y - popupHeight - gap
         end
@@ -2111,7 +1869,6 @@ function Section:Colorpicker(config)
         y = clamp(y, margin, math.max(margin, screenSize.Y - popupHeight - margin))
         popup.Position = UDim2.fromOffset(x, y)
     end
-
     local function render(fire)
         state.Value = Color3.fromHSV(h, s, v)
         local hc = Color3.fromHSV(h, 1, 1)
@@ -2122,9 +1879,7 @@ function Section:Colorpicker(config)
         hueKnob.BackgroundColor3 = hc
         if fire ~= false then safeCallback(config.Callback, state.Value) end
     end
-
     local draggingSV, draggingHue = false, false
-
     local function updateSV(pos)
         local p = svArea.AbsolutePosition
         local sz = svArea.AbsoluteSize
@@ -2133,7 +1888,6 @@ function Section:Colorpicker(config)
         v = 1 - clamp((pos.Y - p.Y) / sz.Y, 0, 1)
         render(true)
     end
-
     local function updateHue(pos)
         local p = hueBar.AbsolutePosition
         local sz = hueBar.AbsoluteSize
@@ -2141,7 +1895,6 @@ function Section:Colorpicker(config)
         h = clamp((pos.X - p.X) / sz.X, 0, 1)
         render(true)
     end
-
     svArea.InputBegan:Connect(function(input)
         if state.Locked then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -2173,7 +1926,6 @@ function Section:Colorpicker(config)
             draggingHue = false
         end
     end)
-
     function obj:Set(color, fire)
         if typeof(color) ~= "Color3" then return self end
         h, s, v = Color3.toHSV(color)
@@ -2182,7 +1934,6 @@ function Section:Colorpicker(config)
     end
     function obj:Get() return state.Value end
     function obj:GetHSV() return h, s, v end
-
     function obj:Open()
         if state.Locked then return self end
         if window.ActiveColorpicker and window.ActiveColorpicker ~= self then
@@ -2205,7 +1956,6 @@ function Section:Colorpicker(config)
         end)
         return self
     end
-
     function obj:Close()
         state.Open = false
         draggingSV = false
@@ -2220,21 +1970,17 @@ function Section:Colorpicker(config)
         if window.ActiveColorpicker == self then window.ActiveColorpicker = nil end
         return self
     end
-
     function obj:Toggle()
         if state.Open then return self:Close() end
         return self:Open()
     end
-
     swatch.MouseButton1Click:Connect(function()
         if not state.Locked then obj:Toggle() end
     end)
     closeBtn.MouseButton1Click:Connect(function() obj:Close() end)
-
     swatch:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
         if state.Open then updatePopupPosition() end
     end)
-
     local function renderLocked()
         if state.Locked and state.Open then obj:Close() end
         title.TextColor3 = state.Locked and theme.MutedText or (config.TextColor or theme.Text)
@@ -2245,24 +1991,17 @@ function Section:Colorpicker(config)
     render(false)
     return obj
 end
-
---============================================================
 -- Tab
---============================================================
-
 function Tab:_nextSectionOrder(side)
     self.SectionOrders[side] += 1
     return self.SectionOrders[side]
 end
-
 function Tab:Section(config)
     config = config or {}
     local side = string.lower(config.Side or "Left")
     side = side == "right" and "Right" or "Left"
-
     local parent = side == "Right" and self.RightContainer or self.LeftContainer
     local theme = self.Window.Theme
-
     local frame = New("Frame", {
         Name = config.Title or "Section",
         BackgroundColor3 = config.BackgroundColor or theme.Surface,
@@ -2275,16 +2014,13 @@ function Tab:Section(config)
     local border = FineStroke(frame, config.BorderColor or theme.Border, 0.42)
     BindTheme(self.Window, frame, "BackgroundColor3", "Surface", config.BackgroundColor)
     BindTheme(self.Window, border, "Color", "Border", config.BorderColor)
-
     local headerHeight = config.HeaderHeight or 26
-
     local header = New("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(10, 0),
         Size = UDim2.new(1, -20, 0, headerHeight),
         Parent = frame,
     })
-
     local iconOffset = 0
     if config.Icon then
         local iconBubble = New("Frame", {
@@ -2305,7 +2041,6 @@ function Tab:Section(config)
         BindTheme(self.Window, icon, "ImageColor3", "Accent", config.IconColor)
         iconOffset = 22
     end
-
     local title = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or "Section",
@@ -2318,7 +2053,6 @@ function Tab:Section(config)
         TextYAlignment = Enum.TextYAlignment.Center,
         Parent = header,
     })
-
     BindTheme(self.Window, title, "TextColor3", "Text", config.TextColor)
     BindTheme(self.Window, title, "Font", "FontMedium", config.Font)
     local headerLine = New("Frame", {
@@ -2339,9 +2073,7 @@ function Tab:Section(config)
         AutomaticSize = Enum.AutomaticSize.Y,
         Parent = frame,
     })
-
     local contentLayout = List(content, config.ElementGap or 2)
-
     local section = setmetatable({
         __type = "Section",
         Window = self.Window,
@@ -2356,29 +2088,21 @@ function Tab:Section(config)
         PaddingBottom = config.PaddingBottom or 8,
         Order = 0,
     }, Section)
-
     contentLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         section:_recalculateHeight()
     end)
-
     section:_recalculateHeight()
     PopIn(frame, math.min(0.03 * frame.LayoutOrder, 0.18))
     table.insert(self.Sections, section)
     return section
 end
-
---============================================================
 -- Window
---============================================================
-
 function Window:_setActiveTab(tab)
     if not tab or (self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint) then return end
     if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
     if self.ActiveScript then self:_LeaveScriptEditor() end
-
     if self.ActiveDropdown then self.ActiveDropdown:Close() end
     if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
-
     for _, t in ipairs(self.Tabs) do
         local selected = t == tab
         t.Container.Visible = selected
@@ -2400,31 +2124,25 @@ function Window:_setActiveTab(tab)
             Tween(t.Accent, 0.22, { BackgroundTransparency = selected and 0 or 1 }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end
-
     self.ActiveTab = tab
     PopIn(tab.Container, 0)
     safeCallback(self.Config.OnTabChange, tab)
 end
-
 -- Keeps the sidebar readable when a tab/display name is wider than the default width.
 -- By default the main window grows together with the sidebar, preserving the content area width.
 function Window:_applySidebarWidth(targetWidth, animated)
     local minWidth = self.Config.SidebarWidth or Defaults.SidebarWidth
     local maxWidth = self.Config.MaxSidebarWidth or Defaults.MaxSidebarWidth
     targetWidth = math.floor(clamp(tonumber(targetWidth) or minWidth, minWidth, maxWidth) + 0.5)
-
     local current = self.SidebarWidth or minWidth
     if targetWidth <= current then return self end
-
     local delta = targetWidth - current
     self.SidebarWidth = targetWidth
-
     local sidebarSize = UDim2.new(0, targetWidth - 8, 1, -16)
     local topbarPosition = UDim2.fromOffset(targetWidth + 12, 6)
     local topbarSize = UDim2.new(1, -(targetWidth + 24 + (self._scriptRightInset or 0)), 0, self.TopbarHeight)
     local contentPosition = UDim2.fromOffset(targetWidth + 12, self.TopbarHeight + 10)
     local contentSize = UDim2.new(1, -(targetWidth + 24 + (self._scriptRightInset or 0)), 1, -(self.TopbarHeight + 22))
-
     local duration = animated == false and 0 or 0.28
     if duration > 0 then
         Tween(self.Sidebar, duration, { Size = sidebarSize }, EASE_SOFT, Enum.EasingDirection.Out)
@@ -2437,7 +2155,6 @@ function Window:_applySidebarWidth(targetWidth, animated)
         self.ContentHost.Position = contentPosition
         self.ContentHost.Size = contentSize
     end
-
     if self.Config.ExpandWindowForSidebar ~= false and self.Main then
         local currentSize = self.Main.Size
         local targetOffset = currentSize.X.Offset + delta
@@ -2452,16 +2169,13 @@ function Window:_applySidebarWidth(targetWidth, animated)
             self.Main.Size = targetMainSize
         end
     end
-
     if self.ScriptExplorer then self:_UpdateScriptLayout() end
     return self
 end
-
 function Window:_fitSidebarText(text, textSize, font, hasIcon, extraPadding)
     if self.Config.AutoFitSidebar == false then return self end
     text = tostring(text or "")
     if text == "" then return self end
-
     local ok, bounds = pcall(function()
         return TextService:GetTextSize(
             text,
@@ -2471,13 +2185,11 @@ function Window:_fitSidebarText(text, textSize, font, hasIcon, extraPadding)
         )
     end)
     if not ok or not bounds then return self end
-
     -- Accounts for sidebar/list/button paddings, optional tab icon and the left selection marker.
     local chrome = hasIcon and 82 or 62
     local required = math.ceil(bounds.X + chrome + (extraPadding or 0))
     return self:_applySidebarWidth(required, true)
 end
-
 function Window:TabDivider(config)
     config = config or {}
     local holder = New("Frame", {
@@ -2488,7 +2200,6 @@ function Window:TabDivider(config)
         Parent = self.SidebarList,
     })
     self.SidebarOrder += 1
-
     if config.Title then
         New("TextLabel", {
             BackgroundTransparency = 1,
@@ -2514,17 +2225,13 @@ function Window:TabDivider(config)
     end
     return holder
 end
-
 function Window:Tab(config)
     config = config or {}
     self.SidebarOrder += 1
-
     local title = config.Title or "Tab"
     local theme = self.Theme
-
     -- Grow the sidebar before creating the visual row so long tab names never get crushed.
     self:_fitSidebarText(title, config.TextSize or 12, theme.FontMedium, config.Icon ~= nil)
-
     local button = New("TextButton", {
         Name = title,
         BackgroundColor3 = theme.SurfaceHover,
@@ -2537,7 +2244,6 @@ function Window:Tab(config)
         Parent = self.SidebarList,
     })
     Corner(button, config.Corner or theme.ControlRadius)
-
     local icon
     if config.Icon then
         icon = CreateIcon(config.Icon, config.IconSize or 14,
@@ -2546,7 +2252,6 @@ function Window:Tab(config)
         icon.Position = UDim2.new(0, 11, 0.5, 0)
         icon.Parent = button
     end
-
     local label = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = title,
@@ -2560,7 +2265,6 @@ function Window:Tab(config)
         TextTruncate = Enum.TextTruncate.AtEnd,
         Parent = button,
     })
-
     local accent = New("Frame", {
         Name = "Accent",
         BackgroundColor3 = config.AccentColor or theme.Accent,
@@ -2572,7 +2276,6 @@ function Window:Tab(config)
         Parent = button,
     })
     Corner(accent, 99)
-
     local container = New("Frame", {
         Name = title .. "_Container",
         BackgroundTransparency = 1,
@@ -2580,11 +2283,9 @@ function Window:Tab(config)
         Visible = false,
         Parent = self.ContentHost,
     })
-
     local leftWidth = self.Config.LeftColumnWidth
     local splitColumns = leftWidth == nil
     local gap = self.Config.ColumnGap or Defaults.ColumnGap
-
     local leftScroll = StyleScrollBar(New("ScrollingFrame", {
         Name = "LeftScroll",
         BackgroundTransparency = 1,
@@ -2602,7 +2303,6 @@ function Window:Tab(config)
         Transparency = self.Theme.ScrollbarTransparency or 0.6,
         Inset = Enum.ScrollBarInset.ScrollBar,
     })
-
     local leftContainer = New("Frame", {
         Name = "LeftContainer",
         BackgroundTransparency = 1,
@@ -2611,7 +2311,6 @@ function Window:Tab(config)
         Parent = leftScroll,
     })
     local leftLayout = List(leftContainer, self.Config.SectionGap or Defaults.SectionGap)
-
     local rightScroll = StyleScrollBar(New("ScrollingFrame", {
         Name = "RightScroll",
         BackgroundTransparency = 1,
@@ -2629,7 +2328,6 @@ function Window:Tab(config)
         Transparency = self.Theme.ScrollbarTransparency or 0.6,
         Inset = Enum.ScrollBarInset.ScrollBar,
     })
-
     local rightContainer = New("Frame", {
         Name = "RightContainer",
         BackgroundTransparency = 1,
@@ -2638,7 +2336,6 @@ function Window:Tab(config)
         Parent = rightScroll,
     })
     local rightLayout = List(rightContainer, self.Config.SectionGap or Defaults.SectionGap)
-
     local tab = setmetatable({
         __type = "Tab",
         Window = self,
@@ -2658,7 +2355,6 @@ function Window:Tab(config)
         Sections = {},
         SectionOrders = { Left = 0, Right = 0 },
     }, Tab)
-
     BindTheme(self, label, "Font", "FontMedium")
     BindTheme(self, accent, "BackgroundColor3", "Accent", config.AccentColor)
     WatchTheme(self, button, function()
@@ -2671,7 +2367,6 @@ function Window:Tab(config)
         end
     end)
     table.insert(self.Tabs, tab)
-
     button.MouseEnter:Connect(function()
         if self.ActiveTab ~= tab or self.ActiveScript or self.ActiveBlueprint then
             Tween(button, 0.2, { BackgroundTransparency = 0.5 }, EASE_SOFT, Enum.EasingDirection.Out)
@@ -2691,11 +2386,9 @@ function Window:Tab(config)
     button.MouseButton1Down:Connect(function() PressScale(button) end)
     button.MouseButton1Up:Connect(function() ReleaseScale(button) end)
     button.MouseButton1Click:Connect(function() self:_setActiveTab(tab) end)
-
     if not self.ActiveTab then self:_setActiveTab(tab) end
     return tab
 end
-
 function Window:SetTheme(themePatch)
     -- Keep the table identity: existing component callbacks refer to it.
     local nextTheme = merge(self.Theme, themePatch or {})
@@ -2703,14 +2396,12 @@ function Window:SetTheme(themePatch)
     self:_RefreshTheme()
     return self
 end
-
 function Window:SetSelectColor(color)
     if typeof(color) == "Color3" then
         return self:SetTheme({ Accent = color })
     end
     return self
 end
-
 function Window:SetBackgroundTransparency(value)
     value = clamp01(value)
     self.BackgroundTransparency = value
@@ -2719,11 +2410,9 @@ function Window:SetBackgroundTransparency(value)
     end
     return self
 end
-
 function Window:GetBackgroundTransparency()
     return self.BackgroundTransparency or 0
 end
-
 function Window:ToggleVisibility()
     if self.Destroyed or not self.Main.Parent then return false end
     self.Visible = not self.Visible
@@ -2756,7 +2445,6 @@ function Window:ToggleVisibility()
     end
     return self.Visible
 end
-
 function Window:Close()
     if self.Destroyed then return end
     self.Visible = false
@@ -2773,29 +2461,21 @@ function Window:Close()
     if self.ActiveColorpicker then self.ActiveColorpicker:Close(); self.ActiveColorpicker = nil end
     if self.ScreenGui then self.ScreenGui:Destroy() end
 end
-
 function Window:Destroy() self:Close() end
-
---============================================================
 -- Notify / Dialog / Popup
---============================================================
-
 function Window:Notify(config)
     config = config or {}
     local theme = self.Theme
     local message = tostring(config.Content or config.Text or config.Title or "Notification")
     local textSize = config.TextSize or 12
-
     local bounds = TextService:GetTextSize(message, textSize, theme.Font, Vector2.new(config.MaxWidth or 420, 1000))
     local width = math.clamp(bounds.X + 44, 150, config.MaxWidth or 420)
     local height = math.max(42, bounds.Y + 18)
-
     local holder = New("Frame", {
         Name = "Notification", BackgroundTransparency = 1, BorderSizePixel = 0,
         Size = UDim2.fromOffset(width, height), LayoutOrder = #self.Notifications + 1,
         ClipsDescendants = false, ZIndex = 201, Parent = self.NotificationHolder,
     })
-
     local card = New("Frame", {
         Name = "Card", Position = UDim2.fromOffset(-(width + 18), 0), Size = UDim2.fromOffset(width, height),
         BackgroundColor3 = config.BackgroundColor or theme.Paper,
@@ -2803,7 +2483,6 @@ function Window:Notify(config)
     })
     Corner(card, config.Corner or theme.PopupRadius)
     local border = FineStroke(card, config.BorderColor or theme.Border, 0.12)
-
     local badge = New("Frame", {
         BackgroundColor3 = config.AccentColor or theme.SkySoft, BorderSizePixel = 0,
         Position = UDim2.fromOffset(8, 9), Size = UDim2.fromOffset(24, 24), ZIndex = 203, Parent = card,
@@ -2811,14 +2490,12 @@ function Window:Notify(config)
     Corner(badge, theme.ControlRadius)
     local sparkle = CreateIcon(config.Icon or "sparkles", 13, config.IconColor or theme.Accent, 204)
     sparkle.AnchorPoint = Vector2.new(0.5,0.5); sparkle.Position = UDim2.fromScale(0.5,0.5); sparkle.Parent = badge
-
     local label = New("TextLabel", {
         BackgroundTransparency = 1, Position = UDim2.fromOffset(40, 0), Size = UDim2.new(1, -48, 1, 0),
         Font = theme.FontMedium, Text = message, TextColor3 = config.TextColor or theme.Text, TextSize = textSize,
         TextWrapped = config.TextWrapped ~= false, TextXAlignment = config.TextXAlignment or Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center, ZIndex = 203, Parent = card,
     })
-
     BindTheme(self, card, "BackgroundColor3", "Paper", config.BackgroundColor)
     BindTheme(self, border, "Color", "Border", config.BorderColor)
     BindTheme(self, badge, "BackgroundColor3", "SkySoft", config.AccentColor)
@@ -2834,23 +2511,19 @@ function Window:Notify(config)
         Tween(border, 0.2, { Transparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
         task.delay(0.28, function() if holder then holder:Destroy() end end)
     end
-
     table.insert(self.Notifications, obj)
     task.defer(function()
         Tween(card, 0.3, { Position = UDim2.fromOffset(0, 0) }, EASE_SETTLE, Enum.EasingDirection.Out)
         PopIn(badge, 0.06)
     end)
-
     if config.Duration ~= false then
         task.delay(config.Duration or 3, function() if not obj.Closed then obj:Close() end end)
     end
     return obj
 end
-
 function Window:Dialog(config)
     config = config or {}
     local theme = self.Theme
-
     local overlay = New("TextButton", {
         Name = "DialogOverlay",
         BackgroundColor3 = theme.Overlay,
@@ -2862,7 +2535,6 @@ function Window:Dialog(config)
         ZIndex = 100,
         Parent = self.ScreenGui,
     })
-
     local dialog = New("Frame", {
         BackgroundColor3 = config.BackgroundColor or theme.Popup,
         BorderSizePixel = 0,
@@ -2878,7 +2550,6 @@ function Window:Dialog(config)
     BindTheme(self, dialogStroke, "Color", "Border")
     BindTheme(self, overlay, "BackgroundColor3", "Overlay")
     Padding(dialog, 14, 14, 14, 14)
-
     local content = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 1, 0),
@@ -2886,7 +2557,6 @@ function Window:Dialog(config)
         Parent = dialog,
     })
     List(content, 8)
-
     local title = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or "Dialog",
@@ -2898,7 +2568,6 @@ function Window:Dialog(config)
         ZIndex = 102,
         Parent = content,
     })
-
     local body = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Content or "",
@@ -2913,7 +2582,6 @@ function Window:Dialog(config)
         ZIndex = 102,
         Parent = content,
     })
-
     local buttons = New("Frame", {
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, 28),
@@ -2922,13 +2590,11 @@ function Window:Dialog(config)
     })
     local bl = List(buttons, 8, Enum.FillDirection.Horizontal)
     bl.HorizontalAlignment = Enum.HorizontalAlignment.Right
-
     BindTheme(self, title, "TextColor3", "Text")
     BindTheme(self, title, "Font", "FontDisplay")
     BindTheme(self, body, "TextColor3", "SubText")
     BindTheme(self, body, "Font", "Font")
     local obj = { __type = "Dialog", UIElements = { Overlay = overlay, Dialog = dialog }, Closed = false }
-
     function obj:Close()
         if self.Closed then return end
         self.Closed = true
@@ -2940,7 +2606,6 @@ function Window:Dialog(config)
         }, EASE_SOFT, Enum.EasingDirection.In)
         task.delay(0.26, function() overlay:Destroy() end)
     end
-
     for _, bcfg in ipairs(config.Buttons or { { Title = "Close", Callback = function() end } }) do
         local b = New("TextButton", {
             Text = bcfg.Title or "Button",
@@ -2959,24 +2624,20 @@ function Window:Dialog(config)
         BindTheme(self, b, "BackgroundColor3", "Accent", bcfg.Color)
         BindTheme(self, b, "TextColor3", "AccentText", bcfg.TextColor)
         BindTheme(self, b, "Font", "FontMedium")
-
         b.MouseEnter:Connect(function()
             HoverTween(b, 0.22, { BackgroundColor3 = theme.AccentHover })
         end)
         b.MouseLeave:Connect(function()
             HoverTween(b, 0.26, { BackgroundColor3 = bcfg.Color or theme.Accent })
         end)
-
         b.MouseButton1Click:Connect(function()
             safeCallback(bcfg.Callback, obj)
             if bcfg.Close ~= false then obj:Close() end
         end)
     end
-
     if config.CloseOnOverlay then
         overlay.MouseButton1Click:Connect(function() obj:Close() end)
     end
-
     task.defer(function()
         Tween(overlay, 0.25, {
             BackgroundTransparency = config.OverlayTransparency or 0.35
@@ -2986,14 +2647,11 @@ function Window:Dialog(config)
         dialog.BackgroundTransparency = 0.3
         SettleTween(dialog, { Size = baseSize, BackgroundTransparency = 0 })
     end)
-
     return obj
 end
-
 function Window:Popup(config)
     config = config or {}
     local theme = self.Theme
-
     local popup = New("Frame", {
         Name = "Popup",
         BackgroundColor3 = config.BackgroundColor or theme.Popup,
@@ -3009,7 +2667,6 @@ function Window:Popup(config)
     BindTheme(self, popup, "BackgroundColor3", "Popup", config.BackgroundColor)
     BindTheme(self, popupStroke, "Color", "Border")
     Padding(popup, 12, 12, 12, 12)
-
     local title = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Title or "Popup",
@@ -3021,7 +2678,6 @@ function Window:Popup(config)
         ZIndex = 91,
         Parent = popup,
     })
-
     local body = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = config.Content or "",
@@ -3036,7 +2692,6 @@ function Window:Popup(config)
         ZIndex = 91,
         Parent = popup,
     })
-
     BindTheme(self, title, "TextColor3", "Text")
     BindTheme(self, title, "Font", "FontMedium")
     BindTheme(self, body, "TextColor3", "SubText")
@@ -3046,17 +2701,11 @@ function Window:Popup(config)
         Tween(popup, 0.2, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.In)
         task.delay(0.22, function() popup:Destroy() end)
     end
-
     popup.BackgroundTransparency = 1
     Tween(popup, 0.28, { BackgroundTransparency = 0 }, EASE_SOFT, Enum.EasingDirection.Out)
-
     return obj
 end
-
---============================================================
 -- Custom scripts / Explorer / Lua editor
---============================================================
-
 local LuaKeywords = {}
 for word in ("and break continue do else elseif end false for function if in local nil not or repeat return then true until while export type"):gmatch("%S+") do
     LuaKeywords[word] = true
@@ -3065,17 +2714,14 @@ local LuaBuiltins = {}
 for word in ("assert error ipairs pairs next pcall xpcall print warn tostring tonumber typeof require select unpack setmetatable getmetatable rawget rawset rawequal math string table task coroutine utf8 os debug bit32 game workspace script Enum Instance Color3 Vector2 Vector3 CFrame UDim UDim2 ColorSequence NumberSequence"):gmatch("%S+") do
     LuaBuiltins[word] = true
 end
-
 local function EscapeRichText(text)
     return (text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
         :gsub('"', "&quot;"):gsub("'", "&apos;"))
 end
-
 local function ColorHex(color)
     return string.format("#%02X%02X%02X", math.floor(color.R * 255 + 0.5),
         math.floor(color.G * 255 + 0.5), math.floor(color.B * 255 + 0.5))
 end
-
 local function HighlightLua(source, theme)
     -- Never put markup into the TextBox: the RichText layer only displays it.
     if #source > 20000 then return nil end
@@ -3145,11 +2791,9 @@ local function HighlightLua(source, theme)
     if #result > 180000 then return nil end
     return result
 end
-
 local function NormalizeSource(source)
     return (source:gsub("\r\n", "\n"):gsub("\r", "\n"))
 end
-
 local function ScriptName(window, name, exceptId, names)
     if type(name) ~= "string" then return nil, "Enter a script name." end
     name = name:match("^%s*(.-)%s*$")
@@ -3168,7 +2812,6 @@ local function ScriptName(window, name, exceptId, names)
     end
     return name
 end
-
 local function ScriptIconButton(window, parent, name, position, callback)
     local button = New("TextButton", {
         Name = name, Text = "", AutoButtonColor = false, BorderSizePixel = 0,
@@ -3193,7 +2836,6 @@ local function ScriptIconButton(window, parent, name, position, callback)
     button.MouseButton1Click:Connect(function() safeCallback(callback) end)
     return button, icon
 end
-
 function Window:_ScriptStatus(text, danger)
     self._scriptStatusText = tostring(text or "")
     self._scriptStatusDanger = danger == true
@@ -3203,7 +2845,6 @@ function Window:_ScriptStatus(text, danger)
         label.TextColor3 = danger and self.Theme.Danger or self.Theme.MutedText
     end
 end
-
 function Window:GetScripts()
     local records = {}
     for _, record in ipairs(self.CustomScripts or {}) do
@@ -3211,7 +2852,6 @@ function Window:GetScripts()
     end
     return records
 end
-
 function Window:GetScript(idOrName)
     if type(idOrName) == "table" then
         return idOrName.Window == self and self._scriptsById[idOrName.Id] or nil
@@ -3225,12 +2865,10 @@ function Window:GetScript(idOrName)
     end
     return nil
 end
-
 function Window:ExportScripts()
     return HttpService:JSONEncode({ Version = 1, Scripts = self:GetScripts(),
         ActiveScriptId = self.ActiveScript and self.ActiveScript.Id or nil })
 end
-
 function Window:SaveScripts()
     if not self.CustomScripts then return false, "Explorer unavailable." end
     local snapshot = self:GetScripts()
@@ -3259,7 +2897,6 @@ function Window:SaveScripts()
     safeCallback(self.Config.OnScriptsChanged, snapshot, self)
     return true
 end
-
 function Window:_ScriptsChanged()
     self._scriptsDirty = true
     self._scriptSaveRevision = (self._scriptSaveRevision or 0) + 1
@@ -3271,7 +2908,6 @@ function Window:_ScriptsChanged()
         if not self.Destroyed and self._scriptSaveRevision == revision then self:SaveScripts() end
     end)
 end
-
 function Window:CreateScript(config)
     if self.Destroyed or not self.ScriptExplorer then return nil, "Explorer unavailable." end
     config = type(config) == "string" and { Name = config } or (config or {})
@@ -3308,7 +2944,6 @@ function Window:CreateScript(config)
     if config.Open ~= false then self:OpenScript(id) end
     return record
 end
-
 function Window:RenameScript(idOrName, newName)
     local record = self:GetScript(idOrName)
     if not record then return nil, "Script not found." end
@@ -3321,7 +2956,6 @@ function Window:RenameScript(idOrName, newName)
     self:_ScriptsChanged()
     return record
 end
-
 function Window:SetScriptSource(idOrName, source)
     local record = self:GetScript(idOrName)
     if not record then return nil, "Script not found." end
@@ -3339,7 +2973,6 @@ function Window:SetScriptSource(idOrName, source)
     self:_ScriptsChanged()
     return record
 end
-
 function Window:DeleteScript(idOrName)
     local record = self:GetScript(idOrName)
     if not record then return false, "Script not found." end
@@ -3360,7 +2993,6 @@ function Window:DeleteScript(idOrName)
     self:_ScriptsChanged()
     return true
 end
-
 function Window:ImportScripts(payload, replaceExisting)
     if self.Destroyed or not self.ScriptExplorer then return false, "Explorer unavailable." end
     if type(payload) == "string" then
@@ -3402,7 +3034,6 @@ function Window:ImportScripts(payload, replaceExisting)
     self:_ScriptsChanged()
     return true
 end
-
 function Window:_LeaveScriptEditor()
     if not self.ActiveScript then return end
     self:_CloseScriptAutocomplete()
@@ -3412,14 +3043,12 @@ function Window:_LeaveScriptEditor()
     self.ContentHost.Visible = true
     self:_RenderScriptRows()
 end
-
 function Window:CloseScriptEditor()
     if not self.ActiveScript then return self end
     if self._scriptsDirty then self:SaveScripts() end
     if self.ActiveTab then self:_setActiveTab(self.ActiveTab) else self:_LeaveScriptEditor() end
     return self
 end
-
 function Window:OpenScript(idOrName)
     if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
     self:_CloseCreationMenu()
@@ -3457,7 +3086,6 @@ function Window:OpenScript(idOrName)
     safeCallback(self.Config.OnScriptOpened, record, self)
     return record
 end
-
 function Window:RunScript(idOrName)
     local record = self:GetScript(idOrName or self.ActiveScript)
     if not record then return false, "Script not found." end
@@ -3491,7 +3119,6 @@ function Window:RunScript(idOrName)
     end)
     return true
 end
-
 function Window:_UpdateScriptLayout()
     if not self.ScriptExplorer or self.Destroyed then return end
     local desired = self.Config.ScriptExplorerWidth or 192
@@ -3515,7 +3142,6 @@ function Window:_UpdateScriptLayout()
         self:_LayoutBlueprintExplorer()
     end
 end
-
 function Window:_CreateScriptRow(record)
     local row = New("TextButton", {
         Name = record.Id, Text = "", AutoButtonColor = false, BorderSizePixel = 0,
@@ -3557,7 +3183,6 @@ function Window:_CreateScriptRow(record)
     end)
     row.MouseButton1Click:Connect(function() self:OpenScript(record) end)
 end
-
 function Window:_RenderScriptRows()
     if not self.ScriptExplorerElements then return end
     for i, record in ipairs(self.CustomScripts) do
@@ -3580,11 +3205,9 @@ function Window:_RenderScriptRows()
         and (type(self.Config.SaveScripts) == "function" and "Saved" or "Local") or "Memory"
     if self.BlueprintExplorerUI then self:_LayoutBlueprintExplorer() end
 end
-
 function Window:_EditorMeasure(text)
     return TextService:GetTextSize(text, 13, Enum.Font.Code, Vector2.new(100000, 100000)).X
 end
-
 function Window:_RenderScriptEditor()
     local ui = self.ScriptEditorElements
     if not ui or not self.ActiveScript then return end
@@ -3615,7 +3238,6 @@ function Window:_RenderScriptEditor()
     ui.LineCount.Text = "Lua · " .. tostring(#lines) .. (#lines == 1 and " line" or " lines")
     self:_UpdateEditorCursor(false)
 end
-
 function Window:_EditorLineAt(bytePosition)
     local lines = self._editorLines or { { Start = 1, Text = "" } }
     local low, high = 1, #lines
@@ -3625,8 +3247,6 @@ function Window:_EditorLineAt(bytePosition)
     end
     return low, lines[low]
 end
-
-
 -- Lightweight Luau completion for the embedded script editor.
 local SCRIPT_COMPLETION_WORDS = {
     "and", "break", "continue", "do", "else", "elseif", "end", "export", "false", "for", "function", "if", "in", "local", "nil", "not", "or", "repeat", "return", "then", "true", "type", "until", "while",
@@ -3641,14 +3261,12 @@ local SCRIPT_MEMBER_WORDS = {
     "FindFirstChild", "WaitForChild", "GetChildren", "GetDescendants", "FindFirstChildOfClass", "FindFirstChildWhichIsA", "IsA", "Clone", "Destroy", "GetAttribute", "SetAttribute", "GetPropertyChangedSignal", "GetAttributeChangedSignal", "GetFullName", "IsDescendantOf", "Connect", "Once", "Disconnect", "Fire", "Invoke", "GetService", "GetPlayers", "GetPlayerFromCharacter", "GetMouse", "PivotTo", "GetPivot", "Play", "Stop", "Pause", "Cancel", "Create", "GetAsync", "JSONEncode", "JSONDecode", "Raycast", "Lerp", "Magnitude", "Unit", "Position", "Size", "Parent", "Name", "Value", "Text", "Visible", "Transparency", "BackgroundColor3", "CFrame", "Character", "LocalPlayer", "CurrentCamera", "RenderStepped", "Heartbeat", "InputBegan", "InputEnded", "MouseButton1Click", "Touched", "Changed", "CharacterAdded", "PlayerAdded", "PlayerRemoving", "Completed",
 }
 local SCRIPT_SERVICES = { "Players", "Lighting", "Workspace", "ReplicatedStorage", "ReplicatedFirst", "RunService", "TweenService", "UserInputService", "TextService", "HttpService", "SoundService", "Debris", "CollectionService", "StarterGui", "StarterPlayer", "StarterPack", "ServerScriptService", "ServerStorage", "Teams", "MarketplaceService", "TeleportService", "ContextActionService", "GuiService", "TextChatService", "PathfindingService" }
-
 function Window:_CloseScriptAutocomplete()
     local ui = self.ScriptEditorElements
     if ui and ui.Completion then ui.Completion.Visible = false end
     self._scriptCompletionItems = nil
     self._scriptCompletionIndex = nil
 end
-
 function Window:_RefreshScriptAutocomplete()
     local ui, record = self.ScriptEditorElements, self.ActiveScript
     if not ui or not ui.Completion or not record or not ui.Input:IsFocused() or not self.ScriptEditor.Visible then
@@ -3717,7 +3335,6 @@ function Window:_RefreshScriptAutocomplete()
     end
     ui.Completion.Visible = true
 end
-
 function Window:_ChooseScriptAutocomplete(index)
     local ui, record = self.ScriptEditorElements, self.ActiveScript
     local choices = self._scriptCompletionItems
@@ -3746,7 +3363,6 @@ function Window:_ChooseScriptAutocomplete(index)
     self._scriptCompletionRefreshLocked = false
     return true
 end
-
 function Window:_MoveScriptAutocomplete(step)
     local ui = self.ScriptEditorElements
     local items = self._scriptCompletionItems
@@ -3756,7 +3372,6 @@ function Window:_MoveScriptAutocomplete(step)
         row.Button.BackgroundTransparency = i == self._scriptCompletionIndex and 0.15 or 1
     end
 end
-
 function Window:_UpdateEditorCursor(reveal)
     local ui = self.ScriptEditorElements
     if not ui or not self.ActiveScript or self._settingScriptText then return end
@@ -3774,7 +3389,6 @@ function Window:_UpdateEditorCursor(reveal)
     ui.Numbers.Position = UDim2.fromOffset(0, 10 - ui.Scroll.CanvasPosition.Y)
     local length = utf8.len(prefix) or #prefix
     ui.Cursor.Text = "Ln " .. tostring(lineIndex) .. ", Col " .. tostring(length + 1)
-
     local selection = ui.Input.SelectionStart
     local used = 0
     if focused and self._editorHasHighlight and selection and selection > 0 and selection ~= position then
@@ -3817,7 +3431,6 @@ function Window:_UpdateEditorCursor(reveal)
     end
     if self._scriptCompletionRefreshLocked ~= true then self:_RefreshScriptAutocomplete() end
 end
-
 function Window:_HandleScriptTextChanged()
     if self._settingScriptText or not self.ActiveScript then return end
     local ui, record = self.ScriptEditorElements, self.ActiveScript
@@ -3866,7 +3479,6 @@ function Window:_HandleScriptTextChanged()
     end
     safeCallback(self.Config.OnScriptChanged, record, self)
 end
-
 function Window:InsertScriptText(text)
     if not self.ActiveScript or type(text) ~= "string" then return false end
     local ui, source = self.ScriptEditorElements, self.ActiveScript.Source
@@ -3882,7 +3494,6 @@ function Window:InsertScriptText(text)
     self:_UpdateEditorCursor(true)
     return true
 end
-
 function Window:OpenScriptNamePopup(idOrName, blueprint)
     if self.Destroyed or not self.ScriptExplorer then return nil end
     if self._scriptModal then self._scriptModal:Close() end
@@ -4014,7 +3625,6 @@ function Window:OpenScriptNamePopup(idOrName, blueprint)
     end)
     return modal
 end
-
 function Window:_CreateScriptEditor()
     local theme = self.Theme
     local editor = New("Frame", {
@@ -4210,7 +3820,6 @@ function Window:_CreateScriptEditor()
         StyleScrollBar(scroll, { Thickness = 3, Color = self.Theme.Scrollbar, Transparency = self.Theme.ScrollbarTransparency })
     end)
 end
-
 function Window:_LoadCustomScripts()
     local payload, ok, err
     self._scriptStorageFile = self.Config.ScriptStorageFile
@@ -4256,7 +3865,6 @@ function Window:_LoadCustomScripts()
     for _, record in ipairs(self.CustomScripts) do record.Dirty = false end
     self:_RenderScriptRows()
 end
-
 function Window:_CreateScriptExplorer()
     if self.Config.ScriptExplorer == false then return end
     local theme = self.Theme
@@ -4386,19 +3994,20 @@ function Window:_CreateScriptExplorer()
         end
     end)
     table.insert(self._scriptConnections, connection)
-    local caretConnection = RunService.RenderStepped:Connect(function()
+    local caretElapsed = 0
+    local caretConnection = RunService.RenderStepped:Connect(function(dt)
+        caretElapsed += dt
+        if caretElapsed < 0.1 then return end
+        caretElapsed = 0
         local ui = self.ScriptEditorElements
-        if self.Destroyed or not self.Visible or not self.ActiveScript or not ui.Input:IsFocused() then
-            ui.Caret.Visible = false
-            return
-        end
-        ui.Caret.Visible = self._editorHasHighlight
-            and ((os.clock() - (self._scriptCaretTimestamp or 0)) % 1.1 < 0.65)
+        local visible = not self.Destroyed and self.Visible and self.ActiveScript
+            and ui.Input:IsFocused() and self._editorHasHighlight
+            and ((os.clock() - (self._scriptCaretTimestamp or 0)) % 1.1 < 0.65) or false
+        if ui.Caret.Visible ~= visible then ui.Caret.Visible = visible end
     end)
     table.insert(self._scriptConnections, caretConnection)
     self:_LoadCustomScripts()
 end
-
 function Window:_DisposeScripts()
     if self._scriptDisposed then return end
     self._scriptDisposed = true
@@ -4407,8 +4016,6 @@ function Window:_DisposeScripts()
     for _, connection in ipairs(self._scriptConnections or {}) do connection:Disconnect() end
     self._scriptConnections = {}
 end
-
-
 -- PebbleUI Custom Blueprints, client graph engine + native Roblox UI.
 -- This block is inserted before PebbleUI:CreateWindow in the complete file.
 do
@@ -4705,7 +4312,6 @@ do
         Inputs = { port("Start","number","0"),port("End","number","1") }, Outputs = { port("Value","NumberSequence") } })
     register({ Id = "ColorSequence", Title = "Color sequence", Category = "Values", Description = "Creates a gradient between two RGB colors.",
         Inputs = { port("Start","Color3","110, 170, 255"),port("End","Color3","180, 130, 240") }, Outputs = { port("Value","ColorSequence") } })
-
     local function definition(node)
         local base = Catalog[node.Type]
         if not base then return nil end
@@ -5138,7 +4744,6 @@ do
         end)
         return true
     end
-
     local GuiService = game:GetService("GuiService")
     local function pointer(input)
         local p = input and Vector2.new(input.Position.X,input.Position.Y) or UserInputService:GetMouseLocation()
@@ -5624,7 +5229,6 @@ do
         local record = self.ActiveBlueprint
         local nodeUI = self._bpNodeUI
         if not record or not nodeUI or self._bpDrag then return end
-
         local selected = {}
         for id, enabled in pairs(self._bpSelectionSet or {}) do
             if enabled then selected[id] = true end
@@ -5636,10 +5240,8 @@ do
             self:_BlueprintStatus("Select a node or connected nodes, then press Q")
             return
         end
-
         local lookup = {}
         for _, node in ipairs(record.Nodes) do lookup[node.Id] = node end
-
         -- Endpoint centers are measured on screen, so this also accounts for
         -- different rows, dynamic node properties, and graph zoom.
         local function portY(id, direction, name)
@@ -5654,7 +5256,6 @@ do
             end
             return nil
         end
-
         local candidates = {}
         for _, link in ipairs(record.Links) do
             local source, target = lookup[link.From], lookup[link.To]
@@ -5692,7 +5293,6 @@ do
             if a.Move ~= b.Move then return a.Move < b.Move end
             return a.Anchor < b.Anchor
         end)
-
         local moved, count = {}, 0
         local zoom = math.max(0.01, record.View.Zoom or 1)
         for _, edge in ipairs(candidates) do
@@ -5764,7 +5364,6 @@ do
         local pool = self._bpWirePool or {}; self._bpWirePool = pool
         local used = 0
         local now = os.clock()
-
         local function lerpColor(a,b,t)
             return Color3.new(
                 a.R + (b.R-a.R)*t,
@@ -5812,7 +5411,7 @@ do
             local lift = math.min(28, dy*0.08)
             local c1 = a + Vector2.new(offset, -lift)
             local c2 = b - Vector2.new(offset, -lift)
-            local steps = math.clamp(math.floor((dx + dy) / 12), 32, 72)
+            local steps = math.clamp(math.floor((dx + dy) / 22), 10, 28)
             local previous = a
             for i=1,steps do
                 local t=i/steps; local u=1-t
@@ -5845,12 +5444,10 @@ do
                 local glowC1 = lerpColor(c1, Color3.new(1,1,1), 0.20 + highlight*0.45)
                 local coreC0 = lerpColor(c0, Color3.new(1,1,1), highlight*0.18)
                 local coreC1 = lerpColor(c1, Color3.new(1,1,1), highlight*0.18)
-
                 used = used + 1
                 local glow = pool[used]
                 if not glow then glow = createSegment(ui.WireLayer,22); pool[used] = glow end
                 applySegment(glow,p0,p1,glowC0,glowC1,glowA0,glowA1,glowThickness,22)
-
                 used = used + 1
                 local core = pool[used]
                 if not core then core = createSegment(ui.WireLayer,23); pool[used] = core end
@@ -6228,11 +5825,16 @@ do
                 if n then local clone=self:AddBlueprintNode(self.ActiveBlueprint,n.Type,{ X=n.X+35,Y=n.Y+35 },n.Values); if clone then clone.Settings=copyTable(n.Settings); self:_BuildBlueprintBoard(); self:_SelectBlueprintNode(clone.Id) end end
             end
         end))
-        local accumulator=0
+        local accumulator = 0
+        local fps = math.clamp(tonumber(self.Config.BlueprintWireFPS) or 24, 5, 60)
+        local animate = self.Config.AnimateBlueprintWires == true
         track(RunService.RenderStepped:Connect(function(dt)
-            accumulator=accumulator+dt
-            if accumulator<1/60 then return end; accumulator=0
-            if not self.Destroyed and self.Visible and self.ActiveBlueprint then if self._bpWireDirty or true then self:_DrawBlueprintWires() end end
+            if self.Destroyed or not self.Visible or not self.ActiveBlueprint then return end
+            if not self._bpWireDirty and not animate then return end
+            accumulator += dt
+            if accumulator < 1 / fps then return end
+            accumulator = 0
+            self:_DrawBlueprintWires()
         end))
         WatchTheme(self,editor,function()
             if self.ActiveBlueprint then self:_BuildBlueprintBoard() end
@@ -6356,12 +5958,7 @@ do
         self._blueprintConnections={}
     end
 end
-
-
---============================================================
 -- Library creation
---============================================================
-
 -- Intro cinematica: fundo limpo, marca, letras e progresso.
 -- A interface real ja esta construida sob a cobertura.
 local function PlayStartupIntro(window)
@@ -6373,7 +5970,6 @@ local function PlayStartupIntro(window)
     local introFadeDuration = math.max(0.08, tonumber(config.LoadingIntroFadeDuration) or 0.35)
     local titleText = tostring(config.LoadingTitle or window.Title)
     local iconName = config.LoadingIcon or "cat"
-
     local cover = New("CanvasGroup", {
         Name = "StartupIntro",
         BackgroundColor3 = theme.BackgroundTop,
@@ -6395,7 +5991,6 @@ local function PlayStartupIntro(window)
         notifiedLoaded = true
         safeCallback(config.OnLoaded, window)
     end
-
     -- Fail-safe: nenhuma animação pode deixar um painel preto preso.
     local maxIntroSeconds = math.max(5, duration + introFadeDuration + 5)
     task.delay(maxIntroSeconds, function()
@@ -6406,7 +6001,6 @@ local function PlayStartupIntro(window)
         if main.Parent and window.Visible then main.Visible = true end
         notifyLoaded()
     end)
-
     local stack = New("Frame", {
         Name = "Identity", BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(0.5, 0.5),
@@ -6430,7 +6024,6 @@ local function PlayStartupIntro(window)
     logo.Position = UDim2.fromOffset(0, 0)
     logo.ImageTransparency = 0
     logo.Parent = logoHolder
-
     local letters = New("Frame", {
         Name = "Letters", BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 56),
@@ -6464,7 +6057,6 @@ local function PlayStartupIntro(window)
         })
         table.insert(glyphs, glyph)
     end
-
     local track = New("Frame", {
         Name = "LoadingTrack", AnchorPoint = Vector2.new(0.5, 0),
         Position = UDim2.new(0.5, 0, 0, 111),
@@ -6480,22 +6072,18 @@ local function PlayStartupIntro(window)
         BorderSizePixel = 0, ZIndex = 10003, Parent = track,
     })
     Corner(fill, 99)
-
     task.spawn(function()
         if not cover.Parent then return end
-
         -- A ScreenGui ja foi ativada, mas aguardamos a primeira renderizacao.
         while cover.Parent and not window.ScreenGui.Enabled do
             RunService.RenderStepped:Wait()
         end
         if not cover.Parent then return end
         RunService.RenderStepped:Wait()
-
         -- Fundo ja esta opaco antes da ScreenGui ser exibida.
         -- Pequena pausa preserva o ritmo do loading sem revelar a UI.
         task.wait(introFadeDuration)
         if not cover.Parent then return end
-
         -- Preload evita que o icon apareca no meio do slide por atraso da textura.
         if logo.Image ~= "" then
             local loaded = false
@@ -6512,7 +6100,6 @@ local function PlayStartupIntro(window)
         end
         if not cover.Parent then return end
         RunService.RenderStepped:Wait()
-
         -- Slide-up claro: o holder percorre 48px e revela a imagem ao mesmo tempo.
         local rise = Tween(logoHolder, 0.45, {
             Position = UDim2.new(0.5, 0, 0, 0),
@@ -6547,34 +6134,28 @@ local function PlayStartupIntro(window)
         notifyLoaded()
     end)
 end
-
---============================================================
 -- Subtle animated particle constellation (background only)
---============================================================
 local function AttachParticleBackground(window, parent, options)
     if options == false then return end
     options = type(options) == "table" and options or {}
-
-    local targetFPS = math.clamp(math.floor(tonumber(options.FPS) or 60), 15, 120)
+    local targetFPS = math.clamp(math.floor(tonumber(options.FPS) or 30), 10, 120)
     local frameInterval = 1 / targetFPS
-    local count = math.clamp(math.floor(tonumber(options.Count) or 34), 4, 72)
+    local count = math.clamp(math.floor(tonumber(options.Count) or 22), 4, 72)
     local radius = math.max(30, tonumber(options.ConnectionDistance) or 170)
     local speed = math.max(0, tonumber(options.Speed) or 10)
     local dotSize = math.clamp(tonumber(options.DotSize) or 2, 1, 6)
     local dotOpacity = math.clamp(tonumber(options.DotOpacity) or 0.22, 0, 1)
     local lineOpacity = math.clamp(tonumber(options.LineOpacity) or 0.12, 0, 1)
     local lineThickness = math.clamp(math.floor(tonumber(options.LineThickness) or 1), 1, 3)
-    local maxLines = math.clamp(math.floor(tonumber(options.MaxLines) or 60), 0, 220)
+    local maxLines = math.clamp(math.floor(tonumber(options.MaxLines) or 32), 0, 220)
     local colorOverride = options.Color
     local padding = math.max(0, tonumber(options.Padding) or 18)
-
     local layer = New("Frame", {
         Name = "ParticleBackground", BackgroundTransparency = 1,
         BorderSizePixel = 0, Size = UDim2.fromScale(1, 1),
         ClipsDescendants = true, ZIndex = 1, Parent = parent,
     })
     window.ParticleBackground = layer
-
     local drawArea = New("Frame", {
         Name = "ParticleDrawArea",
         BackgroundTransparency = 1,
@@ -6585,14 +6166,11 @@ local function AttachParticleBackground(window, parent, options)
         ZIndex = 1,
         Parent = layer,
     })
-
     local rng = Random.new()
     local particles, lines = {}, {}
-
     local function particleColor()
         return colorOverride or window.Theme.Accent
     end
-
     for i = 1, count do
         local dot = New("Frame", {
             Name = "Particle",
@@ -6605,7 +6183,6 @@ local function AttachParticleBackground(window, parent, options)
             Parent = drawArea,
         })
         Corner(dot, 100)
-
         local angle = rng:NextNumber(0, math.pi * 2)
         particles[i] = {
             UI = dot,
@@ -6615,7 +6192,6 @@ local function AttachParticleBackground(window, parent, options)
             VY = math.sin(angle) * speed,
         }
     end
-
     for i = 1, maxLines do
         lines[i] = New("Frame", {
             Name = "Connection",
@@ -6631,7 +6207,6 @@ local function AttachParticleBackground(window, parent, options)
         })
         Corner(lines[i], 99)
     end
-
     local radiusSquared = radius * radius
     local accumulator = 0
     local activeLines = 0
@@ -6651,28 +6226,22 @@ local function AttachParticleBackground(window, parent, options)
             isPaused = false
             accumulator = 0
         end
-
         accumulator += math.min(dt, 0.1)
         if accumulator < frameInterval then return end
         local elapsed = math.min(accumulator, 0.07)
         accumulator = 0
-
         local width, height = drawArea.AbsoluteSize.X, drawArea.AbsoluteSize.Y
         if width < 2 or height < 2 then return end
-
         for _, p in ipairs(particles) do
             local x = p.X * width + p.VX * elapsed
             local y = p.Y * height + p.VY * elapsed
-
             if x < 0 then x = -x; p.VX = math.abs(p.VX) end
             if x > width then x = 2 * width - x; p.VX = -math.abs(p.VX) end
             if y < 0 then y = -y; p.VY = math.abs(p.VY) end
             if y > height then y = 2 * height - y; p.VY = -math.abs(p.VY) end
-
             p.X, p.Y = math.clamp(x / width, 0, 1), math.clamp(y / height, 0, 1)
             p.UI.Position = UDim2.fromOffset(x, y)
         end
-
         local used = 0
         for i = 1, #particles - 1 do
             if used >= maxLines then break end
@@ -6685,7 +6254,6 @@ local function AttachParticleBackground(window, parent, options)
                 local dx = bx - ax
                 local dy = by - ay
                 local distanceSquared = dx * dx + dy * dy
-
                 if distanceSquared <= radiusSquared then
                     local distance = math.sqrt(distanceSquared)
                     used += 1
@@ -6699,13 +6267,11 @@ local function AttachParticleBackground(window, parent, options)
                 end
             end
         end
-
         for i = used + 1, activeLines do
             lines[i].Visible = false
         end
         activeLines = used
     end)
-
     window._particleConnection = connection
     table.insert(window._scriptConnections, connection)
     WatchTheme(window, layer, function()
@@ -6714,15 +6280,12 @@ local function AttachParticleBackground(window, parent, options)
         for _, line in ipairs(lines) do line.BackgroundColor3 = color end
     end)
 end
-
 function PebbleUI:CreateWindow(config)
     config = config or {}
     local self = setmetatable({}, Window)
-
     self.Config = config
     self.Theme = merge(DefaultTheme, config.Theme or {})
     if config.SelectColor then self.Theme.Accent = config.SelectColor end
-
     self.Title = config.Title or Defaults.Title
     self.Tabs = {}
     self.Notifications = {}
@@ -6742,11 +6305,9 @@ function PebbleUI:CreateWindow(config)
     self.CustomBlueprints = {}
     self._blueprintsById = {}
     self._blueprintConnections = {}
-
     local bgTransparency = config.BackgroundTransparency
     if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
     self.BackgroundTransparency = clamp01(bgTransparency)
-
     local size = config.Size or Defaults.Size
     if config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
         local width = size.X.Offset + (config.ScriptExplorerWidth or 192) + 12
@@ -6758,13 +6319,11 @@ function PebbleUI:CreateWindow(config)
     local corner = config.CornerRadius or Defaults.CornerRadius
     self.SidebarWidth = sidebarWidth
     self.TopbarHeight = topHeight
-
     local guiName = config.Name or ("PebbleUI_" .. tostring(math.random(100000, 999999)))
     local foundCore, existing = pcall(function() return CoreGui:FindFirstChild(guiName) end)
     if foundCore and existing then existing:Destroy() end
     local existingPlayerGui = PlayerGui:FindFirstChild(guiName)
     if existingPlayerGui then existingPlayerGui:Destroy() end
-
     local screen = New("ScreenGui", {
         Name = guiName,
         ResetOnSpawn = false,
@@ -6775,7 +6334,6 @@ function PebbleUI:CreateWindow(config)
     local ok = pcall(function() screen.Parent = CoreGui end)
     if not ok then screen.Parent = PlayerGui end
     self.ScreenGui = screen
-
     local main = New("Frame", {
         Name = "Main",
         Visible = config.Loading == false, -- Escondida ate o loading terminar.
@@ -6792,10 +6350,8 @@ function PebbleUI:CreateWindow(config)
     local mainStroke = FineStroke(main, self.Theme.Stroke, 0.08)
     BindTheme(self, mainStroke, "Color", "Stroke")
     self.Main = main
-
     -- Não iniciar loading enquanto a estrutura da janela ainda está incompleta.
     -- Loading reativado por padrao. Para desativar: Loading = false.
-
     local mainGrad = New("UIGradient", {
         Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, self.Theme.BackgroundTop),
@@ -6808,10 +6364,8 @@ function PebbleUI:CreateWindow(config)
     WatchTheme(self, main, function()
         mainGrad.Color = ColorSequence.new(self.Theme.BackgroundTop, self.Theme.BackgroundBottom)
     end)
-
     -- ParticleNetwork = false disables the effect entirely.
     AttachParticleBackground(self, main, config.ParticleNetwork)
-
     local sidebar = New("Frame", {
         Name = "Sidebar",
         BackgroundColor3 = self.Theme.Sidebar,
@@ -6826,14 +6380,12 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
-
     local brand = New("Frame", {
         Name = "Brand", BackgroundTransparency = 1, BorderSizePixel = 0,
         Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 40), Parent = sidebar,
     })
     Corner(brand, self.Theme.ControlRadius)
     self.Brand = brand
-
     -- A compact profile mark anchors the sidebar.
     local avatarHolder = New("Frame", {
         Name = "AvatarHolder",
@@ -6849,7 +6401,6 @@ function PebbleUI:CreateWindow(config)
     local avatarStroke = FineStroke(avatarHolder, config.AvatarStrokeColor or self.Theme.Stroke, 0.18)
     BindTheme(self, avatarHolder, "BackgroundColor3", "SkySoft", config.AvatarBackgroundColor)
     BindTheme(self, avatarStroke, "Color", "Stroke", config.AvatarStrokeColor)
-
     local headshot = New("ImageLabel", {
         Name = "Headshot",
         BackgroundTransparency = 1,
@@ -6862,7 +6413,6 @@ function PebbleUI:CreateWindow(config)
     })
     Corner(headshot, 4)
     self.Headshot = headshot
-
     local displayName = config.BrandText or LocalPlayer.DisplayName or LocalPlayer.Name
     local brandLabel = New("TextLabel", {
         Name = "DisplayName",
@@ -6881,7 +6431,6 @@ function PebbleUI:CreateWindow(config)
     self.BrandLabel = brandLabel
     BindTheme(self, brandLabel, "TextColor3", "Text")
     BindTheme(self, brandLabel, "Font", "FontMedium")
-
     task.spawn(function()
         local okThumb, thumb = pcall(function()
             local image = Players:GetUserThumbnailAsync(
@@ -6897,9 +6446,7 @@ function PebbleUI:CreateWindow(config)
             Tween(headshot, 0.32, { ImageTransparency = 0 }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end)
-
     PopIn(brand, 0.05)
-
     -- Clicking the avatar/name opens a compact account profile. No screen dimmer.
     local profileButton = New("TextButton", {
         Name = "OpenUserProfile", Text = "", AutoButtonColor = false,
@@ -6909,7 +6456,6 @@ function PebbleUI:CreateWindow(config)
     })
     self.ProfileButton = profileButton
     local profilePanel
-
     local function closeProfile()
         if profilePanel then
             profilePanel:Destroy()
@@ -6918,7 +6464,6 @@ function PebbleUI:CreateWindow(config)
         self.UserProfilePopup = nil
     end
     self.CloseUserProfile = function() closeProfile() end
-
     local function addProfileText(parent, text, x, y, w, h, size, color, font, z)
         return New("TextLabel", {
             BackgroundTransparency = 1, Text = tostring(text),
@@ -6929,7 +6474,6 @@ function PebbleUI:CreateWindow(config)
             ZIndex = z, Parent = parent,
         })
     end
-
     local function addProfileDetail(parent, caption, value, y)
         addProfileText(parent, caption, 18, y, -36, 16, 10, self.Theme.DimText, self.Theme.Font, 4103)
         addProfileText(parent, value, 18, y + 16, -36, 22, 12, self.Theme.Text, self.Theme.FontMedium, 4103)
@@ -6937,7 +6481,6 @@ function PebbleUI:CreateWindow(config)
             BorderSizePixel = 0, Position = UDim2.new(0, 18, 0, y + 42),
             Size = UDim2.new(1, -36, 0, 1), ZIndex = 4103, Parent = parent })
     end
-
     local function openProfile()
         if self.Destroyed or not self.Main or not self.Main.Parent then return end
         if profilePanel then closeProfile(); return end
@@ -6954,7 +6497,6 @@ function PebbleUI:CreateWindow(config)
         Corner(profilePanel, 10)
         FineStroke(profilePanel, self.Theme.Stroke, 0.15)
         BindTheme(self, profilePanel, "BackgroundColor3", "Popup")
-
         local closeButton = New("TextButton", {
             Name = "CloseProfile", Text = "×", TextSize = 20, Font = self.Theme.FontMedium,
             TextColor3 = self.Theme.SubText, BackgroundColor3 = self.Theme.Surface2,
@@ -6964,7 +6506,6 @@ function PebbleUI:CreateWindow(config)
         })
         Corner(closeButton, 5)
         closeButton.MouseButton1Click:Connect(closeProfile)
-
         New("Frame", { Name = "ProfileAvatarHolder", BackgroundColor3 = self.Theme.SurfaceHover,
             BorderSizePixel = 0, Position = UDim2.fromOffset(18, 18),
             Size = UDim2.fromOffset(64, 64), ZIndex = 4101, Parent = profilePanel })
@@ -7002,7 +6543,6 @@ function PebbleUI:CreateWindow(config)
     profileButton.MouseLeave:Connect(function()
         if not self.Destroyed then Tween(brand, 0.15, { BackgroundTransparency = 1 }) end
     end)
-
     New("Frame", {
         Name = "SidebarRightMask",
         Visible = false,
@@ -7014,7 +6554,6 @@ function PebbleUI:CreateWindow(config)
         ZIndex = sidebar.ZIndex,
         Parent = sidebar,
     })
-
     New("Frame", {
         Name = "Divider",
         Visible = false,
@@ -7025,7 +6564,6 @@ function PebbleUI:CreateWindow(config)
         BorderSizePixel = 0,
         Parent = sidebar,
     })
-
     local sidebarList = New("Frame", {
         Name = "SidebarList",
         BackgroundTransparency = 1,
@@ -7035,7 +6573,6 @@ function PebbleUI:CreateWindow(config)
     })
     List(sidebarList, 3)
     self.SidebarList = sidebarList
-
     local topbar = New("Frame", {
         Name = "Topbar",
         BackgroundTransparency = 1,
@@ -7044,7 +6581,6 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.Topbar = topbar
-
     local titleLabel = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = self.Title,
@@ -7067,7 +6603,6 @@ function PebbleUI:CreateWindow(config)
         Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 1), Parent = topbar,
     })
     BindTheme(self, topbarLine, "BackgroundColor3", "Border")
-
     local closeBtn = New("TextButton", {
         Name = "CloseButton",
         AnchorPoint = Vector2.new(1, 0),
@@ -7085,14 +6620,12 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, closeBtn, "BackgroundColor3", "Surface2")
     BindTheme(self, closeStroke, "Color", "Border")
     self.CloseButton = closeBtn
-
     local closeIcon = CreateIcon("x", 14, self.Theme.TopbarIcon, 51)
     closeIcon.AnchorPoint = Vector2.new(0.5, 0.5)
     closeIcon.Position = UDim2.fromScale(0.5, 0.5)
     closeIcon.ImageTransparency = config.TopbarIconTransparency or 0.08
     closeIcon.Parent = closeBtn
     BindTheme(self, closeIcon, "ImageColor3", "TopbarIcon")
-
     closeBtn.MouseEnter:Connect(function()
         HoverTween(closeIcon, 0.25, { ImageColor3 = self.Theme.TopbarIconHover, ImageTransparency = 0.05 })
         HoverTween(closeBtn, 0.22, { BackgroundColor3 = self.Theme.SurfaceHover })
@@ -7111,7 +6644,6 @@ function PebbleUI:CreateWindow(config)
         }, EASE_SOFT, Enum.EasingDirection.In)
         task.delay(0.22, function() self:Close() end)
     end)
-
     -- Global navigation search: tabs, sections and controls.
     local searchWidth = 198
     local searchBar = New("Frame", {
@@ -7158,7 +6690,6 @@ function PebbleUI:CreateWindow(config)
     List(searchResults, 2)
     Padding(searchResults, 5, 7, 5, 5)
     self.SearchBar, self.SearchInput, self.SearchResults = searchBar, searchInput, searchResults
-
     local foundItems = {}
     local selectedIndex = 1
     local searchClosing = false
@@ -7304,7 +6835,6 @@ function PebbleUI:CreateWindow(config)
     self._PositionGlobalSearch = positionSearch
     main:GetPropertyChangedSignal("AbsoluteSize"):Connect(positionSearch)
     task.defer(positionSearch)
-
     local contentHost = New("Frame", {
         Name = "ContentHost",
         BackgroundTransparency = 1,
@@ -7313,10 +6843,8 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.ContentHost = contentHost
-
     -- The profile card follows the same auto-fit rules as tabs, so long display names stay readable.
     self:_fitSidebarText(displayName, 12, self.Theme.FontDisplay or self.Theme.FontBold, true, 12)
-
     local notifHolder = New("Frame", {
         Name = "NotificationHolder",
         BackgroundTransparency = 1,
@@ -7328,7 +6856,6 @@ function PebbleUI:CreateWindow(config)
     })
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
-
     -- A animacao inicial da janela so roda sem loading.
     -- Com loading, o painel permanece oculto ate a transicao final.
     if config.Loading == false then
@@ -7340,7 +6867,6 @@ function PebbleUI:CreateWindow(config)
             Tween(mainScale, 0.28, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
         end)
     end
-
     local toggleKey = config.ToggleKey or Defaults.ToggleKey
     local inputConn
     inputConn = UserInputService.InputBegan:Connect(function(input, gp)
@@ -7350,11 +6876,9 @@ function PebbleUI:CreateWindow(config)
             self:ToggleVisibility()
         end
     end)
-
     table.insert(self._scriptConnections, inputConn)
     if config.Draggable ~= false then
         local dragging, dragStart, startPos, dragInput
-
         topbar.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
@@ -7389,7 +6913,6 @@ function PebbleUI:CreateWindow(config)
     end
     self:_CreateScriptExplorer()
     self:_CreateCustomBlueprints()
-
     -- Monta o loading com a ScreenGui DESLIGADA.
     -- Assim a primeira renderizacao mostra apenas o loading, nunca a UI.
     if config.Loading ~= false then
@@ -7403,7 +6926,6 @@ function PebbleUI:CreateWindow(config)
             if not self.Destroyed then safeCallback(config.OnLoaded, self) end
         end)
     end
-
     -- Manual recovery for unexpected overlays; call window:RestoreVisibility().
     function self:RestoreVisibility()
         if self.Destroyed then return false end
@@ -7422,7 +6944,6 @@ function PebbleUI:CreateWindow(config)
         scale.Scale = 1
         return true
     end
-
     screen.Destroying:Connect(function()
         self:_DisposeBlueprints()
         self:_DisposeScripts()
@@ -7430,6 +6951,5 @@ function PebbleUI:CreateWindow(config)
     end)
     return self
 end
-
 print("[PebbleUI] Loaded v" .. PebbleUI.Version)
 return PebbleUI
