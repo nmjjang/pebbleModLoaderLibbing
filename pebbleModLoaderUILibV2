@@ -6345,6 +6345,7 @@ function PebbleUI:CreateWindow(config)
         ResetOnSpawn = false,
         IgnoreGuiInset = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        Enabled = false, -- Nunca renderizar a UI antes de montar a tela inicial.
     })
     local ok = pcall(function() screen.Parent = CoreGui end)
     if not ok then screen.Parent = PlayerGui end
@@ -6956,7 +6957,9 @@ function PebbleUI:CreateWindow(config)
         self:_DisposeScripts()
         self.Destroyed = true
     end)
+    -- Intro pronta antes do primeiro frame visivel: elimina o flash do conteudo.
     PlayStartupIntro(self)
+    screen.Enabled = true
     return self
 end
 
