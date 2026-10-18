@@ -6185,11 +6185,13 @@ local function PlayStartupIntro(window)
         Name = "StartupIntro",
         BackgroundColor3 = theme.BackgroundTop,
         BorderSizePixel = 0,
-        Size = UDim2.fromScale(1, 1),
+        AnchorPoint = main.AnchorPoint,
+        Position = main.Position,
+        Size = main.Size,
         GroupTransparency = 0,
-        ZIndex = 6000,
+        ZIndex = 10000,
         Active = true,
-        Parent = main,
+        Parent = window.ScreenGui,
     })
     Corner(cover, config.CornerRadius or Defaults.CornerRadius)
     window.LoadingOverlay = cover
@@ -6199,9 +6201,9 @@ local function PlayStartupIntro(window)
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.47),
         Size = UDim2.new(1, -30, 0, 126),
-        ZIndex = 6001, Parent = cover,
+        ZIndex = 10001, Parent = cover,
     })
-    local logo = CreateIcon(iconName, 43, theme.Text, 6002)
+    local logo = CreateIcon(iconName, 43, theme.Text, 10002)
     logo.Name = "LoadingCat"
     logo.AnchorPoint = Vector2.new(0.5, 0)
     logo.Position = UDim2.new(0.5, 0, 0, 0)
@@ -6213,7 +6215,7 @@ local function PlayStartupIntro(window)
     local letters = New("Frame", {
         Name = "Letters", BackgroundTransparency = 1,
         AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 56),
-        Size = UDim2.new(1, 0, 0, 34), ZIndex = 6002, Parent = stack,
+        Size = UDim2.new(1, 0, 0, 34), ZIndex = 10002, Parent = stack,
     })
     local letterLayout = New("UIListLayout", {
         FillDirection = Enum.FillDirection.Horizontal,
@@ -6239,7 +6241,7 @@ local function PlayStartupIntro(window)
             TextColor3 = theme.Text, TextTransparency = 1,
             TextXAlignment = Enum.TextXAlignment.Center,
             Size = UDim2.fromOffset(math.max(char == " " and 7 or 2, measured.X + 1), 34),
-            LayoutOrder = index, ZIndex = 6002, Parent = letters,
+            LayoutOrder = index, ZIndex = 10002, Parent = letters,
         })
         table.insert(glyphs, glyph)
     end
@@ -6250,13 +6252,13 @@ local function PlayStartupIntro(window)
         Size = UDim2.fromOffset(170, 3),
         BackgroundColor3 = theme.SliderTrack,
         BackgroundTransparency = 1, BorderSizePixel = 0,
-        ClipsDescendants = true, ZIndex = 6002, Parent = stack,
+        ClipsDescendants = true, ZIndex = 10002, Parent = stack,
     })
     Corner(track, 99)
     local fill = New("Frame", {
         Name = "LoadingFill", Size = UDim2.fromScale(0, 1),
         BackgroundColor3 = theme.Accent, BackgroundTransparency = 0,
-        BorderSizePixel = 0, ZIndex = 6003, Parent = track,
+        BorderSizePixel = 0, ZIndex = 10003, Parent = track,
     })
     Corner(fill, 99)
 
@@ -6279,8 +6281,10 @@ local function PlayStartupIntro(window)
         progress.Completed:Wait()
         if not cover.Parent then return end
         task.wait(0.12)
+        -- O conteudo principal so pode ser renderizado a partir daqui.
         local mainScale = EnsureScale(main)
         mainScale.Scale = 0.985
+        main.Visible = true
         Tween(mainScale, 0.65, { Scale = 1 }, EASE_SOFT)
         local fade = Tween(cover, 0.58, { GroupTransparency = 1 }, EASE_SOFT)
         fade.Completed:Wait()
@@ -6353,6 +6357,7 @@ function PebbleUI:CreateWindow(config)
 
     local main = New("Frame", {
         Name = "Main",
+        Visible = false, -- Nunca mostrar o conteudo durante a introducao.
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = config.Position or Defaults.Position,
         Size = size,
@@ -6366,6 +6371,15 @@ function PebbleUI:CreateWindow(config)
     local mainStroke = FineStroke(main, self.Theme.Stroke, 0.08)
     BindTheme(self, mainStroke, "Color", "Stroke")
     self.Main = main
+
+    -- Loading independente do Main, exibido ANTES da construcao da UI.
+    -- Nenhum elemento do Main pode piscar, porque ele permanece invisivel.
+    if config.Loading ~= false then
+        PlayStartupIntro(self)
+    else
+        main.Visible = true
+    end
+    screen.Enabled = true
 
     local mainGrad = New("UIGradient", {
         Color = ColorSequence.new({
@@ -6957,9 +6971,6 @@ function PebbleUI:CreateWindow(config)
         self:_DisposeScripts()
         self.Destroyed = true
     end)
-    -- Intro pronta antes do primeiro frame visivel: elimina o flash do conteudo.
-    PlayStartupIntro(self)
-    screen.Enabled = true
     return self
 end
 
