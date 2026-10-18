@@ -6206,11 +6206,12 @@ local function PlayStartupIntro(window)
     local logo = CreateIcon(iconName, 43, theme.Text, 10002)
     logo.Name = "LoadingCat"
     logo.AnchorPoint = Vector2.new(0.5, 0)
-    logo.Position = UDim2.new(0.5, 0, 0, 0)
+    -- Comeca um pouco abaixo e sobe rapidamente, como entrando no enquadramento.
+    logo.Position = UDim2.new(0.5, 0, 0, 18)
     logo.ImageTransparency = 1
     logo.Parent = stack
     local logoScale = EnsureScale(logo)
-    logoScale.Scale = 0.87
+    logoScale.Scale = 0.94
 
     local letters = New("Frame", {
         Name = "Letters", BackgroundTransparency = 1,
@@ -6264,9 +6265,14 @@ local function PlayStartupIntro(window)
 
     task.spawn(function()
         if not cover.Parent then return end
-        Tween(logo, 0.32, { ImageTransparency = 0 }, EASE_SOFT)
-        Tween(logoScale, 0.42, { Scale = 1 }, EASE_SOFT)
-        task.wait(0.3)
+        -- Entrada suave do gato: sobe rapido de baixo para cima com leve settle.
+        Tween(logo, 0.16, { ImageTransparency = 0 }, Enum.EasingStyle.Sine)
+        local logoRise = Tween(logo, 0.26, { Position = UDim2.new(0.5, 0, 0, -2) }, Enum.EasingStyle.Quint)
+        Tween(logoScale, 0.26, { Scale = 1 }, Enum.EasingStyle.Quint)
+        logoRise.Completed:Wait()
+        if not cover.Parent then return end
+        Tween(logo, 0.10, { Position = UDim2.new(0.5, 0, 0, 0) }, Enum.EasingStyle.Sine)
+        task.wait(0.12)
         local stepTime = math.min(0.075, 0.62 / math.max(#glyphs, 1))
         for _, glyph in ipairs(glyphs) do
             if not cover.Parent then return end
