@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.6.0-lucide-blueprints" }
+local PebbleUI = { Version = "1.6.1-visibility-fix" }
 
 --============================================================
 -- Services
@@ -6174,7 +6174,7 @@ end
 -- A interface real ja esta construida sob a cobertura.
 local function PlayStartupIntro(window)
     local config = window.Config
-    if config.Loading == false then return end
+    if config.Loading ~= true then return end
     local main = window.Main
     local theme = window.Theme
     local duration = math.max(0.15, tonumber(config.LoadingDuration) or 2.4)
@@ -6197,6 +6197,17 @@ local function PlayStartupIntro(window)
     })
     Corner(cover, config.CornerRadius or Defaults.CornerRadius)
     window.LoadingOverlay = cover
+
+    -- Fail-safe: nenhuma animação pode deixar um painel preto preso.
+    local maxIntroSeconds = math.max(5, duration + introFadeDuration + 5)
+    task.delay(maxIntroSeconds, function()
+        if not cover.Parent then return end
+        warn("[PebbleUI] Intro timed out; restoring window visibility.")
+        cover:Destroy()
+        if window.LoadingOverlay == cover then window.LoadingOverlay = nil end
+        if main.Parent and window.Visible then main.Visible = true end
+        safeCallback(config.OnLoaded, window)
+    end)
 
     local stack = New("Frame", {
         Name = "Identity", BackgroundTransparency = 1,
@@ -6396,7 +6407,7 @@ function PebbleUI:CreateWindow(config)
         ResetOnSpawn = false,
         IgnoreGuiInset = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        Enabled = false, -- Nunca renderizar a UI antes de montar a tela inicial.
+        Enabled = false, -- Construir completamente antes de exibir.
     })
     local ok = pcall(function() screen.Parent = CoreGui end)
     if not ok then screen.Parent = PlayerGui end
@@ -6404,7 +6415,7 @@ function PebbleUI:CreateWindow(config)
 
     local main = New("Frame", {
         Name = "Main",
-        Visible = false, -- Nunca mostrar o conteudo durante a introducao.
+        Visible = true, -- Conteúdo pronto para renderizar; intro opcional por cima.
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = config.Position or Defaults.Position,
         Size = size,
@@ -6419,14 +6430,8 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, mainStroke, "Color", "Stroke")
     self.Main = main
 
-    -- Loading independente do Main, exibido ANTES da construcao da UI.
-    -- Nenhum elemento do Main pode piscar, porque ele permanece invisivel.
-    if config.Loading ~= false then
-        PlayStartupIntro(self)
-    else
-        main.Visible = true
-    end
-    screen.Enabled = true
+    -- Não iniciar loading enquanto a estrutura da janela ainda está incompleta.
+    -- Padrão seguro: sem intro. Para ativá-la, use Loading = true.
 
     local mainGrad = New("UIGradient", {
         Color = ColorSequence.new({
@@ -7013,6 +7018,37 @@ function PebbleUI:CreateWindow(config)
     end
     self:_CreateScriptExplorer()
     self:_CreateCustomBlueprints()
+
+    -- Só agora a UI está montada. Evita overlays cobrindo a janela incompleta.
+    screen.Enabled = true
+    if config.Loading == true then
+        PlayStartupIntro(self)
+    else
+        main.Visible = true
+        task.defer(function()
+            if not self.Destroyed then safeCallback(config.OnLoaded, self) end
+        end)
+    end
+
+    -- Manual recovery for unexpected overlays; call window:RestoreVisibility().
+    function self:RestoreVisibility()
+        if self.Destroyed then return false end
+        if self.LoadingOverlay then
+            self.LoadingOverlay:Destroy()
+            self.LoadingOverlay = nil
+        end
+        for _, child in ipairs(self.ScreenGui:GetChildren()) do
+            if child.Name == "StartupIntro" then child:Destroy() end
+        end
+        self.ScreenGui.Enabled = true
+        self.Visible = true
+        self.Main.Visible = true
+        self.Main.BackgroundTransparency = self.BackgroundTransparency
+        local scale = EnsureScale(self.Main)
+        scale.Scale = 1
+        return true
+    end
+
     screen.Destroying:Connect(function()
         self:_DisposeBlueprints()
         self:_DisposeScripts()
