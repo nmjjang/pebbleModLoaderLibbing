@@ -6319,12 +6319,15 @@ local function PlayStartupIntro(window)
         progress.Completed:Wait()
         if not cover.Parent then return end
         task.wait(0.12)
-        -- O conteudo principal so pode ser renderizado a partir daqui.
+        -- A janela inteira nasce transparente, inclusive todos os seus filhos.
+        -- Comeca a revelar somente apos o progresso terminar.
         local mainScale = EnsureScale(main)
         mainScale.Scale = 0.985
+        main.GroupTransparency = 1
         main.Visible = true
         Tween(mainScale, 0.65, { Scale = 1 }, EASE_SOFT)
-        local fade = Tween(cover, 0.58, { GroupTransparency = 1 }, EASE_SOFT)
+        Tween(main, 0.62, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
+        local fade = Tween(cover, 0.62, { GroupTransparency = 1 }, Enum.EasingStyle.Sine)
         fade.Completed:Wait()
         if cover.Parent then cover:Destroy() end
         if window.LoadingOverlay == cover then window.LoadingOverlay = nil end
@@ -6393,8 +6396,9 @@ function PebbleUI:CreateWindow(config)
     if not ok then screen.Parent = PlayerGui end
     self.ScreenGui = screen
 
-    local main = New("Frame", {
+    local main = New("CanvasGroup", {
         Name = "Main",
+        GroupTransparency = config.Loading == false and 0 or 1,
         Visible = false, -- Nunca mostrar o conteudo durante a introducao.
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = config.Position or Defaults.Position,
