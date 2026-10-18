@@ -3689,10 +3689,11 @@ function Window:_RefreshScriptAutocomplete()
     if y + height > parentSize.Y - 27 then y = math.max(40, y - height - 24) end
     ui.Completion.Position = UDim2.fromOffset(x,y)
     ui.Completion.Size = UDim2.fromOffset(width,height)
+    -- Preserve the highlighted candidate when the popup refreshes.
+    local previousWord = self._scriptCompletionItems and self._scriptCompletionItems[self._scriptCompletionIndex or 1]
     self._scriptCompletionItems = matches
     self._scriptCompletionStart = startsAt
     self._scriptCompletionCursor = cursor
-    local previousWord = self._scriptCompletionItems and self._scriptCompletionItems[self._scriptCompletionIndex or 1]
     local chosen = 1
     if previousWord then
         for i, suggestion in ipairs(matches) do
@@ -4145,6 +4146,7 @@ function Window:_CreateScriptEditor()
             TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(9,0),
             Size = UDim2.new(1,-12,1,0), ZIndex = 38, Parent = row })
         BindTheme(self,labelObj,"TextColor3","Text")
+        -- A click can make the editor lose focus; accept while the mouse is pressed.
         row.MouseButton1Down:Connect(function() self:_ChooseScriptAutocomplete(i) end)
         completionRows[i] = { Button = row, Label = labelObj }
     end
@@ -4156,13 +4158,16 @@ function Window:_CreateScriptEditor()
     scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self:_RenderScriptEditor() end)
     input.Focused:Connect(function() self:_UpdateEditorCursor(true) end)
     input.FocusLost:Connect(function()
-        self:_CloseScriptAutocomplete()
+        -- Defer closing so a suggestion's MouseButton1Down can accept it first.
+        task.defer(function()
+            if not input:IsFocused() then self:_CloseScriptAutocomplete() end
+        end)
         caret.Visible = false
         for _, rect in ipairs(self._scriptSelectionRects) do rect.Visible = false end
         if self._scriptsDirty then self:SaveScripts() end
     end)
-    -- Bind at a high priority so Enter accepts a completion instead of inserting a newline.
-    -- Returning Pass when the popup is hidden leaves normal text editing untouched.
+    -- While suggestions are open: Up/Down changes selection, Enter/Tab accepts it,
+    -- Escape dismisses. Otherwise preserve ordinary editing and cursor movement.
     local completionActionName = "PebbleUIAutocomplete_" .. tostring(self)
     local function completionAction(_, state, key)
         if not self.ActiveScript or not self.Visible or not editor.Visible or not input:IsFocused()
