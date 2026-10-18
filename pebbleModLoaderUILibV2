@@ -1,4 +1,3 @@
-```
 local PebbleUI = { Version = "1.6.1-visibility-fix" }
 
 --============================================================
@@ -7645,4 +7644,3 @@ end
 
 print("[PebbleUI] Loaded v" .. PebbleUI.Version)
 return PebbleUI
-```
