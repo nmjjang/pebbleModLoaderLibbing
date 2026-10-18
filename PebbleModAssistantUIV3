@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.6.1-visibility-fix" }
+local PebbleUI = { Version = "1.6.1-particle-performance" }
 
 --============================================================
 -- Services
@@ -2759,6 +2759,12 @@ end
 
 function Window:Close()
     if self.Destroyed then return end
+    self.Visible = false
+    self._particleDragging = false
+    if self._particleConnection then
+        self._particleConnection:Disconnect()
+        self._particleConnection = nil
+    end
     if self.CloseUserProfile then self.CloseUserProfile() end
     self:_DisposeBlueprints()
     self:_DisposeScripts()
@@ -6558,7 +6564,7 @@ local function AttachParticleBackground(window, parent, options)
     local dotOpacity = math.clamp(tonumber(options.DotOpacity) or 0.22, 0, 1)
     local lineOpacity = math.clamp(tonumber(options.LineOpacity) or 0.12, 0, 1)
     local lineThickness = math.clamp(math.floor(tonumber(options.LineThickness) or 1), 1, 3)
-    local maxLines = math.clamp(math.floor(tonumber(options.MaxLines) or 90), 0, 220)
+    local maxLines = math.clamp(math.floor(tonumber(options.MaxLines) or 60), 0, 220)
     local colorOverride = options.Color
     local padding = math.max(0, tonumber(options.Padding) or 18)
 
@@ -6629,13 +6635,22 @@ local function AttachParticleBackground(window, parent, options)
     local radiusSquared = radius * radius
     local accumulator = 0
     local activeLines = 0
+    local isPaused = false
     local connection
     connection = RunService.RenderStepped:Connect(function(dt)
         if window.Destroyed or not layer.Parent then
             if connection then connection:Disconnect() end
             return
         end
-        if not window.Visible or not parent.Visible or not window.ScreenGui.Enabled then return end
+        if not window.Visible or not parent.Visible or not window.ScreenGui.Enabled or window._particleDragging then
+            accumulator = 0
+            isPaused = true
+            return
+        end
+        if isPaused then
+            isPaused = false
+            accumulator = 0
+        end
 
         accumulator += math.min(dt, 0.1)
         if accumulator < frameInterval then return end
@@ -6691,6 +6706,7 @@ local function AttachParticleBackground(window, parent, options)
         activeLines = used
     end)
 
+    window._particleConnection = connection
     table.insert(window._scriptConnections, connection)
     WatchTheme(window, layer, function()
         local color = particleColor()
@@ -7343,11 +7359,13 @@ function PebbleUI:CreateWindow(config)
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
                 dragging = true
+                self._particleDragging = true
                 dragStart = input.Position
                 startPos = main.Position
                 input.Changed:Connect(function()
                     if input.UserInputState == Enum.UserInputState.End then
                         dragging = false
+                        self._particleDragging = false
                     end
                 end)
             end
