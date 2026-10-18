@@ -6170,6 +6170,126 @@ end
 -- Library creation
 --============================================================
 
+-- Intro cinematica: fundo limpo, marca, letras e progresso.
+-- A interface real ja esta construida sob a cobertura.
+local function PlayStartupIntro(window)
+    local config = window.Config
+    if config.Loading == false then return end
+    local main = window.Main
+    local theme = window.Theme
+    local duration = math.max(0.15, tonumber(config.LoadingDuration) or 2.4)
+    local titleText = tostring(config.LoadingTitle or window.Title)
+    local iconName = config.LoadingIcon or "cat"
+
+    local cover = New("CanvasGroup", {
+        Name = "StartupIntro",
+        BackgroundColor3 = theme.BackgroundTop,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        GroupTransparency = 0,
+        ZIndex = 6000,
+        Active = true,
+        Parent = main,
+    })
+    Corner(cover, config.CornerRadius or Defaults.CornerRadius)
+    window.LoadingOverlay = cover
+
+    local stack = New("Frame", {
+        Name = "Identity", BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.47),
+        Size = UDim2.new(1, -30, 0, 126),
+        ZIndex = 6001, Parent = cover,
+    })
+    local logo = CreateIcon(iconName, 43, theme.Text, 6002)
+    logo.Name = "LoadingCat"
+    logo.AnchorPoint = Vector2.new(0.5, 0)
+    logo.Position = UDim2.new(0.5, 0, 0, 0)
+    logo.ImageTransparency = 1
+    logo.Parent = stack
+    local logoScale = EnsureScale(logo)
+    logoScale.Scale = 0.87
+
+    local letters = New("Frame", {
+        Name = "Letters", BackgroundTransparency = 1,
+        AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 56),
+        Size = UDim2.new(1, 0, 0, 34), ZIndex = 6002, Parent = stack,
+    })
+    local letterLayout = New("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        HorizontalAlignment = Enum.HorizontalAlignment.Center,
+        VerticalAlignment = Enum.VerticalAlignment.Center,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Padding = UDim.new(0, 0), Parent = letters,
+    })
+    local glyphs = {}
+    local utf = {}
+    for _, codepoint in utf8.codes(titleText) do
+        table.insert(utf, utf8.char(codepoint))
+    end
+    if #utf > 32 then
+        utf = { table.unpack(utf, 1, 32) }
+    end
+    local font = theme.FontDisplay or Enum.Font.GothamBold
+    for index, char in ipairs(utf) do
+        local measured = TextService:GetTextSize(char, 23, font, Vector2.new(100, 40))
+        local glyph = New("TextLabel", {
+            Name = "Glyph" .. index, BackgroundTransparency = 1,
+            Text = char, Font = font, TextSize = 23,
+            TextColor3 = theme.Text, TextTransparency = 1,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            Size = UDim2.fromOffset(math.max(char == " " and 7 or 2, measured.X + 1), 34),
+            LayoutOrder = index, ZIndex = 6002, Parent = letters,
+        })
+        table.insert(glyphs, glyph)
+    end
+
+    local track = New("Frame", {
+        Name = "LoadingTrack", AnchorPoint = Vector2.new(0.5, 0),
+        Position = UDim2.new(0.5, 0, 0, 111),
+        Size = UDim2.fromOffset(170, 3),
+        BackgroundColor3 = theme.SliderTrack,
+        BackgroundTransparency = 1, BorderSizePixel = 0,
+        ClipsDescendants = true, ZIndex = 6002, Parent = stack,
+    })
+    Corner(track, 99)
+    local fill = New("Frame", {
+        Name = "LoadingFill", Size = UDim2.fromScale(0, 1),
+        BackgroundColor3 = theme.Accent, BackgroundTransparency = 0,
+        BorderSizePixel = 0, ZIndex = 6003, Parent = track,
+    })
+    Corner(fill, 99)
+
+    task.spawn(function()
+        if not cover.Parent then return end
+        Tween(logo, 0.32, { ImageTransparency = 0 }, EASE_SOFT)
+        Tween(logoScale, 0.42, { Scale = 1 }, EASE_SOFT)
+        task.wait(0.3)
+        local stepTime = math.min(0.075, 0.62 / math.max(#glyphs, 1))
+        for _, glyph in ipairs(glyphs) do
+            if not cover.Parent then return end
+            Tween(glyph, 0.25, { TextTransparency = 0 }, EASE_SOFT)
+            task.wait(stepTime)
+        end
+        task.wait(0.14)
+        if not cover.Parent then return end
+        Tween(track, 0.28, { BackgroundTransparency = 0 }, EASE_SOFT)
+        task.wait(0.12)
+        local progress = Tween(fill, duration, { Size = UDim2.fromScale(1, 1) }, Enum.EasingStyle.Sine)
+        progress.Completed:Wait()
+        if not cover.Parent then return end
+        task.wait(0.12)
+        local mainScale = EnsureScale(main)
+        mainScale.Scale = 0.985
+        Tween(mainScale, 0.65, { Scale = 1 }, EASE_SOFT)
+        local fade = Tween(cover, 0.58, { GroupTransparency = 1 }, EASE_SOFT)
+        fade.Completed:Wait()
+        if cover.Parent then cover:Destroy() end
+        if window.LoadingOverlay == cover then window.LoadingOverlay = nil end
+        safeCallback(config.OnLoaded, window)
+    end)
+end
+
 function PebbleUI:CreateWindow(config)
     config = config or {}
     local self = setmetatable({}, Window)
@@ -6836,6 +6956,7 @@ function PebbleUI:CreateWindow(config)
         self:_DisposeScripts()
         self.Destroyed = true
     end)
+    PlayStartupIntro(self)
     return self
 end
 
