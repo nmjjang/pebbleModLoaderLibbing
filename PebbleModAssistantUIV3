@@ -6174,7 +6174,7 @@ end
 -- A interface real ja esta construida sob a cobertura.
 local function PlayStartupIntro(window)
     local config = window.Config
-    if config.Loading ~= true then return end
+    if config.Loading == false then return end
     local main = window.Main
     local theme = window.Theme
     local duration = math.max(0.15, tonumber(config.LoadingDuration) or 2.4)
@@ -6197,6 +6197,12 @@ local function PlayStartupIntro(window)
     })
     Corner(cover, config.CornerRadius or Defaults.CornerRadius)
     window.LoadingOverlay = cover
+    local notifiedLoaded = false
+    local function notifyLoaded()
+        if notifiedLoaded then return end
+        notifiedLoaded = true
+        safeCallback(config.OnLoaded, window)
+    end
 
     -- Fail-safe: nenhuma animação pode deixar um painel preto preso.
     local maxIntroSeconds = math.max(5, duration + introFadeDuration + 5)
@@ -6206,7 +6212,7 @@ local function PlayStartupIntro(window)
         cover:Destroy()
         if window.LoadingOverlay == cover then window.LoadingOverlay = nil end
         if main.Parent and window.Visible then main.Visible = true end
-        safeCallback(config.OnLoaded, window)
+        notifyLoaded()
     end)
 
     local stack = New("Frame", {
@@ -6348,7 +6354,7 @@ local function PlayStartupIntro(window)
         fade.Completed:Wait()
         if cover.Parent then cover:Destroy() end
         if window.LoadingOverlay == cover then window.LoadingOverlay = nil end
-        safeCallback(config.OnLoaded, window)
+        notifyLoaded()
     end)
 end
 
@@ -6431,7 +6437,7 @@ function PebbleUI:CreateWindow(config)
     self.Main = main
 
     -- Não iniciar loading enquanto a estrutura da janela ainda está incompleta.
-    -- Padrão seguro: sem intro. Para ativá-la, use Loading = true.
+    -- Loading reativado por padrao. Para desativar: Loading = false.
 
     local mainGrad = New("UIGradient", {
         Color = ColorSequence.new({
@@ -7021,7 +7027,7 @@ function PebbleUI:CreateWindow(config)
 
     -- Só agora a UI está montada. Evita overlays cobrindo a janela incompleta.
     screen.Enabled = true
-    if config.Loading == true then
+    if config.Loading ~= false then
         PlayStartupIntro(self)
     else
         main.Visible = true
