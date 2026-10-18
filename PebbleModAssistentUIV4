@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.7.1-real-ultrawide" }
+local PebbleUI = { Version = "1.6.1-visibility-fix" }
 
 --============================================================
 -- Services
@@ -244,35 +244,35 @@ local DefaultTheme = {
     FontMedium = Enum.Font.GothamMedium,
     FontDisplay = Enum.Font.GothamBold,
 
-    BackgroundTop     = Color3.fromRGB(23, 18, 38),
-    BackgroundBottom  = Color3.fromRGB(23, 18, 38),
-    Sidebar           = Color3.fromRGB(29, 23, 47),
-    SidebarDivider    = Color3.fromRGB(55, 46, 78),
+    BackgroundTop     = Color3.fromRGB(15, 16, 19),
+    BackgroundBottom  = Color3.fromRGB(15, 16, 19),
+    Sidebar           = Color3.fromRGB(27, 29, 32),
+    SidebarDivider    = Color3.fromRGB(55, 59, 63),
 
-    Surface           = Color3.fromRGB(29, 23, 47),
-    Surface2          = Color3.fromRGB(43, 35, 65),
-    SurfaceHover      = Color3.fromRGB(55, 45, 80),
-    Input             = Color3.fromRGB(23, 18, 38),
-    Popup             = Color3.fromRGB(29, 23, 47),
-    CodeBackground    = Color3.fromRGB(23, 18, 38),
+    Surface           = Color3.fromRGB(27, 29, 32),
+    Surface2          = Color3.fromRGB(37, 39, 42),
+    SurfaceHover      = Color3.fromRGB(45, 48, 52),
+    Input             = Color3.fromRGB(15, 16, 19),
+    Popup             = Color3.fromRGB(27, 29, 32),
+    CodeBackground    = Color3.fromRGB(15, 16, 19),
 
     Text              = Color3.fromRGB(230, 232, 236),
     SubText           = Color3.fromRGB(154, 158, 165),
     MutedText         = Color3.fromRGB(128, 132, 140),
     DimText           = Color3.fromRGB(109, 113, 121),
 
-    Accent            = Color3.fromRGB(157, 130, 210),
-    AccentHover       = Color3.fromRGB(180, 153, 233),
+    Accent            = Color3.fromRGB(65, 151, 220),
+    AccentHover       = Color3.fromRGB(86, 170, 235),
     AccentText        = Color3.fromRGB(255, 255, 255),
-    Button            = Color3.fromRGB(43, 35, 65),
+    Button            = Color3.fromRGB(37, 39, 42),
     ButtonHover       = Color3.fromRGB(47, 50, 54),
     ButtonText        = Color3.fromRGB(230, 232, 236),
-    SliderTrack       = Color3.fromRGB(55, 46, 78),
-    SliderFill        = Color3.fromRGB(157, 130, 210),
+    SliderTrack       = Color3.fromRGB(55, 59, 63),
+    SliderFill        = Color3.fromRGB(65, 151, 220),
     SliderKnob        = Color3.fromRGB(230, 232, 236),
 
-    Stroke            = Color3.fromRGB(55, 46, 78),
-    Border            = Color3.fromRGB(55, 46, 78),
+    Stroke            = Color3.fromRGB(55, 59, 63),
+    Border            = Color3.fromRGB(55, 59, 63),
     CheckboxBorder    = Color3.fromRGB(80, 85, 90),
 
     Icon              = Color3.fromRGB(154, 158, 165),
@@ -289,12 +289,12 @@ local DefaultTheme = {
     TopbarIconHover   = Color3.fromRGB(230, 232, 236),
 
     -- Legacy keys remain available to existing custom themes.
-    Sky               = Color3.fromRGB(157, 130, 210),
-    SkySoft           = Color3.fromRGB(43, 35, 65),
+    Sky               = Color3.fromRGB(65, 151, 220),
+    SkySoft           = Color3.fromRGB(37, 39, 42),
     Butter            = Color3.fromRGB(223, 185, 107),
     Peach             = Color3.fromRGB(207, 146, 139),
     Mint              = Color3.fromRGB(134, 207, 172),
-    Paper             = Color3.fromRGB(29, 23, 47),
+    Paper             = Color3.fromRGB(27, 29, 32),
     Shadow            = Color3.fromRGB(0, 0, 0),
 
     SyntaxKeyword     = Color3.fromRGB(174, 156, 235),
@@ -317,28 +317,29 @@ PebbleUI.Theme = DefaultTheme
 
 local Defaults = {
     Title = "Pebble UI",
-    RealLayout = true, -- Explorer na esquerda + tabs horizontais no topo
-    UltraWide = true, -- Janela mais larga, inspirada em monitores ultrawide
     Version = "v1.6.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(1280, 440),
+    Size = UDim2.fromOffset(780, 520),
     Position = UDim2.fromScale(0.5, 0.5),
-    MinSize = Vector2.new(920, 400),
-    MaxSize = Vector2.new(1900, 980),
+    MinSize = Vector2.new(600, 380),
+    MaxSize = Vector2.new(1400, 900),
 
-    TopbarHeight = 40,
+    TopbarHeight = 42,
     SidebarWidth = 140,
     CollapsedSidebarWidth = 64,
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
-    ScriptExplorerWidth = 220,
     CornerRadius = 8,
-    LeftColumnWidth = 380,
-    ColumnGap = 16,
-    SectionGap = 12,
+    LeftColumnWidth = 272,
+    ColumnGap = 12,
+    SectionGap = 10,
     CompactControls = true,
+    Layout = "Studio", -- "Classic" keeps the original layout
+    StudioRailWidth = 52,
+    StudioExplorerWidth = 190,
+    StudioHeaderHeight = 52,
 
     BackgroundTransparency = 0,
 
@@ -2412,12 +2413,12 @@ end
 -- Keeps the sidebar readable when a tab/display name is wider than the default width.
 -- By default the main window grows together with the sidebar, preserving the content area width.
 function Window:_applySidebarWidth(targetWidth, animated)
-    if self.RealLayout then return self end
     local minWidth = self.Config.SidebarWidth or Defaults.SidebarWidth
     local maxWidth = self.Config.MaxSidebarWidth or Defaults.MaxSidebarWidth
     targetWidth = math.floor(clamp(tonumber(targetWidth) or minWidth, minWidth, maxWidth) + 0.5)
 
     local current = self.SidebarWidth or minWidth
+    if self.Config.Layout == "Studio" then return self end
     if targetWidth <= current then return self end
 
     local delta = targetWidth - current
@@ -2462,8 +2463,7 @@ function Window:_applySidebarWidth(targetWidth, animated)
 end
 
 function Window:_fitSidebarText(text, textSize, font, hasIcon, extraPadding)
-    if self.RealLayout then return self end
-    if self.Config.AutoFitSidebar == false then return self end
+    if self.Config.Layout == "Studio" or self.Config.AutoFitSidebar == false then return self end
     text = tostring(text or "")
     if text == "" then return self end
 
@@ -2490,9 +2490,8 @@ function Window:TabDivider(config)
         BackgroundTransparency = 1,
         Size = UDim2.new(1, 0, 0, config.Height or 22),
         LayoutOrder = self.SidebarOrder + 1,
-        Parent = self.RealLayout and self.TabStrip or self.SidebarList,
+        Parent = self.SidebarList,
     })
-    if self.RealLayout then holder.Size = UDim2.fromOffset(8, 30) end
     self.SidebarOrder += 1
 
     if config.Title then
@@ -2536,16 +2535,14 @@ function Window:Tab(config)
         BackgroundColor3 = theme.SurfaceHover,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, config.Height or 30),
+        Size = self.Config.Layout == "Studio"
+            and UDim2.fromOffset(math.clamp(42 + TextService:GetTextSize(title, 12, theme.FontMedium, Vector2.new(999, 30)).X, 84, 174), config.Height or 32)
+            or UDim2.new(1, 0, 0, config.Height or 30),
         LayoutOrder = self.SidebarOrder,
         Text = "",
         AutoButtonColor = false,
-        Parent = self.RealLayout and self.TabStrip or self.SidebarList,
+        Parent = self.SidebarList,
     })
-    if self.RealLayout then
-        local measured = TextService:GetTextSize(title, config.TextSize or 12, theme.FontMedium, Vector2.new(1000, 30))
-        button.Size = UDim2.fromOffset(math.clamp(measured.X + (config.Icon and 50 or 34), 95, 230), 34)
-    end
     Corner(button, config.Corner or theme.ControlRadius)
 
     local icon
@@ -2582,11 +2579,6 @@ function Window:Tab(config)
         Parent = button,
     })
     Corner(accent, 99)
-    if self.RealLayout then
-        accent.AnchorPoint = Vector2.new(0.5, 1)
-        accent.Position = UDim2.new(0.5, 0, 1, 0)
-        accent.Size = UDim2.new(1, -24, 0, 2)
-    end
 
     local container = New("Frame", {
         Name = title .. "_Container",
@@ -3503,34 +3495,38 @@ end
 
 function Window:_UpdateScriptLayout()
     if not self.ScriptExplorer or self.Destroyed then return end
-    if self.RealLayout then
-        local width = self.Config.ScriptExplorerWidth or Defaults.ScriptExplorerWidth or 192
+    if self.Config.Layout == "Studio" then
+        local rail = self.SidebarWidth
+        local explorerWidth = self.Config.StudioExplorerWidth or Defaults.StudioExplorerWidth
+        local top = self.TopbarHeight
+        local contentLeft = rail + explorerWidth + 16
         self._scriptRightInset = 0
+        self.Sidebar.Position = UDim2.fromOffset(6, 6)
+        self.Sidebar.Size = UDim2.new(0, rail - 10, 1, -12)
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
-        self.ScriptExplorer.Position = UDim2.fromOffset(0, 50)
-        self.ScriptExplorer.Size = UDim2.new(0, width, 1, -50)
-        self.Topbar.Position = UDim2.fromOffset(12, 4)
-        self.Topbar.Size = UDim2.new(1, -72, 0, 40)
-        self.ContentHost.Position = UDim2.fromOffset(width + 16, 98)
-        self.ContentHost.Size = UDim2.new(1, -(width + 32), 1, -110)
-        if self.TabStrip then
-            self.TabStrip.Position = UDim2.fromOffset(width + 14, 52)
-            self.TabStrip.Size = UDim2.new(1, -(width + 28), 0, 38)
+        self.ScriptExplorer.Position = UDim2.fromOffset(rail + 2, 6)
+        self.ScriptExplorer.Size = UDim2.new(0, explorerWidth, 1, -12)
+        self.Topbar.Position = UDim2.fromOffset(contentLeft, 44)
+        self.Topbar.Size = UDim2.new(1, -(contentLeft + 8), 0, 34)
+        self.ContentHost.Position = UDim2.fromOffset(contentLeft, 83)
+        self.ContentHost.Size = UDim2.new(1, -(contentLeft + 8), 1, -91)
+        if self.StudioToolbar then
+            self.StudioToolbar.Position = UDim2.fromOffset(contentLeft, 5)
+            self.StudioToolbar.Size = UDim2.new(1, -(contentLeft + 116), 0, 34)
         end
-        if self.ScriptEditor then
-            self.ScriptEditor.Position = self.ContentHost.Position
-            self.ScriptEditor.Size = self.ContentHost.Size
-        end
+        self.ScriptEditor.Position = self.ContentHost.Position
+        self.ScriptEditor.Size = self.ContentHost.Size
+        self.CloseButton.Position = UDim2.new(1, -12, 0, 13)
+        if self._PositionGlobalSearch then self._PositionGlobalSearch() end
         if self.BlueprintEditor then
             self.BlueprintEditor.Position = self.ContentHost.Position
             self.BlueprintEditor.Size = self.ContentHost.Size
             self:_LayoutBlueprintExplorer()
         end
-        self.CloseButton.Position = UDim2.new(1, -12, 0, 13)
-        if self._PositionGlobalSearch then self._PositionGlobalSearch() end
         return
     end
-    local desired = self.Config.ScriptExplorerWidth or Defaults.ScriptExplorerWidth or 192
+    if not self.ScriptExplorer or self.Destroyed then return end
+    local desired = self.Config.ScriptExplorerWidth or 192
     local available = self.Main.AbsoluteSize.X - self.SidebarWidth - 336
     local width = math.floor(clamp(available, math.min(148, desired), desired))
     self._scriptRightInset = width + 12
@@ -3614,6 +3610,33 @@ function Window:_RenderScriptRows()
     self.ScriptExplorerElements.Empty.Visible = count == 0 and not self._scriptsCollapsed
     self.ScriptExplorerElements.Storage.Text = self._hasScriptStorage
         and (type(self.Config.SaveScripts) == "function" and "Saved" or "Local") or "Memory"
+    if self.StudioScriptTabs then
+        for _, child in ipairs(self.StudioScriptTabs:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+        for idx, record in ipairs(self.CustomScripts) do
+            local selected = record == self.ActiveScript
+            local nameWidth = TextService:GetTextSize(record.Name, 11, self.Theme.FontMedium, Vector2.new(999, 25)).X
+            local b = New("TextButton", {
+                Name = record.Id, LayoutOrder = idx, Text = "", AutoButtonColor = false,
+                Size = UDim2.fromOffset(math.clamp(nameWidth + 44, 88, 180), 30),
+                BackgroundColor3 = selected and self.Theme.SurfaceHover or self.Theme.Surface,
+                BorderSizePixel = 0, ZIndex = 26, Parent = self.StudioScriptTabs,
+            })
+            Corner(b, 5)
+            local icon = CreateIcon("file-code", 12, selected and self.Theme.Accent or self.Theme.Icon, 27)
+            icon.Position = UDim2.fromOffset(8, 9)
+            icon.Parent = b
+            New("TextLabel", {
+                BackgroundTransparency = 1, Text = record.Name, TextTruncate = Enum.TextTruncate.AtEnd,
+                TextColor3 = selected and self.Theme.Text or self.Theme.SubText,
+                Font = self.Theme.FontMedium, TextSize = 11,
+                Position = UDim2.fromOffset(26, 0), Size = UDim2.new(1, -32, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 27, Parent = b,
+            })
+            b.MouseButton1Click:Connect(function() self:OpenScript(record.Id) end)
+        end
+    end
     if self.BlueprintExplorerUI then self:_LayoutBlueprintExplorer() end
 end
 
@@ -4080,6 +4103,20 @@ function Window:_CreateScriptEditor()
     })
     BindTheme(self, title, "TextColor3", "Text")
     BindTheme(self, title, "Font", "FontMedium")
+    if self.Config.Layout == "Studio" then
+        title.Visible = false
+        local tabs = New("ScrollingFrame", {
+            Name = "OpenScriptTabs", BackgroundTransparency = 1, BorderSizePixel = 0,
+            Position = UDim2.fromOffset(8, 2), Size = UDim2.new(1, -188, 1, -4),
+            CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X,
+            ScrollBarThickness = 0, ScrollingDirection = Enum.ScrollingDirection.X,
+            ZIndex = 25, Parent = toolbar,
+        })
+        List(tabs, 5, Enum.FillDirection.Horizontal)
+        self.StudioScriptTabs = tabs
+        tabs.Visible = false -- Abas internas ocultas ate a UI ser redesenhada.
+        fileIcon.Visible = true
+    end
     local footer = New("Frame", {
         Name = "EditorStatusBar", BackgroundColor3 = theme.Surface2, BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 1, -26), Size = UDim2.new(1, 0, 0, 26), ZIndex = 22, Parent = editor,
@@ -4307,7 +4344,7 @@ function Window:_CreateScriptExplorer()
     BindTheme(self, border, "Color", "SidebarDivider")
     self.ScriptExplorer = frame
     local title = New("TextLabel", {
-        BackgroundTransparency = 1, Text = "Explorer", Font = theme.FontBold, TextSize = 12,
+        BackgroundTransparency = 1, Text = "Explorer", Font = theme.FontMedium, TextSize = 12,
         TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
         Position = UDim2.fromOffset(12, 5), Size = UDim2.new(1, -52, 0, 34), ZIndex = 12, Parent = frame,
     })
@@ -6589,12 +6626,6 @@ function PebbleUI:CreateWindow(config)
     local self = setmetatable({}, Window)
 
     self.Config = config
-    self.RealLayout = config.RealLayout ~= false
-    if self.RealLayout and config.ScriptExplorer == nil then config.ScriptExplorer = true end
-    if self.RealLayout then
-        config.AutoFitSidebar = false
-        config.ExpandWindowForSidebar = false
-    end
     self.Theme = merge(DefaultTheme, config.Theme or {})
     if config.SelectColor then self.Theme.Accent = config.SelectColor end
 
@@ -6622,18 +6653,16 @@ function PebbleUI:CreateWindow(config)
     if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
     self.BackgroundTransparency = clamp01(bgTransparency)
 
-    local usingUltraWide = self.RealLayout and config.UltraWide ~= false and config.Size == nil
     local size = config.Size or Defaults.Size
-    if usingUltraWide then
-        size = Defaults.Size
-    end
-    if not self.RealLayout and config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
-        local width = size.X.Offset + (config.ScriptExplorerWidth or Defaults.ScriptExplorerWidth or 192) + 12
+    if config.Layout ~= "Studio" and config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
+        local width = size.X.Offset + (config.ScriptExplorerWidth or 192) + 12
         if size.X.Scale == 0 then width = math.min(width, (config.MaxSize or Defaults.MaxSize).X) end
         size = UDim2.new(size.X.Scale, width, size.Y.Scale, size.Y.Offset)
     end
-    local sidebarWidth = self.RealLayout and 0 or (config.SidebarWidth or Defaults.SidebarWidth)
-    local topHeight = config.TopbarHeight or Defaults.TopbarHeight
+    if config.Layout == nil then config.Layout = "Studio" end
+    local studio = config.Layout == "Studio"
+    local sidebarWidth = studio and (config.StudioRailWidth or Defaults.StudioRailWidth) or (config.SidebarWidth or Defaults.SidebarWidth)
+    local topHeight = studio and (config.StudioHeaderHeight or Defaults.StudioHeaderHeight) or (config.TopbarHeight or Defaults.TopbarHeight)
     local corner = config.CornerRadius or Defaults.CornerRadius
     self.SidebarWidth = sidebarWidth
     self.TopbarHeight = topHeight
@@ -6702,7 +6731,41 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
-    if self.RealLayout then sidebar.Visible = false end
+    if studio then
+        -- A barra de atalhos fica ACIMA das tabs, nao na lateral do Explorer.
+        local railMenu = New("Frame", {
+            Name = "StudioQuickActions", BackgroundColor3 = self.Theme.Surface,
+            BorderSizePixel = 0, Position = UDim2.fromOffset(sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 16, 5),
+            Size = UDim2.new(1, -(sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 130), 0, 34),
+            ZIndex = 35, Parent = main,
+        })
+        Corner(railMenu, 5)
+        self.StudioToolbar = railMenu
+        local railItems = {
+            { "house", function() if self.Tabs[1] then self:_setActiveTab(self.Tabs[1]) end end },
+            { "code-xml", function()
+                if self.ActiveScript then self:OpenScript(self.ActiveScript.Id)
+                elseif self.CustomScripts[1] then self:OpenScript(self.CustomScripts[1].Id) end
+            end },
+            { "folder-open", function() if self.ScriptExplorer then self.ScriptExplorer.Visible = not self.ScriptExplorer.Visible end end },
+            { "settings", function() if #self.Tabs > 0 then self:_setActiveTab(self.Tabs[#self.Tabs]) end end },
+        }
+        for i, item in ipairs(railItems) do
+            local b = New("TextButton", {
+                Name = "QuickAction_" .. i, BackgroundColor3 = self.Theme.Surface2,
+                BackgroundTransparency = 0.45, BorderSizePixel = 0, Text = "",
+                Size = UDim2.fromOffset(28, 27), Position = UDim2.fromOffset(5 + (i-1)*33, 3),
+                AutoButtonColor = false, ZIndex = 36, Parent = railMenu,
+            })
+            Corner(b, 5)
+            local ic = CreateIcon(item[1], 15, self.Theme.Icon, 37)
+            ic.AnchorPoint = Vector2.new(0.5, 0.5)
+            ic.Position = UDim2.fromScale(0.5, 0.5)
+            ic.Parent = b
+            BindTheme(self, ic, "ImageColor3", "Icon")
+            b.MouseButton1Click:Connect(item[2])
+        end
+    end
 
     local brand = New("Frame", {
         Name = "Brand", BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -6921,22 +6984,16 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.Topbar = topbar
-    if self.RealLayout then
-        topbar.Position = UDim2.fromOffset(12, 4)
-        topbar.Size = UDim2.new(1, -60, 0, 40)
-        local strip = New("ScrollingFrame", {
-            Name = "TabStrip", BackgroundColor3 = self.Theme.BackgroundTop,
-            BorderSizePixel = 0, Position = UDim2.fromOffset((config.ScriptExplorerWidth or 192) + 10, 52),
-            Size = UDim2.new(1, -((config.ScriptExplorerWidth or 192) + 20), 0, 38),
-            ScrollBarThickness = 0, ScrollingDirection = Enum.ScrollingDirection.X,
-            AutomaticCanvasSize = Enum.AutomaticSize.X, CanvasSize = UDim2.new(),
-            ZIndex = 5, Parent = main,
-        })
-        local stripList = List(strip, 5, Enum.FillDirection.Horizontal)
-        stripList.VerticalAlignment = Enum.VerticalAlignment.Bottom
-        Padding(strip, 4, 4, 0, 0)
-        self.TabStrip = strip
-        BindTheme(self, strip, "BackgroundColor3", "BackgroundTop")
+    if config.Layout == "Studio" then
+        self.SidebarList.Parent = topbar
+        self.SidebarList.Position = UDim2.fromOffset(8, 6)
+        self.SidebarList.Size = UDim2.new(1, -20, 1, -12)
+        local tabLayout = self.SidebarList:FindFirstChildOfClass("UIListLayout")
+        if tabLayout then
+            tabLayout.FillDirection = Enum.FillDirection.Horizontal
+            tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+            tabLayout.Padding = UDim.new(0, 5)
+        end
     end
 
     local titleLabel = New("TextLabel", {
@@ -6953,6 +7010,7 @@ function PebbleUI:CreateWindow(config)
         Parent = topbar,
     })
     self.TitleLabel = titleLabel
+    if studio then titleLabel.Visible = false end
     BindTheme(self, titleLabel, "TextColor3", "TopbarText")
     BindTheme(self, titleLabel, "Font", "FontDisplay")
     local topbarLine = New("Frame", {
@@ -6961,6 +7019,7 @@ function PebbleUI:CreateWindow(config)
         Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 1), Parent = topbar,
     })
     BindTheme(self, topbarLine, "BackgroundColor3", "Border")
+    if studio then topbarLine.Visible = false end
 
     local closeBtn = New("TextButton", {
         Name = "CloseButton",
@@ -6998,6 +7057,7 @@ function PebbleUI:CreateWindow(config)
         RestScale(closeBtn)
     end)
     closeBtn.MouseButton1Click:Connect(function()
+        UserInputService.MouseIconEnabled = true
         Tween(main, 0.22, {
             Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset - 18,
                 main.Size.Y.Scale, main.Size.Y.Offset - 18),
@@ -7005,6 +7065,160 @@ function PebbleUI:CreateWindow(config)
         }, EASE_SOFT, Enum.EasingDirection.In)
         task.delay(0.22, function() self:Close() end)
     end)
+
+    -- Controles nativos da janela: minimizar, maximizar e restaurar.
+    local isMinimized, isMaximized = false, false
+    local restoreSize, restorePosition = main.Size, main.Position
+    local minimizedHeight = 42
+    local function makeWindowButton(name, iconName, rightOffset, action)
+        local button = New("TextButton", {
+            Name = name, BackgroundColor3 = self.Theme.Surface2,
+            BorderSizePixel = 0, AutoButtonColor = false, Text = "",
+            AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, rightOffset, 0, 13),
+            Size = UDim2.fromOffset(24, 24), ZIndex = 51, Parent = main,
+        })
+        Corner(button, 4)
+        local ico = CreateIcon(iconName, 13, self.Theme.TopbarIcon, 52)
+        ico.AnchorPoint = Vector2.new(0.5, 0.5)
+        ico.Position = UDim2.fromScale(0.5, 0.5)
+        ico.Parent = button
+        button.MouseEnter:Connect(function() ico.ImageColor3 = self.Theme.TopbarIconHover end)
+        button.MouseLeave:Connect(function() ico.ImageColor3 = self.Theme.TopbarIcon end)
+        button.MouseButton1Click:Connect(action)
+        return button, ico
+    end
+    local maximizeButton, maximizeIcon
+    local function maximizeOrRestore()
+        if isMinimized then
+            isMinimized = false
+            main.Size = restoreSize
+            if self.StudioToolbar then self.StudioToolbar.Visible = true end
+            self.Sidebar.Visible = true
+            if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
+            if self.Topbar then self.Topbar.Visible = true end
+            if self.ContentHost then self.ContentHost.Visible = true end
+            if self.ScriptEditor and self.ActiveScript then self.ScriptEditor.Visible = true end
+            if self.BlueprintEditor and self.ActiveBlueprint then self.BlueprintEditor.Visible = true end
+        end
+        if not isMaximized then
+            restoreSize, restorePosition = main.Size, main.Position
+            local viewport = screen.AbsoluteSize
+            main.Size = UDim2.fromOffset(math.max(420, viewport.X - 16), math.max(280, viewport.Y - 16))
+            main.Position = UDim2.fromScale(0.5, 0.5)
+            isMaximized = true
+        else
+            main.Size, main.Position = restoreSize, restorePosition
+            isMaximized = false
+        end
+        if maximizeIcon then maximizeIcon.Image = GetIcon(isMaximized and "copy" or "maximize-2") end
+        self:_UpdateScriptLayout()
+    end
+    local minimizeButton = makeWindowButton("MinimizeButton", "minus", -70, function()
+        if isMinimized then
+            isMinimized = false
+            main.Size = restoreSize
+            if self.StudioToolbar then self.StudioToolbar.Visible = true end
+            self.Sidebar.Visible = true
+            if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
+            self.Topbar.Visible = true
+            self.ContentHost.Visible = self.ScriptEditor == nil or not self.ScriptEditor.Visible
+            if self.ScriptEditor and self.ActiveScript then self.ScriptEditor.Visible = true end
+            if self.BlueprintEditor and self.ActiveBlueprint then self.BlueprintEditor.Visible = true end
+        else
+            restoreSize = main.Size
+            isMinimized = true
+            if self.StudioToolbar then self.StudioToolbar.Visible = false end
+            self.Sidebar.Visible = false
+            if self.ScriptExplorer then self.ScriptExplorer.Visible = false end
+            self.Topbar.Visible = false
+            self.ContentHost.Visible = false
+            if self.ScriptEditor then self.ScriptEditor.Visible = false end
+            if self.BlueprintEditor then self.BlueprintEditor.Visible = false end
+            main.Size = UDim2.fromOffset(main.AbsoluteSize.X, minimizedHeight)
+        end
+    end)
+    maximizeButton, maximizeIcon = makeWindowButton("MaximizeButton", "maximize-2", -41, maximizeOrRestore)
+    closeBtn.Position = UDim2.new(1, -12, 0, 13)
+
+    -- Oito zonas de resize (4 lados + 4 cantos), com cursor direcional.
+    if config.Resizable ~= false then
+        local zones = {
+            {"Left", -1, 0, UDim2.new(0,0,0,9), UDim2.new(0,6,1,-18), "move-horizontal"},
+            {"Right", 1, 0, UDim2.new(1,-6,0,9), UDim2.new(0,6,1,-18), "move-horizontal"},
+            {"Top", 0, -1, UDim2.new(0,9,0,0), UDim2.new(1,-18,0,6), "move-vertical"},
+            {"Bottom", 0, 1, UDim2.new(0,9,1,-6), UDim2.new(1,-18,0,6), "move-vertical"},
+            {"TopLeft", -1, -1, UDim2.fromOffset(0,0), UDim2.fromOffset(11,11), "move-diagonal-2"},
+            {"TopRight", 1, -1, UDim2.new(1,-11,0,0), UDim2.fromOffset(11,11), "move-diagonal"},
+            {"BottomLeft", -1, 1, UDim2.new(0,0,1,-11), UDim2.fromOffset(11,11), "move-diagonal"},
+            {"BottomRight", 1, 1, UDim2.new(1,-11,1,-11), UDim2.fromOffset(11,11), "move-diagonal-2"},
+        }
+        local resizing, mouseOver, currentZone, initialPoint, initialSize, initialCenter
+        local cursor = CreateIcon("move-horizontal", 19, self.Theme.Accent, 1002)
+        cursor.Name = "StudioResizeCursor"
+        cursor.Visible = false
+        cursor.Parent = screen
+        local function stopResize()
+            resizing = false
+            if not mouseOver then
+                cursor.Visible = false
+                UserInputService.MouseIconEnabled = true
+            end
+        end
+        for _, z in ipairs(zones) do
+            local zone = New("TextButton", {
+                Name = "Resize" .. z[1], Text = "", AutoButtonColor = false,
+                BackgroundTransparency = 1, BorderSizePixel = 0,
+                Position = z[4], Size = z[5], ZIndex = 1000, Parent = main,
+            })
+            zone.MouseEnter:Connect(function()
+                if isMinimized or isMaximized then return end
+                mouseOver = z
+                cursor.Image = GetIcon(z[6])
+                cursor.Visible = true
+                UserInputService.MouseIconEnabled = false
+            end)
+            zone.MouseLeave:Connect(function()
+                if mouseOver == z then mouseOver = nil end
+                if not resizing then
+                    cursor.Visible = false
+                    UserInputService.MouseIconEnabled = true
+                end
+            end)
+            zone.InputBegan:Connect(function(input)
+                if isMinimized or isMaximized then return end
+                if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+                resizing = true
+                currentZone = z
+                initialPoint = input.Position
+                initialSize = main.AbsoluteSize
+                initialCenter = main.AbsolutePosition + initialSize / 2
+            end)
+        end
+        local changed = UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+            if cursor.Visible then
+                cursor.Position = UDim2.fromOffset(input.Position.X + 10, input.Position.Y + 10)
+            end
+            if not resizing or not currentZone then return end
+            local dx = input.Position.X - initialPoint.X
+            local dy = input.Position.Y - initialPoint.Y
+            local minSize = config.MinSize or Defaults.MinSize
+            local maxSize = config.MaxSize or Defaults.MaxSize
+            local vp = screen.AbsoluteSize
+            local w = math.clamp(initialSize.X + currentZone[2]*dx, math.min(minSize.X,math.max(240,vp.X-8)), math.max(math.min(minSize.X,math.max(240,vp.X-8)), math.min(maxSize.X,math.max(240,vp.X-8))))
+            local h = math.clamp(initialSize.Y + currentZone[3]*dy, math.min(minSize.Y,math.max(180,vp.Y-8)), math.max(math.min(minSize.Y,math.max(180,vp.Y-8)), math.min(maxSize.Y,math.max(180,vp.Y-8))))
+            local x = initialCenter.X + currentZone[2]*(w-initialSize.X)/2
+            local y = initialCenter.Y + currentZone[3]*(h-initialSize.Y)/2
+            main.AnchorPoint = Vector2.new(0.5, 0.5)
+            main.Size = UDim2.fromOffset(w,h)
+            main.Position = UDim2.fromOffset(x,y)
+        end)
+        local ended = UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then stopResize() end
+        end)
+        table.insert(self._scriptConnections, changed)
+        table.insert(self._scriptConnections, ended)
+    end
 
     -- Global navigation search: tabs, sections and controls.
     local searchWidth = 198
@@ -7014,6 +7228,7 @@ function PebbleUI:CreateWindow(config)
         BackgroundColor3 = self.Theme.Input, BorderSizePixel = 0,
         ZIndex = 60, Parent = main,
     })
+    if studio then searchBar.Visible = false end
     Corner(searchBar, self.Theme.ControlRadius)
     BindTheme(self, searchBar, "BackgroundColor3", "Input")
     local searchBorder = FineStroke(searchBar, self.Theme.Border, 0.2)
