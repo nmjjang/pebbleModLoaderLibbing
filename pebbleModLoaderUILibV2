@@ -3504,12 +3504,16 @@ function Window:_UpdateScriptLayout()
         self.Sidebar.Position = UDim2.fromOffset(6, 6)
         self.Sidebar.Size = UDim2.new(0, rail - 10, 1, -12)
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
-        self.ScriptExplorer.Position = UDim2.fromOffset(rail + 2, top + 7)
-        self.ScriptExplorer.Size = UDim2.new(0, explorerWidth, 1, -(top + 15))
-        self.Topbar.Position = UDim2.fromOffset(contentLeft, 5)
-        self.Topbar.Size = UDim2.new(1, -(contentLeft + 48), 0, top - 5)
-        self.ContentHost.Position = UDim2.fromOffset(contentLeft, top + 7)
-        self.ContentHost.Size = UDim2.new(1, -(contentLeft + 8), 1, -(top + 15))
+        self.ScriptExplorer.Position = UDim2.fromOffset(rail + 2, 6)
+        self.ScriptExplorer.Size = UDim2.new(0, explorerWidth, 1, -12)
+        self.Topbar.Position = UDim2.fromOffset(contentLeft, 44)
+        self.Topbar.Size = UDim2.new(1, -(contentLeft + 8), 0, 34)
+        self.ContentHost.Position = UDim2.fromOffset(contentLeft, 83)
+        self.ContentHost.Size = UDim2.new(1, -(contentLeft + 8), 1, -91)
+        if self.StudioToolbar then
+            self.StudioToolbar.Position = UDim2.fromOffset(contentLeft, 5)
+            self.StudioToolbar.Size = UDim2.new(1, -(contentLeft + 116), 0, 34)
+        end
         self.ScriptEditor.Position = self.ContentHost.Position
         self.ScriptEditor.Size = self.ContentHost.Size
         self.CloseButton.Position = UDim2.new(1, -12, 0, 13)
@@ -4110,7 +4114,8 @@ function Window:_CreateScriptEditor()
         })
         List(tabs, 5, Enum.FillDirection.Horizontal)
         self.StudioScriptTabs = tabs
-        fileIcon.Visible = false
+        tabs.Visible = false -- Abas internas ocultas ate a UI ser redesenhada.
+        fileIcon.Visible = true
     end
     local footer = New("Frame", {
         Name = "EditorStatusBar", BackgroundColor3 = theme.Surface2, BorderSizePixel = 0,
@@ -6727,28 +6732,33 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
     if studio then
+        -- A barra de atalhos fica ACIMA das tabs, nao na lateral do Explorer.
         local railMenu = New("Frame", {
-            Name = "StudioRail", BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(3, 75), Size = UDim2.new(1, -6, 0, 190),
-            Parent = sidebar,
+            Name = "StudioQuickActions", BackgroundColor3 = self.Theme.Surface,
+            BorderSizePixel = 0, Position = UDim2.fromOffset(sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 16, 5),
+            Size = UDim2.new(1, -(sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 130), 0, 34),
+            ZIndex = 35, Parent = main,
         })
+        Corner(railMenu, 5)
+        self.StudioToolbar = railMenu
         local railItems = {
             { "house", function() if self.Tabs[1] then self:_setActiveTab(self.Tabs[1]) end end },
-            { "file-code-2", function()
+            { "code-xml", function()
                 if self.ActiveScript then self:OpenScript(self.ActiveScript.Id)
                 elseif self.CustomScripts[1] then self:OpenScript(self.CustomScripts[1].Id) end
             end },
             { "folder-open", function() if self.ScriptExplorer then self.ScriptExplorer.Visible = not self.ScriptExplorer.Visible end end },
+            { "settings", function() if #self.Tabs > 0 then self:_setActiveTab(self.Tabs[#self.Tabs]) end end },
         }
         for i, item in ipairs(railItems) do
             local b = New("TextButton", {
-                Name = "Rail_" .. i, BackgroundColor3 = self.Theme.Surface2,
-                BackgroundTransparency = 0.6, BorderSizePixel = 0, Text = "",
-                Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(3, (i-1)*44),
-                AutoButtonColor = false, Parent = railMenu,
+                Name = "QuickAction_" .. i, BackgroundColor3 = self.Theme.Surface2,
+                BackgroundTransparency = 0.45, BorderSizePixel = 0, Text = "",
+                Size = UDim2.fromOffset(28, 27), Position = UDim2.fromOffset(5 + (i-1)*33, 3),
+                AutoButtonColor = false, ZIndex = 36, Parent = railMenu,
             })
-            Corner(b, 6)
-            local ic = CreateIcon(item[1], 17, self.Theme.Icon, 3)
+            Corner(b, 5)
+            local ic = CreateIcon(item[1], 15, self.Theme.Icon, 37)
             ic.AnchorPoint = Vector2.new(0.5, 0.5)
             ic.Position = UDim2.fromScale(0.5, 0.5)
             ic.Parent = b
@@ -7009,6 +7019,7 @@ function PebbleUI:CreateWindow(config)
         Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 1), Parent = topbar,
     })
     BindTheme(self, topbarLine, "BackgroundColor3", "Border")
+    if studio then topbarLine.Visible = false end
 
     local closeBtn = New("TextButton", {
         Name = "CloseButton",
@@ -7046,6 +7057,7 @@ function PebbleUI:CreateWindow(config)
         RestScale(closeBtn)
     end)
     closeBtn.MouseButton1Click:Connect(function()
+        UserInputService.MouseIconEnabled = true
         Tween(main, 0.22, {
             Size = UDim2.new(main.Size.X.Scale, main.Size.X.Offset - 18,
                 main.Size.Y.Scale, main.Size.Y.Offset - 18),
@@ -7053,6 +7065,160 @@ function PebbleUI:CreateWindow(config)
         }, EASE_SOFT, Enum.EasingDirection.In)
         task.delay(0.22, function() self:Close() end)
     end)
+
+    -- Controles nativos da janela: minimizar, maximizar e restaurar.
+    local isMinimized, isMaximized = false, false
+    local restoreSize, restorePosition = main.Size, main.Position
+    local minimizedHeight = 42
+    local function makeWindowButton(name, iconName, rightOffset, action)
+        local button = New("TextButton", {
+            Name = name, BackgroundColor3 = self.Theme.Surface2,
+            BorderSizePixel = 0, AutoButtonColor = false, Text = "",
+            AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, rightOffset, 0, 13),
+            Size = UDim2.fromOffset(24, 24), ZIndex = 51, Parent = main,
+        })
+        Corner(button, 4)
+        local ico = CreateIcon(iconName, 13, self.Theme.TopbarIcon, 52)
+        ico.AnchorPoint = Vector2.new(0.5, 0.5)
+        ico.Position = UDim2.fromScale(0.5, 0.5)
+        ico.Parent = button
+        button.MouseEnter:Connect(function() ico.ImageColor3 = self.Theme.TopbarIconHover end)
+        button.MouseLeave:Connect(function() ico.ImageColor3 = self.Theme.TopbarIcon end)
+        button.MouseButton1Click:Connect(action)
+        return button, ico
+    end
+    local maximizeButton, maximizeIcon
+    local function maximizeOrRestore()
+        if isMinimized then
+            isMinimized = false
+            main.Size = restoreSize
+            if self.StudioToolbar then self.StudioToolbar.Visible = true end
+            self.Sidebar.Visible = true
+            if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
+            if self.Topbar then self.Topbar.Visible = true end
+            if self.ContentHost then self.ContentHost.Visible = true end
+            if self.ScriptEditor and self.ActiveScript then self.ScriptEditor.Visible = true end
+            if self.BlueprintEditor and self.ActiveBlueprint then self.BlueprintEditor.Visible = true end
+        end
+        if not isMaximized then
+            restoreSize, restorePosition = main.Size, main.Position
+            local viewport = screen.AbsoluteSize
+            main.Size = UDim2.fromOffset(math.max(420, viewport.X - 16), math.max(280, viewport.Y - 16))
+            main.Position = UDim2.fromScale(0.5, 0.5)
+            isMaximized = true
+        else
+            main.Size, main.Position = restoreSize, restorePosition
+            isMaximized = false
+        end
+        if maximizeIcon then maximizeIcon.Image = GetIcon(isMaximized and "copy" or "maximize-2") end
+        self:_UpdateScriptLayout()
+    end
+    local minimizeButton = makeWindowButton("MinimizeButton", "minus", -70, function()
+        if isMinimized then
+            isMinimized = false
+            main.Size = restoreSize
+            if self.StudioToolbar then self.StudioToolbar.Visible = true end
+            self.Sidebar.Visible = true
+            if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
+            self.Topbar.Visible = true
+            self.ContentHost.Visible = self.ScriptEditor == nil or not self.ScriptEditor.Visible
+            if self.ScriptEditor and self.ActiveScript then self.ScriptEditor.Visible = true end
+            if self.BlueprintEditor and self.ActiveBlueprint then self.BlueprintEditor.Visible = true end
+        else
+            restoreSize = main.Size
+            isMinimized = true
+            if self.StudioToolbar then self.StudioToolbar.Visible = false end
+            self.Sidebar.Visible = false
+            if self.ScriptExplorer then self.ScriptExplorer.Visible = false end
+            self.Topbar.Visible = false
+            self.ContentHost.Visible = false
+            if self.ScriptEditor then self.ScriptEditor.Visible = false end
+            if self.BlueprintEditor then self.BlueprintEditor.Visible = false end
+            main.Size = UDim2.fromOffset(main.AbsoluteSize.X, minimizedHeight)
+        end
+    end)
+    maximizeButton, maximizeIcon = makeWindowButton("MaximizeButton", "maximize-2", -41, maximizeOrRestore)
+    closeBtn.Position = UDim2.new(1, -12, 0, 13)
+
+    -- Oito zonas de resize (4 lados + 4 cantos), com cursor direcional.
+    if config.Resizable ~= false then
+        local zones = {
+            {"Left", -1, 0, UDim2.new(0,0,0,9), UDim2.new(0,6,1,-18), "move-horizontal"},
+            {"Right", 1, 0, UDim2.new(1,-6,0,9), UDim2.new(0,6,1,-18), "move-horizontal"},
+            {"Top", 0, -1, UDim2.new(0,9,0,0), UDim2.new(1,-18,0,6), "move-vertical"},
+            {"Bottom", 0, 1, UDim2.new(0,9,1,-6), UDim2.new(1,-18,0,6), "move-vertical"},
+            {"TopLeft", -1, -1, UDim2.fromOffset(0,0), UDim2.fromOffset(11,11), "move-diagonal-2"},
+            {"TopRight", 1, -1, UDim2.new(1,-11,0,0), UDim2.fromOffset(11,11), "move-diagonal"},
+            {"BottomLeft", -1, 1, UDim2.new(0,0,1,-11), UDim2.fromOffset(11,11), "move-diagonal"},
+            {"BottomRight", 1, 1, UDim2.new(1,-11,1,-11), UDim2.fromOffset(11,11), "move-diagonal-2"},
+        }
+        local resizing, mouseOver, currentZone, initialPoint, initialSize, initialCenter
+        local cursor = CreateIcon("move-horizontal", 19, self.Theme.Accent, 1002)
+        cursor.Name = "StudioResizeCursor"
+        cursor.Visible = false
+        cursor.Parent = screen
+        local function stopResize()
+            resizing = false
+            if not mouseOver then
+                cursor.Visible = false
+                UserInputService.MouseIconEnabled = true
+            end
+        end
+        for _, z in ipairs(zones) do
+            local zone = New("TextButton", {
+                Name = "Resize" .. z[1], Text = "", AutoButtonColor = false,
+                BackgroundTransparency = 1, BorderSizePixel = 0,
+                Position = z[4], Size = z[5], ZIndex = 1000, Parent = main,
+            })
+            zone.MouseEnter:Connect(function()
+                if isMinimized or isMaximized then return end
+                mouseOver = z
+                cursor.Image = GetIcon(z[6])
+                cursor.Visible = true
+                UserInputService.MouseIconEnabled = false
+            end)
+            zone.MouseLeave:Connect(function()
+                if mouseOver == z then mouseOver = nil end
+                if not resizing then
+                    cursor.Visible = false
+                    UserInputService.MouseIconEnabled = true
+                end
+            end)
+            zone.InputBegan:Connect(function(input)
+                if isMinimized or isMaximized then return end
+                if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+                resizing = true
+                currentZone = z
+                initialPoint = input.Position
+                initialSize = main.AbsoluteSize
+                initialCenter = main.AbsolutePosition + initialSize / 2
+            end)
+        end
+        local changed = UserInputService.InputChanged:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+            if cursor.Visible then
+                cursor.Position = UDim2.fromOffset(input.Position.X + 10, input.Position.Y + 10)
+            end
+            if not resizing or not currentZone then return end
+            local dx = input.Position.X - initialPoint.X
+            local dy = input.Position.Y - initialPoint.Y
+            local minSize = config.MinSize or Defaults.MinSize
+            local maxSize = config.MaxSize or Defaults.MaxSize
+            local vp = screen.AbsoluteSize
+            local w = math.clamp(initialSize.X + currentZone[2]*dx, math.min(minSize.X,math.max(240,vp.X-8)), math.max(math.min(minSize.X,math.max(240,vp.X-8)), math.min(maxSize.X,math.max(240,vp.X-8))))
+            local h = math.clamp(initialSize.Y + currentZone[3]*dy, math.min(minSize.Y,math.max(180,vp.Y-8)), math.max(math.min(minSize.Y,math.max(180,vp.Y-8)), math.min(maxSize.Y,math.max(180,vp.Y-8))))
+            local x = initialCenter.X + currentZone[2]*(w-initialSize.X)/2
+            local y = initialCenter.Y + currentZone[3]*(h-initialSize.Y)/2
+            main.AnchorPoint = Vector2.new(0.5, 0.5)
+            main.Size = UDim2.fromOffset(w,h)
+            main.Position = UDim2.fromOffset(x,y)
+        end)
+        local ended = UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then stopResize() end
+        end)
+        table.insert(self._scriptConnections, changed)
+        table.insert(self._scriptConnections, ended)
+    end
 
     -- Global navigation search: tabs, sections and controls.
     local searchWidth = 198
