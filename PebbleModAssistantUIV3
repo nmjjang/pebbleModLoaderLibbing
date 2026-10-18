@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.7.0-real-layout" }
+local PebbleUI = { Version = "1.6.2-liquid-tabs" }
 
 --============================================================
 -- Services
@@ -244,35 +244,35 @@ local DefaultTheme = {
     FontMedium = Enum.Font.GothamMedium,
     FontDisplay = Enum.Font.GothamBold,
 
-    BackgroundTop     = Color3.fromRGB(12, 13, 13),
-    BackgroundBottom  = Color3.fromRGB(12, 13, 13),
-    Sidebar           = Color3.fromRGB(15, 16, 16),
-    SidebarDivider    = Color3.fromRGB(35, 37, 38),
+    BackgroundTop     = Color3.fromRGB(15, 16, 19),
+    BackgroundBottom  = Color3.fromRGB(15, 16, 19),
+    Sidebar           = Color3.fromRGB(27, 29, 32),
+    SidebarDivider    = Color3.fromRGB(55, 59, 63),
 
-    Surface           = Color3.fromRGB(18, 19, 19),
-    Surface2          = Color3.fromRGB(24, 25, 25),
-    SurfaceHover      = Color3.fromRGB(28, 29, 29),
-    Input             = Color3.fromRGB(20, 21, 21),
-    Popup             = Color3.fromRGB(20, 21, 21),
-    CodeBackground    = Color3.fromRGB(12, 13, 13),
+    Surface           = Color3.fromRGB(27, 29, 32),
+    Surface2          = Color3.fromRGB(37, 39, 42),
+    SurfaceHover      = Color3.fromRGB(45, 48, 52),
+    Input             = Color3.fromRGB(15, 16, 19),
+    Popup             = Color3.fromRGB(27, 29, 32),
+    CodeBackground    = Color3.fromRGB(15, 16, 19),
 
     Text              = Color3.fromRGB(230, 232, 236),
     SubText           = Color3.fromRGB(154, 158, 165),
     MutedText         = Color3.fromRGB(128, 132, 140),
     DimText           = Color3.fromRGB(109, 113, 121),
 
-    Accent            = Color3.fromRGB(228, 229, 230),
-    AccentHover       = Color3.fromRGB(255, 255, 255),
-    AccentText        = Color3.fromRGB(18, 19, 19),
-    Button            = Color3.fromRGB(23, 24, 24),
-    ButtonHover       = Color3.fromRGB(36, 37, 37),
+    Accent            = Color3.fromRGB(65, 151, 220),
+    AccentHover       = Color3.fromRGB(86, 170, 235),
+    AccentText        = Color3.fromRGB(255, 255, 255),
+    Button            = Color3.fromRGB(37, 39, 42),
+    ButtonHover       = Color3.fromRGB(47, 50, 54),
     ButtonText        = Color3.fromRGB(230, 232, 236),
     SliderTrack       = Color3.fromRGB(55, 59, 63),
-    SliderFill        = Color3.fromRGB(220, 222, 224),
+    SliderFill        = Color3.fromRGB(65, 151, 220),
     SliderKnob        = Color3.fromRGB(230, 232, 236),
 
-    Stroke            = Color3.fromRGB(38, 39, 39),
-    Border            = Color3.fromRGB(38, 39, 39),
+    Stroke            = Color3.fromRGB(55, 59, 63),
+    Border            = Color3.fromRGB(55, 59, 63),
     CheckboxBorder    = Color3.fromRGB(80, 85, 90),
 
     Icon              = Color3.fromRGB(154, 158, 165),
@@ -305,8 +305,8 @@ local DefaultTheme = {
     SyntaxFunction    = Color3.fromRGB(144, 207, 222),
     SyntaxSelection   = Color3.fromRGB(87, 119, 174),
 
-    ControlRadius     = 6,
-    SectionRadius     = 7,
+    ControlRadius     = 4,
+    SectionRadius     = 5,
     PopupRadius       = 6,
     Scrollbar         = Color3.fromRGB(80, 85, 90),
     ScrollbarTransparency = 0.6,
@@ -320,19 +320,19 @@ local Defaults = {
     Version = "v1.6.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(940, 600),
+    Size = UDim2.fromOffset(780, 520),
     Position = UDim2.fromScale(0.5, 0.5),
     MinSize = Vector2.new(600, 380),
     MaxSize = Vector2.new(1400, 900),
 
-    TopbarHeight = 64,
-    SidebarWidth = 190,
+    TopbarHeight = 42,
+    SidebarWidth = 140,
     CollapsedSidebarWidth = 64,
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
-    CornerRadius = 10,
-    LeftColumnWidth = nil,
+    CornerRadius = 8,
+    LeftColumnWidth = 272,
     ColumnGap = 12,
     SectionGap = 10,
     CompactControls = true,
@@ -2272,7 +2272,7 @@ function Tab:Section(config)
         Parent = parent,
     })
     Corner(frame, config.Corner or theme.SectionRadius)
-    local border = FineStroke(frame, config.BorderColor or theme.Border, 0.72)
+    local border = FineStroke(frame, config.BorderColor or theme.Border, 0.42)
     BindTheme(self.Window, frame, "BackgroundColor3", "Surface", config.BackgroundColor)
     BindTheme(self.Window, border, "Color", "Border", config.BorderColor)
 
@@ -2324,7 +2324,7 @@ function Tab:Section(config)
     local headerLine = New("Frame", {
         Name = "HeaderLine",
         BackgroundColor3 = theme.Border,
-        BackgroundTransparency = 0.75,
+        BackgroundTransparency = 0.35,
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(10, headerHeight),
         Size = UDim2.new(1, -20, 0, 1),
@@ -2371,6 +2371,77 @@ end
 -- Window
 --============================================================
 
+-- Single, shared liquid selector that travels between sidebar tabs.
+function Window:_MoveLiquidSelection(tab, instant)
+    if not tab or not tab.Button or not tab.Button.Parent then return end
+    local pill = self.LiquidTabIndicator
+    if not pill then return end
+
+    self._liquidSequence = (self._liquidSequence or 0) + 1
+    local sequence = self._liquidSequence
+    if self._liquidMoveTween then self._liquidMoveTween:Cancel() end
+    if self._liquidSizeTween then self._liquidSizeTween:Cancel() end
+    if self._liquidSettleTween then self._liquidSettleTween:Cancel() end
+    if self._liquidSettleSizeTween then self._liquidSettleSizeTween:Cancel() end
+
+    local button = tab.Button
+    local sidebar = self.Sidebar
+    local targetY = button.AbsolutePosition.Y - sidebar.AbsolutePosition.Y
+    local targetX = button.AbsolutePosition.X - sidebar.AbsolutePosition.X
+    local targetW = button.AbsoluteSize.X
+    local targetH = button.AbsoluteSize.Y
+    if targetW <= 0 or targetH <= 0 then
+        task.delay(0.05, function()
+            if sequence == self._liquidSequence and pill.Parent then
+                self:_MoveLiquidSelection(tab, instant)
+            end
+        end)
+        return
+    end
+
+    pill.Visible = true
+    pill.BackgroundColor3 = self.Theme.SurfaceHover
+    local destination = UDim2.fromOffset(targetX, targetY)
+    local originalSize = UDim2.fromOffset(targetW, targetH)
+    if instant or not self._liquidInitialized then
+        pill.Position = destination
+        pill.Size = originalSize
+        pill.BackgroundTransparency = 0
+        self._liquidInitialized = true
+        return
+    end
+
+    local currentY = pill.Position.Y.Offset
+    local distance = targetY - currentY
+    if math.abs(distance) < 1 then
+        self._liquidMoveTween = Tween(pill, 0.24, {
+            Position = destination, Size = originalSize,
+        }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+        return
+    end
+
+    -- A gently stretched blob: leading edge moves first, then the tail catches up.
+    local stretch = math.min(17, math.abs(distance) * 0.20 + 5)
+    local movingDown = distance > 0
+    local stretchedY = movingDown and (targetY - stretch) or targetY
+    local stretchedH = targetH + stretch
+    self._liquidMoveTween = Tween(pill, 0.27, {
+        Position = UDim2.fromOffset(targetX, stretchedY),
+    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    self._liquidSizeTween = Tween(pill, 0.27, {
+        Size = UDim2.fromOffset(targetW, stretchedH),
+    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    task.delay(0.19, function()
+        if sequence ~= self._liquidSequence or not pill.Parent then return end
+        self._liquidSettleTween = Tween(pill, 0.25, {
+            Position = destination,
+        }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        self._liquidSettleSizeTween = Tween(pill, 0.25, {
+            Size = originalSize,
+        }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    end)
+end
+
 function Window:_setActiveTab(tab)
     if not tab or (self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint) then return end
     if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
@@ -2383,31 +2454,23 @@ function Window:_setActiveTab(tab)
         local selected = t == tab
         t.Container.Visible = selected
         Tween(t.ButtonLabel, 0.22, {
-            TextColor3 = selected and self.Theme.Text or self.Theme.SubText
+            TextColor3 = selected and self.Theme.Accent or self.Theme.SubText
         }, EASE_SOFT, Enum.EasingDirection.Out)
         if t.ButtonIcon then
             Tween(t.ButtonIcon, 0.22, {
-                ImageColor3 = selected and self.Theme.Text or self.Theme.Icon
+                ImageColor3 = selected and self.Theme.Accent or self.Theme.Icon
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Button then
-            Tween(t.Button, 0.24, {
-                BackgroundTransparency = selected and 0 or 1,
-                BackgroundColor3 = selected and self.Theme.SurfaceHover or self.Theme.Sidebar,
-            }, EASE_SOFT, Enum.EasingDirection.Out)
+            Tween(t.Button, 0.2, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Accent then
-            Tween(t.Accent, 0.22, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
-        end
-        if t.DocumentButton then
-            Tween(t.DocumentButton, 0.18, {
-                BackgroundTransparency = selected and 0 or 0.35,
-                TextColor3 = selected and self.Theme.Text or self.Theme.SubText,
-            }, EASE_SOFT, Enum.EasingDirection.Out)
+            Tween(t.Accent, 0.22, { BackgroundTransparency = selected and 0 or 1 }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end
 
     self.ActiveTab = tab
+    self:_MoveLiquidSelection(tab)
     PopIn(tab.Container, 0)
     safeCallback(self.Config.OnTabChange, tab)
 end
@@ -2464,7 +2527,7 @@ function Window:_applySidebarWidth(targetWidth, animated)
 end
 
 function Window:_fitSidebarText(text, textSize, font, hasIcon, extraPadding)
-    if self.RealStyle or self.Config.AutoFitSidebar == false then return self end
+    if self.Config.AutoFitSidebar == false then return self end
     text = tostring(text or "")
     if text == "" then return self end
 
@@ -2540,6 +2603,7 @@ function Window:Tab(config)
         LayoutOrder = self.SidebarOrder,
         Text = "",
         AutoButtonColor = false,
+        ZIndex = 4,
         Parent = self.SidebarList,
     })
     Corner(button, config.Corner or theme.ControlRadius)
@@ -2547,7 +2611,7 @@ function Window:Tab(config)
     local icon
     if config.Icon then
         icon = CreateIcon(config.Icon, config.IconSize or 14,
-            config.IconColor or theme.Icon, 2)
+            config.IconColor or theme.Icon, 5)
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 11, 0.5, 0)
         icon.Parent = button
@@ -2564,6 +2628,7 @@ function Window:Tab(config)
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd,
+        ZIndex = 5,
         Parent = button,
     })
 
@@ -2575,6 +2640,7 @@ function Window:Tab(config)
         Size = UDim2.fromOffset(2, 12),
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(0, 2, 0.5, 0),
+        ZIndex = 5,
         Parent = button,
     })
     Corner(accent, 99)
@@ -2671,7 +2737,9 @@ function Window:Tab(config)
         local selected = self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint
         label.TextColor3 = selected and theme.Accent or theme.SubText
         if icon then icon.ImageColor3 = selected and theme.Accent or (config.IconColor or theme.Icon) end
-        button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Sidebar
+        button.BackgroundTransparency = 1
+        button.BackgroundColor3 = theme.Sidebar
+        if selected then self:_MoveLiquidSelection(tab, true) end
         for _, scrollFrame in ipairs({ leftScroll, rightScroll }) do
             StyleScrollBar(scrollFrame, { Thickness = theme.ScrollbarThickness, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
         end
@@ -2698,25 +2766,6 @@ function Window:Tab(config)
     button.MouseButton1Up:Connect(function() ReleaseScale(button) end)
     button.MouseButton1Click:Connect(function() self:_setActiveTab(tab) end)
 
-    if self.RealStyle and self.RealTabStrip then
-        local documentTab = New('TextButton', {
-            Name='Document_' .. title, Text=title, Font=theme.FontMedium,
-            TextSize=11, TextColor3=theme.SubText,
-            BackgroundColor3=theme.Surface2, BackgroundTransparency=0.35,
-            BorderSizePixel=0, AutoButtonColor=false,
-            Size=UDim2.fromOffset(math.clamp(#title * 7 + 34, 95, 174),27),
-            LayoutOrder=self.SidebarOrder, Parent=self.RealTabStrip,
-        })
-        Corner(documentTab,5)
-        tab.DocumentButton = documentTab
-        documentTab.MouseButton1Click:Connect(function() self:_setActiveTab(tab) end)
-        documentTab.MouseEnter:Connect(function()
-            if self.ActiveTab ~= tab then documentTab.BackgroundTransparency=0 end
-        end)
-        documentTab.MouseLeave:Connect(function()
-            if self.ActiveTab ~= tab then documentTab.BackgroundTransparency=0.35 end
-        end)
-    end
     if not self.ActiveTab then self:_setActiveTab(tab) end
     return tab
 end
@@ -6572,7 +6621,6 @@ function PebbleUI:CreateWindow(config)
     local self = setmetatable({}, Window)
 
     self.Config = config
-    self.RealStyle = config.RealStyle ~= false
     self.Theme = merge(DefaultTheme, config.Theme or {})
     if config.SelectColor then self.Theme.Accent = config.SelectColor end
 
@@ -6886,6 +6934,21 @@ function PebbleUI:CreateWindow(config)
     List(sidebarList, 3)
     self.SidebarList = sidebarList
 
+    -- The selector lives outside UIListLayout so it can freely slide between buttons.
+    local liquidIndicator = New("Frame", {
+        Name = "LiquidTabIndicator",
+        Visible = false,
+        BackgroundColor3 = self.Theme.SurfaceHover,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        Size = UDim2.fromOffset(0, 0),
+        ZIndex = 2,
+        Parent = sidebar,
+    })
+    Corner(liquidIndicator, 7)
+    self.LiquidTabIndicator = liquidIndicator
+    BindTheme(self, liquidIndicator, "BackgroundColor3", "SurfaceHover")
+
     local topbar = New("Frame", {
         Name = "Topbar",
         BackgroundTransparency = 1,
@@ -7146,18 +7209,10 @@ function PebbleUI:CreateWindow(config)
     local function positionSearch()
         if not closeBtn.Parent then return end
         local inset = self._scriptRightInset or 0
-        if self.RealStyle then
-            searchBar.AnchorPoint = Vector2.new(0, 0)
-            searchBar.Position = UDim2.fromOffset(16, 131)
-            searchBar.Size = UDim2.new(0, math.max(92, self.SidebarWidth - 32), 0, 29)
-            searchResults.AnchorPoint = Vector2.new(0, 0)
-            searchResults.Position = UDim2.fromOffset(16, 164)
-        else
-            searchBar.Position = UDim2.new(1, -(44 + inset), 0, 13)
-            searchResults.Position = UDim2.new(1, -(44 + inset), 0, 41)
-            local available = closeBtn.AbsolutePosition.X - (topbar.AbsolutePosition.X + 110)
-            searchBar.Size = UDim2.fromOffset(math.max(100, math.min(searchWidth, available)), 24)
-        end
+        searchBar.Position = UDim2.new(1, -(44 + inset), 0, 13)
+        searchResults.Position = UDim2.new(1, -(44 + inset), 0, 41)
+        local available = closeBtn.AbsolutePosition.X - (topbar.AbsolutePosition.X + 110)
+        searchBar.Size = UDim2.fromOffset(math.max(100, math.min(searchWidth, available)), 24)
     end
     self._PositionGlobalSearch = positionSearch
     main:GetPropertyChangedSignal("AbsoluteSize"):Connect(positionSearch)
@@ -7171,84 +7226,6 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.ContentHost = contentHost
-
-    if self.RealStyle then
-        -- Real-inspired workbench: framed Explorer, top document area, bottom status.
-        sidebar.Position = UDim2.fromOffset(0, 47)
-        sidebar.Size = UDim2.new(0, sidebarWidth, 1, -73)
-        sidebar.BackgroundTransparency = 0
-        sidebarStroke.Transparency = 1
-        sidebar.ClipsDescendants = false
-        brand.Position = UDim2.fromOffset(13, 3)
-        brand.Size = UDim2.new(1, -26, 0, 38)
-        avatarHolder.Size = UDim2.fromOffset(25, 25)
-        brandLabel.Position = UDim2.fromOffset(34, 0)
-        brandLabel.Size = UDim2.new(1, -34, 1, 0)
-        brandLabel.TextColor3 = self.Theme.Text
-        sidebarList.Position = UDim2.fromOffset(9, 130)
-        sidebarList.Size = UDim2.new(1, -18, 1, -140)
-        topbar.Position = UDim2.fromOffset(sidebarWidth + 9, 47)
-        topbar.Size = UDim2.new(1, -(sidebarWidth + 18), 0, topHeight)
-        titleLabel.Text = 'Workspace  /  ' .. self.Title
-        titleLabel.Font = self.Theme.FontMedium
-        titleLabel.TextSize = 12
-        titleLabel.TextColor3 = self.Theme.SubText
-        titleLabel.Size = UDim2.new(1, -20, 0, 29)
-        local documentTabs = New('ScrollingFrame', {
-            Name='DocumentTabs', BackgroundTransparency=1, BorderSizePixel=0,
-            ScrollBarThickness=0, ScrollingDirection=Enum.ScrollingDirection.X,
-            AutomaticCanvasSize=Enum.AutomaticSize.X, CanvasSize=UDim2.new(),
-            Position=UDim2.fromOffset(0,32), Size=UDim2.new(1,-8,0,31), Parent=topbar,
-        })
-        List(documentTabs, 4, Enum.FillDirection.Horizontal)
-        self.RealTabStrip = documentTabs
-        topbarLine.BackgroundTransparency = 0.76
-        contentHost.Position = UDim2.fromOffset(sidebarWidth + 15, topHeight + 57)
-        contentHost.Size = UDim2.new(1, -(sidebarWidth + 30), 1, -(topHeight + 91))
-        closeBtn.Position = UDim2.new(1, -12, 0, 10)
-        closeBtn.BackgroundTransparency = 1
-        closeStroke.Transparency = 1
-        local head = New('Frame', {Name='RealHeader', BackgroundColor3=self.Theme.Sidebar,
-            BorderSizePixel=0, Size=UDim2.new(1,0,0,47), Parent=main})
-        local headerIcon = CreateIcon('code-2', 17, self.Theme.Text, 5)
-        headerIcon.Position = UDim2.fromOffset(18, 15)
-        headerIcon.Parent = head
-        New('TextLabel', {Name='WorkbenchTitle', Text=config.WorkbenchTitle or 'Pebble',
-            Font=self.Theme.FontBold, TextSize=16, TextColor3=self.Theme.Text,
-            TextXAlignment=Enum.TextXAlignment.Left, BackgroundTransparency=1,
-            Position=UDim2.fromOffset(43,0), Size=UDim2.new(0,175,1,0), Parent=head})
-        local headerLine = New('Frame',{BackgroundColor3=self.Theme.Border,BorderSizePixel=0,
-            Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),Parent=head})
-        BindTheme(self,head,'BackgroundColor3','Sidebar')
-        BindTheme(self,headerLine,'BackgroundColor3','Border')
-        local explorer = New('TextLabel',{Name='ExplorerTitle',BackgroundTransparency=1,
-            Text='Explorer',Font=self.Theme.FontBold,TextSize=15,TextColor3=self.Theme.Text,
-            TextXAlignment=Enum.TextXAlignment.Left,Position=UDim2.fromOffset(16,48),
-            Size=UDim2.new(1,-32,0,32),Parent=sidebar})
-        BindTheme(self,explorer,'TextColor3','Text')
-        local bottom = New('Frame',{Name='StatusBar',BackgroundColor3=self.Theme.Sidebar,
-            BorderSizePixel=0,AnchorPoint=Vector2.new(0,1),Position=UDim2.new(0,0,1,0),
-            Size=UDim2.new(1,0,0,26),Parent=main})
-        local bottomText = New('TextLabel',{BackgroundTransparency=1,Text='◈  Pebble UI     •     Ready',
-            Font=self.Theme.FontMedium,TextSize=10,TextColor3=self.Theme.SubText,
-            Position=UDim2.fromOffset(14,0),Size=UDim2.new(0.7,0,1,0),
-            TextXAlignment=Enum.TextXAlignment.Left,Parent=bottom})
-        local status = New('TextLabel',{BackgroundTransparency=1,Text='●  ONLINE',
-            Font=self.Theme.FontMedium,TextSize=10,TextColor3=Color3.fromRGB(74,195,123),
-            AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,-14,0,0),
-            Size=UDim2.fromOffset(100,26),TextXAlignment=Enum.TextXAlignment.Right,Parent=bottom})
-        self.StatusBar = bottom
-        self.StatusLabel = status
-        searchInput.PlaceholderText = 'Search files...'
-        searchBar.BackgroundColor3 = self.Theme.Input
-        searchBorder.Transparency = 1
-        searchBar.ZIndex = 80
-        searchInput.ZIndex = 81
-        searchIcon.ZIndex = 81
-        searchResults.ZIndex = 90
-        -- The search remains interactive and searches tabs, sections, and controls.
-        task.defer(positionSearch)
-    end
 
     -- The profile card follows the same auto-fit rules as tabs, so long display names stay readable.
     self:_fitSidebarText(displayName, 12, self.Theme.FontDisplay or self.Theme.FontBold, true, 12)
