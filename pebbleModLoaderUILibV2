@@ -6891,24 +6891,39 @@ function PebbleUI:CreateWindow(config)
             if main.Parent then fit(main.AbsoluteSize.X, main.AbsoluteSize.Y, true) end
         end)
         if config.Resizable ~= false then
+            -- Always-visible corner handle, built without external icon assets.
             local grip = New("TextButton", {
                 Name = "ResizeGrip", Text = "", AutoButtonColor = false,
-                BackgroundTransparency = 1, BorderSizePixel = 0,
-                AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0),
-                Size = UDim2.fromOffset(30, 30), ZIndex = 4500, Active = true, Parent = main,
+                BackgroundColor3 = self.Theme.SurfaceHover, BackgroundTransparency = 0,
+                BorderSizePixel = 0, AnchorPoint = Vector2.new(1, 1),
+                Position = UDim2.new(1, -3, 1, -3),
+                Size = UDim2.fromOffset(34, 34), ZIndex = 4500,
+                Active = true, Parent = main,
             })
-            local icon = CreateIcon("grip", 16, self.Theme.MutedText, 4501)
-            icon.AnchorPoint = Vector2.new(0.5, 0.5)
-            icon.Position = UDim2.fromScale(0.5, 0.5)
-            icon.Rotation = -45
-            icon.Parent = grip
-            if icon.Image == "" then
-                icon:Destroy()
-                New("TextLabel", { Name = "ResizeSymbol", Text = "◢", Font = Enum.Font.Gotham,
-                    TextSize = 18, TextColor3 = self.Theme.MutedText,
-                    BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1),
-                    ZIndex = 4501, Parent = grip })
+            Corner(grip, 6)
+            local gripStroke = Stroke(grip, self.Theme.Accent, 1, 0.2)
+            BindTheme(self, grip, "BackgroundColor3", "SurfaceHover")
+            BindTheme(self, gripStroke, "Color", "Accent")
+            -- Diagonal grab lines remain visible even if the Lucide bundle fails.
+            for i = 0, 2 do
+                New("Frame", {
+                    Name = "GripLine" .. i,
+                    BorderSizePixel = 0,
+                    BackgroundColor3 = self.Theme.Accent,
+                    Size = UDim2.fromOffset(12 - i * 3, 2),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.fromOffset(21 + i * 3, 19 + i * 3),
+                    Rotation = -45,
+                    ZIndex = 4501,
+                    Parent = grip,
+                })
             end
+            grip.MouseEnter:Connect(function()
+                if grip.Parent then grip.BackgroundColor3 = self.Theme.Accent end
+            end)
+            grip.MouseLeave:Connect(function()
+                if grip.Parent then grip.BackgroundColor3 = self.Theme.SurfaceHover end
+            end)
             self.ResizeGrip = grip
             local active, startPointer, startSize, startCenter, touchInput = false, nil, nil, nil, nil
             grip.InputBegan:Connect(function(input)
