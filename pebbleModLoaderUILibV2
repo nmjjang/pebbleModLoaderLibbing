@@ -6178,23 +6178,39 @@ local function PlayStartupIntro(window)
     local main = window.Main
     local theme = window.Theme
     local duration = math.max(0.15, tonumber(config.LoadingDuration) or 2.4)
+    local introFadeDuration = math.max(0.08, tonumber(config.LoadingIntroFadeDuration) or 0.28)
     local titleText = tostring(config.LoadingTitle or window.Title)
     local iconName = config.LoadingIcon or "cat"
 
     local cover = New("CanvasGroup", {
         Name = "StartupIntro",
         BackgroundColor3 = theme.BackgroundTop,
+        BackgroundTransparency = 1, -- Fundo preto nasce transparente; o resto do loading permanece independente.
         BorderSizePixel = 0,
         AnchorPoint = main.AnchorPoint,
         Position = main.Position,
         Size = main.Size,
-        GroupTransparency = 0,
+        GroupTransparency = 0, -- Evita apagar o CanvasGroup inteiro durante o fade do fundo.
         ZIndex = 10000,
         Active = true,
         Parent = window.ScreenGui,
     })
     Corner(cover, config.CornerRadius or Defaults.CornerRadius)
     window.LoadingOverlay = cover
+
+    -- A janela do script jamais pode aparecer por baixo do fade inicial.
+    local startupReleased = false
+    main.Visible = false
+    main.GroupTransparency = 1
+    local guardVisible = main:GetPropertyChangedSignal("Visible"):Connect(function()
+        if not startupReleased and main.Visible then
+            main.Visible = false
+        end
+    end)
+    cover.Destroying:Connect(function()
+        startupReleased = true
+        if guardVisible.Connected then guardVisible:Disconnect() end
+    end)
 
     local stack = New("Frame", {
         Name = "Identity", BackgroundTransparency = 1,
@@ -6280,6 +6296,14 @@ local function PlayStartupIntro(window)
         if not cover.Parent then return end
         RunService.RenderStepped:Wait()
 
+        -- Primeiro aparece a janelona preta inteira com um fade-in curto.
+        local introFade = Tween(cover, introFadeDuration, { BackgroundTransparency = 0 }, Enum.EasingStyle.Sine)
+        introFade.Completed:Wait()
+        -- Garante que a tela esteja 100% opaca antes do gatinho entrar.
+        cover.BackgroundTransparency = 0
+        if not cover.Parent then return end
+        task.wait(0.03)
+
         -- Preload evita que o icon apareca no meio do slide por atraso da textura.
         if logo.Image ~= "" then
             local loaded = false
@@ -6319,12 +6343,18 @@ local function PlayStartupIntro(window)
         progress.Completed:Wait()
         if not cover.Parent then return end
         task.wait(0.12)
-        -- O conteudo principal so pode ser renderizado a partir daqui.
+        -- A janela inteira nasce transparente, inclusive todos os seus filhos.
+        -- Comeca a revelar somente apos o progresso terminar.
         local mainScale = EnsureScale(main)
         mainScale.Scale = 0.985
+        main.GroupTransparency = 1
+        -- So agora o script pode ser exibido.
+        startupReleased = true
+        guardVisible:Disconnect()
         main.Visible = true
         Tween(mainScale, 0.65, { Scale = 1 }, EASE_SOFT)
-        local fade = Tween(cover, 0.58, { GroupTransparency = 1 }, EASE_SOFT)
+        Tween(main, 0.62, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
+        local fade = Tween(cover, 0.62, { GroupTransparency = 1 }, Enum.EasingStyle.Sine)
         fade.Completed:Wait()
         if cover.Parent then cover:Destroy() end
         if window.LoadingOverlay == cover then window.LoadingOverlay = nil end
@@ -6393,8 +6423,9 @@ function PebbleUI:CreateWindow(config)
     if not ok then screen.Parent = PlayerGui end
     self.ScreenGui = screen
 
-    local main = New("Frame", {
+    local main = New("CanvasGroup", {
         Name = "Main",
+        GroupTransparency = config.Loading == false and 0 or 1,
         Visible = false, -- Nunca mostrar o conteudo durante a introducao.
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = config.Position or Defaults.Position,
