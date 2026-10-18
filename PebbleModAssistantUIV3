@@ -235,41 +235,43 @@ end
 
 -- Soft radial hover: Roblox UIGradient is linear, so translucent concentric
 -- circles are used for a true radial falloff instead.
+-- Rounded, pointer-following background illumination.
+-- A CanvasGroup clips all radial discs to the same rounded silhouette as its host.
+-- This prevents the square patches that appeared during hover.
 local function AttachRadialHover(target, theme, options)
     options = options or {}
-    local inputTarget = options.InputTarget or target
-    local parent = options.Parent or target
-    target.ClipsDescendants = options.ClipTarget ~= false
-    if inputTarget:IsA("GuiObject") then
-        inputTarget.Active = true
-    end
-
-    local layer = New("Frame", {
+    local globalMouse = options.GlobalMouse == true
+    local layer = New("CanvasGroup", {
         Name = "RadialHoverLayer",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
+        ClipsDescendants = true,
+        GroupTransparency = 0,
         ZIndex = options.ZIndex or (target.ZIndex + 1),
         Active = false,
-        Parent = parent,
+        Parent = target,
     })
-
-    local discs = {}
-    local strengths = options.Strengths or { 0.945, 0.915, 0.875, 0.83, 0.785, 0.74, 0.69 }
-    local fraction = options.Fractions or { 1.00, 0.86, 0.72, 0.58, 0.44, 0.30, 0.17 }
-
-    local function applyColor()
-        local hoverColor = options.Color or theme.RadialHover or theme.SurfaceHover
-        for _, disc in ipairs(discs) do
-            disc.BackgroundColor3 = hoverColor
-        end
+    -- UICorner on CanvasGroup performs an actual rounded clip on the contents.
+    local originalCorner = target:FindFirstChildOfClass("UICorner")
+    local maskCorner = New("UICorner", {
+        CornerRadius = originalCorner and originalCorner.CornerRadius or UDim.new(0, 9),
+        Parent = layer,
+    })
+    if originalCorner then
+        originalCorner:GetPropertyChangedSignal("CornerRadius"):Connect(function()
+            if maskCorner.Parent then maskCorner.CornerRadius = originalCorner.CornerRadius end
+        end)
     end
 
+    local strengths = options.Strengths or { 0.955, 0.935, 0.91, 0.885, 0.86, 0.83, 0.80 }
+    local fractions = { 1, 0.86, 0.72, 0.58, 0.44, 0.30, 0.17 }
+    local discs = {}
     for i = 1, #strengths do
         local disc = New("Frame", {
             Name = "RadialDisc" .. i,
             AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundColor3 = options.Color or theme.RadialHover or theme.SurfaceHover,
+            BackgroundColor3 = theme.RadialHover or theme.SurfaceHover,
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             ZIndex = layer.ZIndex,
@@ -280,54 +282,64 @@ local function AttachRadialHover(target, theme, options)
         discs[i] = disc
     end
 
-    local lastX, lastY = 0.5, 0.5
     local hovering = false
-
-    local function positionAt(x, y)
-        local w, h = math.max(1, target.AbsoluteSize.X), math.max(1, target.AbsoluteSize.Y)
+    local lastX, lastY = 0.5, 0.5
+    local function place(x, y)
+        local w, h = math.max(target.AbsoluteSize.X, 1), math.max(target.AbsoluteSize.Y, 1)
+        lastX, lastY = x, y
         local diameter = math.max(w, h) * (options.Spread or 1.65)
         for i, disc in ipairs(discs) do
-            local size = diameter * fraction[i]
-            disc.Size = UDim2.fromOffset(size, size)
+            local radius = diameter * fractions[i]
+            disc.Size = UDim2.fromOffset(radius, radius)
             disc.Position = UDim2.fromOffset(x * w, y * h)
         end
     end
-
-    local function setHover(active)
+    local function hover(active)
+        if hovering == active then return end
         hovering = active
         for i, disc in ipairs(discs) do
-            Tween(disc, active and (options.FadeInTime or 0.23) or (options.FadeOutTime or 0.30), {
+            Tween(disc, active and 0.23 or 0.32, {
                 BackgroundTransparency = active and strengths[i] or 1,
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end
+    local function updatePointer(screenX, screenY)
+        if not target.Parent or not target.Visible then hover(false); return end
+        local pos, size = target.AbsolutePosition, target.AbsoluteSize
+        local inside = screenX >= pos.X and screenX <= pos.X + size.X
+            and screenY >= pos.Y and screenY <= pos.Y + size.Y
+        if inside then
+            place(math.clamp((screenX - pos.X) / math.max(size.X, 1), 0, 1),
+                  math.clamp((screenY - pos.Y) / math.max(size.Y, 1), 0, 1))
+        end
+        hover(inside)
+    end
 
-    applyColor()
-
-    inputTarget.MouseEnter:Connect(function()
-        local mouse = UserInputService:GetMouseLocation()
-        lastX = math.clamp((mouse.X - target.AbsolutePosition.X) / math.max(1, target.AbsoluteSize.X), 0, 1)
-        lastY = math.clamp((mouse.Y - target.AbsolutePosition.Y) / math.max(1, target.AbsoluteSize.Y), 0, 1)
-        positionAt(lastX, lastY)
-        setHover(true)
-    end)
-    inputTarget.MouseMoved:Connect(function(x, y)
-        lastX = math.clamp((x - target.AbsolutePosition.X) / math.max(1, target.AbsoluteSize.X), 0, 1)
-        lastY = math.clamp((y - target.AbsolutePosition.Y) / math.max(1, target.AbsoluteSize.Y), 0, 1)
-        if hovering then positionAt(lastX, lastY) end
-    end)
-    inputTarget.MouseLeave:Connect(function()
-        setHover(false)
-    end)
+    if globalMouse then
+        -- GUI descendants swallow MouseMoved. Screen-wide input keeps the
+        -- illumination following the cursor even across tabs and sections.
+        local connection
+        connection = UserInputService.InputChanged:Connect(function(input)
+            if not target.Parent then connection:Disconnect(); return end
+            if input.UserInputType == Enum.UserInputType.MouseMovement then
+                updatePointer(input.Position.X, input.Position.Y)
+            end
+        end)
+        target:GetPropertyChangedSignal("Visible"):Connect(function()
+            if not target.Visible then hover(false) end
+        end)
+    else
+        target.MouseEnter:Connect(function()
+            local xy = UserInputService:GetMouseLocation()
+            updatePointer(xy.X, xy.Y)
+        end)
+        target.MouseMoved:Connect(updatePointer)
+        target.MouseLeave:Connect(function() hover(false) end)
+    end
     target:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        positionAt(lastX, lastY)
+        place(lastX, lastY)
     end)
-
-    return {
-        Layer = layer,
-        Discs = discs,
-        Refresh = applyColor,
-    }
+    return layer
 end
 
 --============================================================
@@ -6742,7 +6754,7 @@ function PebbleUI:CreateWindow(config)
         Spread = 2.15,
         ZIndex = 0,
         Color = self.Theme.RadialHover,
-        ClipTarget = true,
+        GlobalMouse = true,
     })
 
     local sidebar = New("Frame", {
@@ -6764,7 +6776,7 @@ function PebbleUI:CreateWindow(config)
         Spread = 1.85,
         ZIndex = 0,
         Color = self.Theme.RadialHover,
-        ClipTarget = true,
+        GlobalMouse = true,
     })
 
     local brand = New("Frame", {
@@ -6989,7 +7001,7 @@ function PebbleUI:CreateWindow(config)
         Spread = 2.0,
         ZIndex = 0,
         Color = self.Theme.RadialHover,
-        ClipTarget = true,
+        GlobalMouse = true,
     })
 
     local titleLabel = New("TextLabel", {
