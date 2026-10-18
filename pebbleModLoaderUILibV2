@@ -342,9 +342,6 @@ local Defaults = {
     ToggleKey = Enum.KeyCode.RightShift,
     Draggable = true,
     Resizable = true,
-    Responsive = true,
-    SingleColumnBreakpoint = 590,
-    ScreenMargin = 12,
 }
 
 --============================================================
@@ -2441,7 +2438,7 @@ function Window:_applySidebarWidth(targetWidth, animated)
         self.ContentHost.Size = contentSize
     end
 
-    if self.Config.ExpandWindowForSidebar ~= false and self.Main and not self._resizingWindow then
+    if self.Config.ExpandWindowForSidebar ~= false and self.Main then
         local currentSize = self.Main.Size
         local targetOffset = currentSize.X.Offset + delta
         local maxSize = self.Config.MaxSize or Defaults.MaxSize
@@ -2673,30 +2670,6 @@ function Window:Tab(config)
             StyleScrollBar(scrollFrame, { Thickness = theme.ScrollbarThickness, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
         end
     end)
-    -- Responsive: balanced columns or two vertically stacked scroll areas.
-    local function updateResponsiveColumns()
-        if self.Destroyed or not container.Parent then return end
-        local width = container.AbsoluteSize.X
-        if width <= 1 then return end
-        local columnGap = self.Config.ColumnGap or Defaults.ColumnGap
-        local narrow = self.Config.Responsive ~= false and width < (self.Config.SingleColumnBreakpoint or Defaults.SingleColumnBreakpoint)
-        local leftPreferred = self.Config.LeftColumnWidth
-        if narrow then
-            leftScroll.Position = UDim2.fromScale(0, 0)
-            leftScroll.Size = UDim2.new(1, 0, 0.5, -columnGap / 2)
-            rightScroll.Position = UDim2.new(0, 0, 0.5, columnGap / 2)
-            rightScroll.Size = UDim2.new(1, 0, 0.5, -columnGap / 2)
-        else
-            local usable = math.max(0, width - columnGap)
-            local left = leftPreferred and math.min(leftPreferred, usable / 2) or usable / 2
-            leftScroll.Position = UDim2.fromOffset(0, 0)
-            leftScroll.Size = UDim2.new(0, left, 1, 0)
-            rightScroll.Position = UDim2.fromOffset(left + columnGap, 0)
-            rightScroll.Size = UDim2.new(1, -(left + columnGap), 1, 0)
-        end
-    end
-    table.insert(self._scriptConnections, container:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateResponsiveColumns))
-    task.defer(updateResponsiveColumns)
     table.insert(self.Tabs, tab)
 
     button.MouseEnter:Connect(function()
@@ -3517,10 +3490,8 @@ function Window:_UpdateScriptLayout()
     if not self.ScriptExplorer or self.Destroyed then return end
     local desired = self.Config.ScriptExplorerWidth or 192
     local available = self.Main.AbsoluteSize.X - self.SidebarWidth - 336
-    local compact = self.Config.Responsive ~= false and available < 148
-    local width = compact and 0 or math.floor(clamp(available, math.min(148, desired), desired))
-    self.ScriptExplorer.Visible = not compact
-    self._scriptRightInset = compact and 0 or (width + 12)
+    local width = math.floor(clamp(available, math.min(148, desired), desired))
+    self._scriptRightInset = width + 12
     self.ScriptExplorer.Size = UDim2.new(0, width, 1, -16)
     self.ScriptExplorer.Position = UDim2.new(1, -8, 0, 8)
     local side, top = self.SidebarWidth, self.TopbarHeight
@@ -6857,171 +6828,6 @@ function PebbleUI:CreateWindow(config)
             end
         end)
         table.insert(self._scriptConnections, windowDragConnection)
-    end
-    -- Corner resize grip with viewport clamping, mouse/touch tracking and cleanup.
-    do
-        local function getViewport()
-            local camera = workspace.CurrentCamera
-            if camera then return camera.ViewportSize end
-            return screen.AbsoluteSize
-        end
-        local margin = tonumber(config.ScreenMargin) or Defaults.ScreenMargin
-        local minCfg = config.MinSize or Defaults.MinSize
-        local maxCfg = config.MaxSize or Defaults.MaxSize
-        local function bounds()
-            local viewport = getViewport()
-            local maxW = math.max(240, math.min(maxCfg.X, viewport.X - margin * 2))
-            local maxH = math.max(220, math.min(maxCfg.Y, viewport.Y - margin * 2))
-            return math.min(minCfg.X, maxW), math.min(minCfg.Y, maxH), maxW, maxH, viewport
-        end
-        local function fit(w, h, keepCenter)
-            local minW, minH, maxW, maxH, viewport = bounds()
-            w, h = clamp(w, minW, maxW), clamp(h, minH, maxH)
-            local center = main.AbsolutePosition + main.AbsoluteSize / 2
-            if keepCenter then
-                center = Vector2.new(viewport.X / 2, viewport.Y / 2)
-            end
-            local x = clamp(center.X, margin + w / 2, math.max(margin + w / 2, viewport.X - margin - w / 2))
-            local y = clamp(center.Y, margin + h / 2, math.max(margin + h / 2, viewport.Y - margin - h / 2))
-            main.Size = UDim2.fromOffset(w, h)
-            main.Position = UDim2.fromOffset(x, y)
-        end
-        self._FitToViewport = fit
-        task.defer(function()
-            if main.Parent then fit(main.AbsoluteSize.X, main.AbsoluteSize.Y, true) end
-        end)
-        if config.Resizable ~= false then
-            -- Grip rendered as a ScreenGui sibling so Main.ClipsDescendants
-            -- and other panels cannot hide or intercept the resize handle.
-            local gripLayer = New("Frame", {
-                Name = "ResizeGripLayer",
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                Size = UDim2.fromScale(1, 1),
-                ZIndex = 9999,
-                Active = false,
-                Parent = screen,
-            })
-            local grip = New("TextButton", {
-                Name = "ResizeGrip",
-                Text = "",
-                AutoButtonColor = false,
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                AnchorPoint = Vector2.new(1, 1),
-                Size = UDim2.fromOffset(34, 34),
-                ZIndex = 10000,
-                Active = true,
-                Parent = gripLayer,
-            })
-            local function updateGripPosition()
-                if not grip.Parent or not main.Parent then return end
-                -- Absolute coordinates avoid UIScale and AnchorPoint drift.
-                local bottomRight = main.AbsolutePosition + main.AbsoluteSize
-                local localPoint = bottomRight - gripLayer.AbsolutePosition
-                grip.Position = UDim2.fromOffset(localPoint.X - 2, localPoint.Y - 2)
-                grip.Visible = main.Visible and screen.Enabled
-            end
-            table.insert(self._scriptConnections,
-                main:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateGripPosition))
-            table.insert(self._scriptConnections,
-                main:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateGripPosition))
-            table.insert(self._scriptConnections,
-                main:GetPropertyChangedSignal("Visible"):Connect(updateGripPosition))
-            table.insert(self._scriptConnections,
-                gripLayer:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateGripPosition))
-            table.insert(self._scriptConnections,
-                screen:GetPropertyChangedSignal("Enabled"):Connect(updateGripPosition))
-            task.defer(updateGripPosition)
-            local gripLines = {}
-            for i = 0, 2 do
-                local line = New("Frame", {
-                    Name = "GripLine" .. i,
-                    BackgroundColor3 = self.Theme.MutedText,
-                    BackgroundTransparency = 0.65,
-                    BorderSizePixel = 0,
-                    AnchorPoint = Vector2.new(0.5, 0.5),
-                    Position = UDim2.fromOffset(15 + i * 5, 15 + i * 5),
-                    Size = UDim2.fromOffset(15 - i * 3, 2),
-                    Rotation = -45,
-                    ZIndex = 10001,
-                    Parent = grip,
-                })
-                Corner(line, 99)
-                BindTheme(self, line, "BackgroundColor3", "MutedText")
-                table.insert(gripLines, line)
-            end
-            local hovered = false
-            local opacityTweens = {}
-            local function setGripHighlighted(highlighted)
-                for i, line in ipairs(gripLines) do
-                    if opacityTweens[i] then opacityTweens[i]:Cancel() end
-                    if line.Parent then
-                        opacityTweens[i] = TweenService:Create(line,
-                            TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                            { BackgroundTransparency = highlighted and 0 or 0.65 })
-                        opacityTweens[i]:Play()
-                    end
-                end
-            end
-            grip.MouseEnter:Connect(function()
-                hovered = true
-                setGripHighlighted(true)
-            end)
-            grip.MouseLeave:Connect(function()
-                hovered = false
-                if not self._resizingWindow then setGripHighlighted(false) end
-            end)
-            self.ResizeGrip = grip
-            local active, startPointer, startSize, startCenter, touchInput = false, nil, nil, nil, nil
-            grip.InputBegan:Connect(function(input)
-                if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-                active = true
-                self._resizingWindow = true
-                setGripHighlighted(true)
-                startPointer = Vector2.new(input.Position.X, input.Position.Y)
-                startSize = main.AbsoluteSize
-                startCenter = main.AbsolutePosition + startSize / 2
-                touchInput = input.UserInputType == Enum.UserInputType.Touch and input or nil
-            end)
-            local changed = UserInputService.InputChanged:Connect(function(input)
-                if not active or not main.Parent then return end
-                if touchInput and input ~= touchInput then return end
-                if not touchInput and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-                local point = Vector2.new(input.Position.X, input.Position.Y)
-                local delta = point - startPointer
-                local minW, minH, maxW, maxH, viewport = bounds()
-                local w = clamp(startSize.X + delta.X, minW, maxW)
-                local h = clamp(startSize.Y + delta.Y, minH, maxH)
-                -- Fix top-left during corner resize; clamp to visible viewport.
-                local left = startCenter.X - startSize.X / 2
-                local top = startCenter.Y - startSize.Y / 2
-                left = clamp(left, margin, math.max(margin, viewport.X - margin - w))
-                top = clamp(top, margin, math.max(margin, viewport.Y - margin - h))
-                main.Size = UDim2.fromOffset(w, h)
-                main.Position = UDim2.fromOffset(left + w / 2, top + h / 2)
-                updateGripPosition()
-            end)
-            local ended = UserInputService.InputEnded:Connect(function(input)
-                if active and ((touchInput and input == touchInput) or (not touchInput and input.UserInputType == Enum.UserInputType.MouseButton1)) then
-                    active, touchInput = false, nil
-                    self._resizingWindow = false
-                    setGripHighlighted(hovered)
-                end
-            end)
-            table.insert(self._scriptConnections, changed)
-            table.insert(self._scriptConnections, ended)
-            screen.Destroying:Connect(function()
-                active = false
-                if gripLayer.Parent then gripLayer:Destroy() end
-            end)
-        end
-        local camera = workspace.CurrentCamera
-        if camera then
-            table.insert(self._scriptConnections, camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-                if main.Parent and not self._resizingWindow then fit(main.AbsoluteSize.X, main.AbsoluteSize.Y) end
-            end))
-        end
     end
     self:_CreateScriptExplorer()
     self:_CreateCustomBlueprints()
