@@ -237,24 +237,39 @@ end
 -- circles are used for a true radial falloff instead.
 local function AttachRadialHover(target, theme, options)
     options = options or {}
-    target.ClipsDescendants = true
+    local inputTarget = options.InputTarget or target
+    local parent = options.Parent or target
+    target.ClipsDescendants = options.ClipTarget ~= false
+    if inputTarget:IsA("GuiObject") then
+        inputTarget.Active = true
+    end
+
     local layer = New("Frame", {
         Name = "RadialHoverLayer",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Size = UDim2.fromScale(1, 1),
-        ZIndex = target.ZIndex + 1,
+        ZIndex = options.ZIndex or (target.ZIndex + 1),
         Active = false,
-        Parent = target,
+        Parent = parent,
     })
+
     local discs = {}
-    local strengths = { 0.93, 0.90, 0.86, 0.81, 0.76, 0.71, 0.66 }
-    local fraction = { 1.00, 0.86, 0.72, 0.58, 0.44, 0.30, 0.17 }
+    local strengths = options.Strengths or { 0.945, 0.915, 0.875, 0.83, 0.785, 0.74, 0.69 }
+    local fraction = options.Fractions or { 1.00, 0.86, 0.72, 0.58, 0.44, 0.30, 0.17 }
+
+    local function applyColor()
+        local hoverColor = options.Color or theme.RadialHover or theme.SurfaceHover
+        for _, disc in ipairs(discs) do
+            disc.BackgroundColor3 = hoverColor
+        end
+    end
+
     for i = 1, #strengths do
         local disc = New("Frame", {
             Name = "RadialDisc" .. i,
             AnchorPoint = Vector2.new(0.5, 0.5),
-            BackgroundColor3 = theme.RadialHover or theme.SurfaceHover,
+            BackgroundColor3 = options.Color or theme.RadialHover or theme.SurfaceHover,
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             ZIndex = layer.ZIndex,
@@ -264,8 +279,10 @@ local function AttachRadialHover(target, theme, options)
         Corner(disc, 999)
         discs[i] = disc
     end
+
     local lastX, lastY = 0.5, 0.5
     local hovering = false
+
     local function positionAt(x, y)
         local w, h = math.max(1, target.AbsoluteSize.X), math.max(1, target.AbsoluteSize.Y)
         local diameter = math.max(w, h) * (options.Spread or 1.65)
@@ -275,29 +292,42 @@ local function AttachRadialHover(target, theme, options)
             disc.Position = UDim2.fromOffset(x * w, y * h)
         end
     end
+
     local function setHover(active)
         hovering = active
         for i, disc in ipairs(discs) do
-            Tween(disc, active and 0.23 or 0.30, {
+            Tween(disc, active and (options.FadeInTime or 0.23) or (options.FadeOutTime or 0.30), {
                 BackgroundTransparency = active and strengths[i] or 1,
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
     end
-    target.MouseEnter:Connect(function()
+
+    applyColor()
+
+    inputTarget.MouseEnter:Connect(function()
         local mouse = UserInputService:GetMouseLocation()
-        lastX = math.clamp((mouse.X - target.AbsolutePosition.X) / math.max(1,target.AbsoluteSize.X), 0, 1)
-        lastY = math.clamp((mouse.Y - target.AbsolutePosition.Y) / math.max(1,target.AbsoluteSize.Y), 0, 1)
+        lastX = math.clamp((mouse.X - target.AbsolutePosition.X) / math.max(1, target.AbsoluteSize.X), 0, 1)
+        lastY = math.clamp((mouse.Y - target.AbsolutePosition.Y) / math.max(1, target.AbsoluteSize.Y), 0, 1)
         positionAt(lastX, lastY)
         setHover(true)
     end)
-    target.MouseMoved:Connect(function(x,y)
-        lastX = math.clamp((x - target.AbsolutePosition.X) / math.max(1,target.AbsoluteSize.X), 0, 1)
-        lastY = math.clamp((y - target.AbsolutePosition.Y) / math.max(1,target.AbsoluteSize.Y), 0, 1)
-        if hovering then positionAt(lastX,lastY) end
+    inputTarget.MouseMoved:Connect(function(x, y)
+        lastX = math.clamp((x - target.AbsolutePosition.X) / math.max(1, target.AbsoluteSize.X), 0, 1)
+        lastY = math.clamp((y - target.AbsolutePosition.Y) / math.max(1, target.AbsoluteSize.Y), 0, 1)
+        if hovering then positionAt(lastX, lastY) end
     end)
-    target.MouseLeave:Connect(function() setHover(false) end)
-    target:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() positionAt(lastX,lastY) end)
-    return layer
+    inputTarget.MouseLeave:Connect(function()
+        setHover(false)
+    end)
+    target:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+        positionAt(lastX, lastY)
+    end)
+
+    return {
+        Layer = layer,
+        Discs = discs,
+        Refresh = applyColor,
+    }
 end
 
 --============================================================
@@ -328,14 +358,14 @@ local DefaultTheme = {
     MutedText         = Color3.fromRGB(105, 117, 126),
     DimText           = Color3.fromRGB(128, 138, 146),
 
-    Accent            = Color3.fromRGB(31, 40, 47),
-    AccentHover       = Color3.fromRGB(64, 77, 86),
+    Accent            = Color3.fromRGB(76, 135, 182),
+    AccentHover       = Color3.fromRGB(61, 114, 156),
     AccentText        = Color3.fromRGB(248, 249, 250),
     Button            = Color3.fromRGB(220, 227, 231),
     ButtonHover       = Color3.fromRGB(187, 198, 205),
     ButtonText        = Color3.fromRGB(29, 38, 45),
     SliderTrack       = Color3.fromRGB(190, 199, 204),
-    SliderFill        = Color3.fromRGB(43, 54, 62),
+    SliderFill        = Color3.fromRGB(76, 135, 182),
     SliderKnob        = Color3.fromRGB(31, 40, 47),
 
     Stroke            = Color3.fromRGB(174, 185, 191),
@@ -350,7 +380,7 @@ local DefaultTheme = {
     Danger            = Color3.fromRGB(151, 76, 84),
     Overlay           = Color3.fromRGB(38, 45, 51),
 
-    TopbarText        = Color3.fromRGB(22, 30, 36),
+    TopbarText        = Color3.fromRGB(24, 32, 38),
     TopbarTextHover   = Color3.fromRGB(0, 0, 0),
     TopbarIcon        = Color3.fromRGB(87, 101, 110),
     TopbarIconHover   = Color3.fromRGB(22, 30, 36),
@@ -6685,6 +6715,7 @@ function PebbleUI:CreateWindow(config)
         BackgroundTransparency = self.BackgroundTransparency,
         BorderSizePixel = 0,
         ClipsDescendants = true,
+        Active = true,
         Parent = screen,
     })
     Corner(main, corner)
@@ -6707,6 +6738,12 @@ function PebbleUI:CreateWindow(config)
     WatchTheme(self, main, function()
         mainGrad.Color = ColorSequence.new(self.Theme.BackgroundTop, self.Theme.BackgroundBottom)
     end)
+    self._MainRadialHover = AttachRadialHover(main, self.Theme, {
+        Spread = 2.15,
+        ZIndex = 0,
+        Color = self.Theme.RadialHover,
+        ClipTarget = true,
+    })
 
     local sidebar = New("Frame", {
         Name = "Sidebar",
@@ -6715,6 +6752,7 @@ function PebbleUI:CreateWindow(config)
         BorderSizePixel = 0,
         Position = UDim2.fromOffset(8, 8),
         Size = UDim2.new(0, sidebarWidth - 8, 1, -16),
+        Active = true,
         Parent = main,
     })
     Corner(sidebar, math.max(4, corner - 2))
@@ -6722,6 +6760,12 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
+    self._SidebarRadialHover = AttachRadialHover(sidebar, self.Theme, {
+        Spread = 1.85,
+        ZIndex = 0,
+        Color = self.Theme.RadialHover,
+        ClipTarget = true,
+    })
 
     local brand = New("Frame", {
         Name = "Brand", BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -6937,9 +6981,16 @@ function PebbleUI:CreateWindow(config)
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(sidebarWidth + 12, 6),
         Size = UDim2.new(1, -(sidebarWidth + 24), 0, topHeight),
+        Active = true,
         Parent = main,
     })
     self.Topbar = topbar
+    self._TopbarRadialHover = AttachRadialHover(topbar, self.Theme, {
+        Spread = 2.0,
+        ZIndex = 0,
+        Color = self.Theme.RadialHover,
+        ClipTarget = true,
+    })
 
     local titleLabel = New("TextLabel", {
         BackgroundTransparency = 1,
