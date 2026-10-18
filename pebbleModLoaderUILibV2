@@ -3501,12 +3501,14 @@ function Window:_UpdateScriptLayout()
         local top = self.TopbarHeight
         local contentLeft = rail + explorerWidth + 16
         self._scriptRightInset = 0
-        -- No Studio, o Explorer substitui a sidebar de perfil/jogador.
-        self.Sidebar.Visible = false
+        self.Sidebar.Position = UDim2.fromOffset(6, 6)
+        self.Sidebar.Size = UDim2.new(0, rail - 10, 1, -12)
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
-        -- Ocupa toda a lateral esquerda, inclusive a antiga faixa do jogador.
-        self.ScriptExplorer.Position = UDim2.fromOffset(0, 0)
-        self.ScriptExplorer.Size = UDim2.new(0, rail + explorerWidth + 2, 1, 0)
+        self.ScriptExplorer.Position = UDim2.fromOffset(rail + 2, 6)
+        self.ScriptExplorer.Size = UDim2.new(0, explorerWidth, 1, -12)
+        if self.StudioExplorerBackdrop then
+            self.StudioExplorerBackdrop.Size = UDim2.new(0, rail + explorerWidth - 4, 1, -12)
+        end
         self.Topbar.Position = UDim2.fromOffset(contentLeft, 44)
         self.Topbar.Size = UDim2.new(1, -(contentLeft + 8), 0, 34)
         self.ContentHost.Position = UDim2.fromOffset(contentLeft, 83)
@@ -4350,11 +4352,15 @@ function Window:_CreateScriptExplorer()
         AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -8, 0, 8),
         Size = UDim2.new(0, self.Config.ScriptExplorerWidth or 192, 1, -16), ZIndex = 10, Parent = self.Main,
     })
-    Corner(frame, self.Config.Layout == "Studio" and 0 or 6)
+    Corner(frame, 6)
     local border = FineStroke(frame, theme.SidebarDivider, 0.35)
     BindTheme(self, frame, "BackgroundColor3", "Sidebar")
     BindTheme(self, border, "Color", "SidebarDivider")
     self.ScriptExplorer = frame
+    if self.Config.Layout == "Studio" then
+        frame.BackgroundTransparency = 1
+        border.Transparency = 1
+    end
     local title = New("TextLabel", {
         BackgroundTransparency = 1, Text = "Explorer", Font = theme.FontMedium, TextSize = 12,
         TextColor3 = theme.Text, TextXAlignment = Enum.TextXAlignment.Left,
@@ -6744,6 +6750,21 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
     if studio then
+        local explorerBackdrop = New("Frame", {
+            Name = "StudioExplorerFullWidthBackground",
+            BackgroundColor3 = self.Theme.Sidebar,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(6, 6),
+            Size = UDim2.new(0, sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) - 4, 1, -12),
+            ZIndex = 1, Parent = main,
+        })
+        Corner(explorerBackdrop, math.max(4, corner - 2))
+        BindTheme(self, explorerBackdrop, "BackgroundColor3", "Sidebar")
+        self.StudioExplorerBackdrop = explorerBackdrop
+        sidebar.BackgroundTransparency = 1
+        sidebarStroke.Transparency = 1
+    end
+    if studio then
         -- Barra transparente; os itens se expandem horizontalmente ao passar o mouse.
         local railMenu = New("Frame", {
             Name = "StudioQuickActions", BackgroundTransparency = 1,
@@ -7096,9 +7117,7 @@ function PebbleUI:CreateWindow(config)
             BorderSizePixel = 0,
             Position = UDim2.fromOffset(sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 16, 5),
             Size = UDim2.new(1, -(sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 130), 0, 34),
-            -- A zona de arrasto deve ficar ABAIXO da barra e de seus botoes.
-            -- ZIndex 37 bloqueava os cliques apesar do fundo transparente.
-            ZIndex = 15,
+            ZIndex = 14, -- Abaixo da toolbar (ZIndex 35+): botões clicáveis.
             Parent = main,
         })
         self.StudioDragHandle = studioDragHandle
@@ -7176,7 +7195,7 @@ function PebbleUI:CreateWindow(config)
             isMinimized = false
             main.Size = restoreSize
             if self.StudioToolbar then self.StudioToolbar.Visible = true end
-            self.Sidebar.Visible = not studio
+            self.Sidebar.Visible = true
             if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
             if self.Topbar then self.Topbar.Visible = true end
             if self.ContentHost then self.ContentHost.Visible = true end
@@ -7201,7 +7220,7 @@ function PebbleUI:CreateWindow(config)
             isMinimized = false
             main.Size = restoreSize
             if self.StudioToolbar then self.StudioToolbar.Visible = true end
-            self.Sidebar.Visible = not studio
+            self.Sidebar.Visible = true
             if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
             self.Topbar.Visible = true
             self.ContentHost.Visible = self.ScriptEditor == nil or not self.ScriptEditor.Visible
