@@ -233,6 +233,73 @@ local function FineStroke(parent, color, transparency)
     return Stroke(parent, color, 1, transparency == nil and 0.2 or transparency)
 end
 
+-- Soft radial hover: Roblox UIGradient is linear, so translucent concentric
+-- circles are used for a true radial falloff instead.
+local function AttachRadialHover(target, theme, options)
+    options = options or {}
+    target.ClipsDescendants = true
+    local layer = New("Frame", {
+        Name = "RadialHoverLayer",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1),
+        ZIndex = target.ZIndex + 1,
+        Active = false,
+        Parent = target,
+    })
+    local discs = {}
+    local strengths = { 0.93, 0.90, 0.86, 0.81, 0.76, 0.71, 0.66 }
+    local fraction = { 1.00, 0.86, 0.72, 0.58, 0.44, 0.30, 0.17 }
+    for i = 1, #strengths do
+        local disc = New("Frame", {
+            Name = "RadialDisc" .. i,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            BackgroundColor3 = theme.RadialHover or theme.SurfaceHover,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ZIndex = layer.ZIndex,
+            Active = false,
+            Parent = layer,
+        })
+        Corner(disc, 999)
+        discs[i] = disc
+    end
+    local lastX, lastY = 0.5, 0.5
+    local hovering = false
+    local function positionAt(x, y)
+        local w, h = math.max(1, target.AbsoluteSize.X), math.max(1, target.AbsoluteSize.Y)
+        local diameter = math.max(w, h) * (options.Spread or 1.65)
+        for i, disc in ipairs(discs) do
+            local size = diameter * fraction[i]
+            disc.Size = UDim2.fromOffset(size, size)
+            disc.Position = UDim2.fromOffset(x * w, y * h)
+        end
+    end
+    local function setHover(active)
+        hovering = active
+        for i, disc in ipairs(discs) do
+            Tween(disc, active and 0.23 or 0.30, {
+                BackgroundTransparency = active and strengths[i] or 1,
+            }, EASE_SOFT, Enum.EasingDirection.Out)
+        end
+    end
+    target.MouseEnter:Connect(function()
+        local mouse = UserInputService:GetMouseLocation()
+        lastX = math.clamp((mouse.X - target.AbsolutePosition.X) / math.max(1,target.AbsoluteSize.X), 0, 1)
+        lastY = math.clamp((mouse.Y - target.AbsolutePosition.Y) / math.max(1,target.AbsoluteSize.Y), 0, 1)
+        positionAt(lastX, lastY)
+        setHover(true)
+    end)
+    target.MouseMoved:Connect(function(x,y)
+        lastX = math.clamp((x - target.AbsolutePosition.X) / math.max(1,target.AbsoluteSize.X), 0, 1)
+        lastY = math.clamp((y - target.AbsolutePosition.Y) / math.max(1,target.AbsoluteSize.Y), 0, 1)
+        if hovering then positionAt(lastX,lastY) end
+    end)
+    target.MouseLeave:Connect(function() setHover(false) end)
+    target:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() positionAt(lastX,lastY) end)
+    return layer
+end
+
 --============================================================
 -- Theme
 --============================================================
@@ -244,71 +311,72 @@ local DefaultTheme = {
     FontMedium = Enum.Font.GothamMedium,
     FontDisplay = Enum.Font.GothamBold,
 
-    BackgroundTop     = Color3.fromRGB(15, 16, 19),
-    BackgroundBottom  = Color3.fromRGB(15, 16, 19),
-    Sidebar           = Color3.fromRGB(27, 29, 32),
-    SidebarDivider    = Color3.fromRGB(55, 59, 63),
+    BackgroundTop     = Color3.fromRGB(232, 235, 237),
+    BackgroundBottom  = Color3.fromRGB(217, 224, 228),
+    Sidebar           = Color3.fromRGB(226, 231, 234),
+    SidebarDivider    = Color3.fromRGB(186, 196, 202),
 
-    Surface           = Color3.fromRGB(27, 29, 32),
-    Surface2          = Color3.fromRGB(37, 39, 42),
-    SurfaceHover      = Color3.fromRGB(45, 48, 52),
-    Input             = Color3.fromRGB(15, 16, 19),
-    Popup             = Color3.fromRGB(27, 29, 32),
-    CodeBackground    = Color3.fromRGB(15, 16, 19),
+    Surface           = Color3.fromRGB(233, 237, 239),
+    Surface2          = Color3.fromRGB(218, 225, 229),
+    SurfaceHover      = Color3.fromRGB(186, 197, 204),
+    Input             = Color3.fromRGB(243, 245, 246),
+    Popup             = Color3.fromRGB(238, 241, 243),
+    CodeBackground    = Color3.fromRGB(222, 229, 233),
 
-    Text              = Color3.fromRGB(230, 232, 236),
-    SubText           = Color3.fromRGB(154, 158, 165),
-    MutedText         = Color3.fromRGB(128, 132, 140),
-    DimText           = Color3.fromRGB(109, 113, 121),
+    Text              = Color3.fromRGB(22, 30, 36),
+    SubText           = Color3.fromRGB(78, 91, 100),
+    MutedText         = Color3.fromRGB(105, 117, 126),
+    DimText           = Color3.fromRGB(128, 138, 146),
 
-    Accent            = Color3.fromRGB(65, 151, 220),
-    AccentHover       = Color3.fromRGB(86, 170, 235),
-    AccentText        = Color3.fromRGB(255, 255, 255),
-    Button            = Color3.fromRGB(37, 39, 42),
-    ButtonHover       = Color3.fromRGB(47, 50, 54),
-    ButtonText        = Color3.fromRGB(230, 232, 236),
-    SliderTrack       = Color3.fromRGB(55, 59, 63),
-    SliderFill        = Color3.fromRGB(65, 151, 220),
-    SliderKnob        = Color3.fromRGB(230, 232, 236),
+    Accent            = Color3.fromRGB(31, 40, 47),
+    AccentHover       = Color3.fromRGB(64, 77, 86),
+    AccentText        = Color3.fromRGB(248, 249, 250),
+    Button            = Color3.fromRGB(220, 227, 231),
+    ButtonHover       = Color3.fromRGB(187, 198, 205),
+    ButtonText        = Color3.fromRGB(29, 38, 45),
+    SliderTrack       = Color3.fromRGB(190, 199, 204),
+    SliderFill        = Color3.fromRGB(43, 54, 62),
+    SliderKnob        = Color3.fromRGB(31, 40, 47),
 
-    Stroke            = Color3.fromRGB(55, 59, 63),
-    Border            = Color3.fromRGB(55, 59, 63),
-    CheckboxBorder    = Color3.fromRGB(80, 85, 90),
+    Stroke            = Color3.fromRGB(174, 185, 191),
+    Border            = Color3.fromRGB(189, 199, 204),
+    CheckboxBorder    = Color3.fromRGB(131, 145, 155),
 
-    Icon              = Color3.fromRGB(154, 158, 165),
-    IconSelected      = Color3.fromRGB(230, 232, 236),
+    Icon              = Color3.fromRGB(94, 108, 117),
+    IconSelected      = Color3.fromRGB(22, 30, 36),
 
-    Success           = Color3.fromRGB(134, 207, 172),
-    Warning           = Color3.fromRGB(223, 185, 107),
-    Danger            = Color3.fromRGB(239, 115, 139),
-    Overlay           = Color3.fromRGB(0, 0, 0),
+    Success           = Color3.fromRGB(66, 124, 100),
+    Warning           = Color3.fromRGB(142, 105, 54),
+    Danger            = Color3.fromRGB(151, 76, 84),
+    Overlay           = Color3.fromRGB(38, 45, 51),
 
-    TopbarText        = Color3.fromRGB(230, 232, 236),
-    TopbarTextHover   = Color3.fromRGB(255, 255, 255),
-    TopbarIcon        = Color3.fromRGB(154, 158, 165),
-    TopbarIconHover   = Color3.fromRGB(230, 232, 236),
+    TopbarText        = Color3.fromRGB(22, 30, 36),
+    TopbarTextHover   = Color3.fromRGB(0, 0, 0),
+    TopbarIcon        = Color3.fromRGB(87, 101, 110),
+    TopbarIconHover   = Color3.fromRGB(22, 30, 36),
 
     -- Legacy keys remain available to existing custom themes.
-    Sky               = Color3.fromRGB(65, 151, 220),
-    SkySoft           = Color3.fromRGB(37, 39, 42),
-    Butter            = Color3.fromRGB(223, 185, 107),
-    Peach             = Color3.fromRGB(207, 146, 139),
-    Mint              = Color3.fromRGB(134, 207, 172),
-    Paper             = Color3.fromRGB(27, 29, 32),
-    Shadow            = Color3.fromRGB(0, 0, 0),
+    Sky               = Color3.fromRGB(78, 103, 119),
+    SkySoft           = Color3.fromRGB(218, 225, 229),
+    Butter            = Color3.fromRGB(176, 150, 105),
+    Peach             = Color3.fromRGB(177, 133, 125),
+    Mint              = Color3.fromRGB(127, 168, 150),
+    Paper             = Color3.fromRGB(232, 236, 238),
+    Shadow            = Color3.fromRGB(80, 94, 104),
 
-    SyntaxKeyword     = Color3.fromRGB(174, 156, 235),
-    SyntaxString      = Color3.fromRGB(173, 203, 149),
-    SyntaxNumber      = Color3.fromRGB(216, 177, 135),
-    SyntaxComment     = Color3.fromRGB(93, 117, 138),
-    SyntaxBuiltin     = Color3.fromRGB(112, 183, 217),
-    SyntaxFunction    = Color3.fromRGB(144, 207, 222),
-    SyntaxSelection   = Color3.fromRGB(87, 119, 174),
+    SyntaxKeyword     = Color3.fromRGB(106, 72, 149),
+    SyntaxString      = Color3.fromRGB(65, 118, 82),
+    SyntaxNumber      = Color3.fromRGB(155, 103, 59),
+    SyntaxComment     = Color3.fromRGB(115, 128, 136),
+    SyntaxBuiltin     = Color3.fromRGB(50, 106, 142),
+    SyntaxFunction    = Color3.fromRGB(38, 113, 133),
+    SyntaxSelection   = Color3.fromRGB(171, 194, 210),
 
-    ControlRadius     = 4,
-    SectionRadius     = 5,
-    PopupRadius       = 6,
-    Scrollbar         = Color3.fromRGB(80, 85, 90),
+    ControlRadius     = 9,
+    SectionRadius     = 12,
+    PopupRadius       = 12,
+    RadialHover       = Color3.fromRGB(172, 185, 193),
+    Scrollbar         = Color3.fromRGB(135, 149, 159),
     ScrollbarTransparency = 0.6,
     ScrollbarThickness    = 2,
 }
@@ -331,10 +399,10 @@ local Defaults = {
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
-    CornerRadius = 8,
+    CornerRadius = 15,
     LeftColumnWidth = 272,
-    ColumnGap = 12,
-    SectionGap = 10,
+    ColumnGap = 15,
+    SectionGap = 13,
     CompactControls = true,
 
     BackgroundTransparency = 0,
@@ -706,6 +774,7 @@ function Section:Button(config)
         Parent = self.Content,
     })
     Corner(btn, config.Corner or theme.ControlRadius)
+    AttachRadialHover(btn, theme)
     local border = FineStroke(btn, config.BorderColor or theme.Border, 0.18)
     BindTheme(window, btn, "BackgroundColor3", colorKey, config.Color)
     BindTheme(window, border, "Color", "Border", config.BorderColor)
@@ -713,7 +782,7 @@ function Section:Button(config)
     local iconOffset = 0
     if config.Icon then
         local icon = CreateIcon(config.Icon, config.IconSize or 14,
-            config.IconColor or theme[textKey], btn.ZIndex + 1)
+            config.IconColor or theme[textKey], btn.ZIndex + 3)
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 12, 0.5, 0)
         icon.Parent = btn
@@ -730,7 +799,7 @@ function Section:Button(config)
         Position = UDim2.fromOffset(12 + iconOffset, 0),
         Size = UDim2.new(1, -(24 + iconOffset), 1, 0),
         TextXAlignment = config.TextXAlignment or (config.Icon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center),
-        ZIndex = btn.ZIndex + 2,
+        ZIndex = btn.ZIndex + 3,
         Parent = btn,
     })
 
@@ -753,7 +822,7 @@ function Section:Button(config)
         if state.Locked then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             PressScale(btn)
-            Ripple(btn, input.Position, theme[textKey])
+            Ripple(btn, input.Position, theme.RadialHover)
         end
     end)
     btn.InputEnded:Connect(function(input)
@@ -2383,17 +2452,17 @@ function Window:_setActiveTab(tab)
         local selected = t == tab
         t.Container.Visible = selected
         Tween(t.ButtonLabel, 0.22, {
-            TextColor3 = selected and self.Theme.Accent or self.Theme.SubText
+            TextColor3 = selected and self.Theme.AccentText or self.Theme.SubText
         }, EASE_SOFT, Enum.EasingDirection.Out)
         if t.ButtonIcon then
             Tween(t.ButtonIcon, 0.22, {
-                ImageColor3 = selected and self.Theme.Accent or self.Theme.Icon
+                ImageColor3 = selected and self.Theme.AccentText or self.Theme.Icon
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Button then
             Tween(t.Button, 0.24, {
                 BackgroundTransparency = selected and 0 or 1,
-                BackgroundColor3 = selected and self.Theme.SurfaceHover or self.Theme.Sidebar,
+                BackgroundColor3 = selected and self.Theme.Accent or self.Theme.Sidebar,
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Accent then
@@ -2537,11 +2606,12 @@ function Window:Tab(config)
         Parent = self.SidebarList,
     })
     Corner(button, config.Corner or theme.ControlRadius)
+    AttachRadialHover(button, theme)
 
     local icon
     if config.Icon then
         icon = CreateIcon(config.Icon, config.IconSize or 14,
-            config.IconColor or theme.Icon, 2)
+            config.IconColor or theme.Icon, button.ZIndex + 3)
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 11, 0.5, 0)
         icon.Parent = button
@@ -2550,6 +2620,7 @@ function Window:Tab(config)
     local label = New("TextLabel", {
         BackgroundTransparency = 1,
         Text = title,
+        ZIndex = button.ZIndex + 3,
         TextColor3 = theme.SubText,
         TextSize = config.TextSize or 12,
         Font = theme.FontMedium,
@@ -2563,6 +2634,7 @@ function Window:Tab(config)
 
     local accent = New("Frame", {
         Name = "Accent",
+        ZIndex = button.ZIndex + 3,
         BackgroundColor3 = config.AccentColor or theme.Accent,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -2663,9 +2735,9 @@ function Window:Tab(config)
     BindTheme(self, accent, "BackgroundColor3", "Accent", config.AccentColor)
     WatchTheme(self, button, function()
         local selected = self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint
-        label.TextColor3 = selected and theme.Accent or theme.SubText
-        if icon then icon.ImageColor3 = selected and theme.Accent or (config.IconColor or theme.Icon) end
-        button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Sidebar
+        label.TextColor3 = selected and theme.AccentText or theme.SubText
+        if icon then icon.ImageColor3 = selected and theme.AccentText or (config.IconColor or theme.Icon) end
+        button.BackgroundColor3 = selected and theme.Accent or theme.Sidebar
         for _, scrollFrame in ipairs({ leftScroll, rightScroll }) do
             StyleScrollBar(scrollFrame, { Thickness = theme.ScrollbarThickness, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
         end
@@ -2675,8 +2747,8 @@ function Window:Tab(config)
     button.MouseEnter:Connect(function()
         if self.ActiveTab ~= tab or self.ActiveScript or self.ActiveBlueprint then
             Tween(button, 0.2, { BackgroundTransparency = 0.5 }, EASE_SOFT, Enum.EasingDirection.Out)
-            HoverTween(label, 0.2, { TextColor3 = theme.Accent })
-            if icon then HoverTween(icon, 0.2, { ImageColor3 = theme.Accent }) end
+            HoverTween(label, 0.2, { TextColor3 = theme.Text })
+            if icon then HoverTween(icon, 0.2, { ImageColor3 = theme.Text }) end
             HoverScale(button, 1.003)
         end
     end)
