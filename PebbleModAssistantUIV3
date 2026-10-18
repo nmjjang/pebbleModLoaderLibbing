@@ -6549,6 +6549,8 @@ local function AttachParticleBackground(window, parent, options)
     if options == false then return end
     options = type(options) == "table" and options or {}
 
+    local targetFPS = math.clamp(math.floor(tonumber(options.FPS) or 60), 15, 120)
+    local frameInterval = 1 / targetFPS
     local count = math.clamp(math.floor(tonumber(options.Count) or 34), 4, 72)
     local radius = math.max(30, tonumber(options.ConnectionDistance) or 170)
     local speed = math.max(0, tonumber(options.Speed) or 10)
@@ -6624,9 +6626,11 @@ local function AttachParticleBackground(window, parent, options)
         Corner(lines[i], 99)
     end
 
+    local radiusSquared = radius * radius
     local accumulator = 0
+    local activeLines = 0
     local connection
-    connection = RunService.Heartbeat:Connect(function(dt)
+    connection = RunService.RenderStepped:Connect(function(dt)
         if window.Destroyed or not layer.Parent then
             if connection then connection:Disconnect() end
             return
@@ -6634,7 +6638,7 @@ local function AttachParticleBackground(window, parent, options)
         if not window.Visible or not parent.Visible or not window.ScreenGui.Enabled then return end
 
         accumulator += math.min(dt, 0.1)
-        if accumulator < 1 / 30 then return end
+        if accumulator < frameInterval then return end
         local elapsed = math.min(accumulator, 0.07)
         accumulator = 0
 
@@ -6665,9 +6669,10 @@ local function AttachParticleBackground(window, parent, options)
                 local bx, by = b.X * width, b.Y * height
                 local dx = bx - ax
                 local dy = by - ay
-                local distance = math.sqrt(dx * dx + dy * dy)
+                local distanceSquared = dx * dx + dy * dy
 
-                if distance <= radius then
+                if distanceSquared <= radiusSquared then
+                    local distance = math.sqrt(distanceSquared)
                     used += 1
                     local line = lines[used]
                     local fade = 1 - (distance / radius)
@@ -6680,11 +6685,10 @@ local function AttachParticleBackground(window, parent, options)
             end
         end
 
-        for i = used + 1, #lines do
-            local line = lines[i]
-            line.Visible = false
-            line.BackgroundTransparency = 1
+        for i = used + 1, activeLines do
+            lines[i].Visible = false
         end
+        activeLines = used
     end)
 
     table.insert(window._scriptConnections, connection)
