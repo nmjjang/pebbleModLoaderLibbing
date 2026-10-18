@@ -5606,6 +5606,109 @@ do
         self:_ApplyBlueprintView(); self:_RefreshBlueprintCompatibility()
         ui.Empty.Visible = #r.Nodes == 0
     end
+    -- Straighten Connections (Q): align connected port centers vertically.
+    -- Only selected nodes move; when two selected nodes connect, the leftmost
+    -- node stays in place and its right-hand neighbor is aligned to it.
+    function Window:_StraightenBlueprintConnections()
+        local record = self.ActiveBlueprint
+        local nodeUI = self._bpNodeUI
+        if not record or not nodeUI or self._bpDrag then return end
+
+        local selected = {}
+        for id, enabled in pairs(self._bpSelectionSet or {}) do
+            if enabled then selected[id] = true end
+        end
+        if self._bpSelection and nodeUI[self._bpSelection] then
+            selected[self._bpSelection] = true
+        end
+        if not next(selected) then
+            self:_BlueprintStatus("Select a node or connected nodes, then press Q")
+            return
+        end
+
+        local lookup = {}
+        for _, node in ipairs(record.Nodes) do lookup[node.Id] = node end
+
+        -- Endpoint centers are measured on screen, so this also accounts for
+        -- different rows, dynamic node properties, and graph zoom.
+        local function portY(id, direction, name)
+            local ui = nodeUI[id]
+            if not ui then return nil end
+            for _, endpoint in ipairs(ui.Endpoints) do
+                if endpoint.Direction == direction and endpoint.Port.Name == name
+                    and endpoint.Button and endpoint.Button.Parent then
+                    local button = endpoint.Button
+                    return button.AbsolutePosition.Y + button.AbsoluteSize.Y * 0.5
+                end
+            end
+            return nil
+        end
+
+        local candidates = {}
+        for _, link in ipairs(record.Links) do
+            local source, target = lookup[link.From], lookup[link.To]
+            if source and target and (selected[source.Id] or selected[target.Id]) then
+                local moveId, anchorId, moveDirection, movePort, anchorDirection, anchorPort
+                if selected[source.Id] and selected[target.Id] then
+                    if source.X <= target.X then
+                        moveId, anchorId = target.Id, source.Id
+                        moveDirection, movePort = "in", link.Input
+                        anchorDirection, anchorPort = "out", link.Output
+                    else
+                        moveId, anchorId = source.Id, target.Id
+                        moveDirection, movePort = "out", link.Output
+                        anchorDirection, anchorPort = "in", link.Input
+                    end
+                elseif selected[target.Id] then
+                    moveId, anchorId = target.Id, source.Id
+                    moveDirection, movePort = "in", link.Input
+                    anchorDirection, anchorPort = "out", link.Output
+                else
+                    moveId, anchorId = source.Id, target.Id
+                    moveDirection, movePort = "out", link.Output
+                    anchorDirection, anchorPort = "in", link.Input
+                end
+                table.insert(candidates, {
+                    Move = moveId, Anchor = anchorId,
+                    MoveDirection = moveDirection, MovePort = movePort,
+                    AnchorDirection = anchorDirection, AnchorPort = anchorPort,
+                    X = lookup[moveId].X,
+                })
+            end
+        end
+        table.sort(candidates, function(a, b)
+            if a.X ~= b.X then return a.X < b.X end
+            if a.Move ~= b.Move then return a.Move < b.Move end
+            return a.Anchor < b.Anchor
+        end)
+
+        local moved, count = {}, 0
+        local zoom = math.max(0.01, record.View.Zoom or 1)
+        for _, edge in ipairs(candidates) do
+            if not moved[edge.Move] then
+                local currentY = portY(edge.Move, edge.MoveDirection, edge.MovePort)
+                local referenceY = portY(edge.Anchor, edge.AnchorDirection, edge.AnchorPort)
+                local node = lookup[edge.Move]
+                local ui = nodeUI[edge.Move]
+                if currentY and referenceY and node and ui then
+                    local delta = (referenceY - currentY) / zoom
+                    if math.abs(delta) > 0.5 then
+                        node.Y = node.Y + delta
+                        ui.Frame.Position = UDim2.fromOffset(node.X, node.Y)
+                        count += 1
+                    end
+                    moved[edge.Move] = true
+                end
+            end
+        end
+        if count > 0 then
+            self._bpWireDirty = true
+            self:_BlueprintChanged(record, true)
+            self:_BlueprintStatus("Straightened " .. count .. " node(s)")
+        else
+            self:_BlueprintStatus("Connections already straight or no connected selection")
+        end
+    end
     function Window:_ApplyBlueprintView(animated)
         local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r or not ui then return end
         r.View.Zoom = clamp(r.View.Zoom or 0.85,0.35,1.6)
@@ -6106,6 +6209,7 @@ do
             local ctrl=UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
             if input.KeyCode==Enum.KeyCode.Escape then self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; self:_CloseBlueprintPalette(); self:_CloseCreationMenu(); self:_RefreshBlueprintCompatibility()
             elseif input.KeyCode==Enum.KeyCode.Delete or input.KeyCode==Enum.KeyCode.Backspace then if self._bpSelection then self:DeleteBlueprintNode(self.ActiveBlueprint,self._bpSelection) end
+            elseif input.KeyCode==Enum.KeyCode.Q and not ctrl then self:_StraightenBlueprintConnections()
             elseif input.KeyCode==Enum.KeyCode.F then self:_FrameBlueprint()
             elseif ctrl and input.KeyCode==Enum.KeyCode.S then self:SaveBlueprints()
             elseif ctrl and input.KeyCode==Enum.KeyCode.D and self._bpSelection then
