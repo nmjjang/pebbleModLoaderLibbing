@@ -6207,7 +6207,7 @@ local function PlayStartupIntro(window)
     logo.Name = "LoadingCat"
     logo.AnchorPoint = Vector2.new(0.5, 0)
     -- Comeca um pouco abaixo e sobe rapidamente, como entrando no enquadramento.
-    logo.Position = UDim2.new(0.5, 0, 0, 18)
+    logo.Position = UDim2.new(0.5, 0, 0, 32)
     logo.ImageTransparency = 1
     logo.Parent = stack
     local logoScale = EnsureScale(logo)
@@ -6265,14 +6265,37 @@ local function PlayStartupIntro(window)
 
     task.spawn(function()
         if not cover.Parent then return end
-        -- Entrada suave do gato: sobe rapido de baixo para cima com leve settle.
-        Tween(logo, 0.16, { ImageTransparency = 0 }, Enum.EasingStyle.Sine)
-        local logoRise = Tween(logo, 0.26, { Position = UDim2.new(0.5, 0, 0, -2) }, Enum.EasingStyle.Quint)
-        Tween(logoScale, 0.26, { Scale = 1 }, Enum.EasingStyle.Quint)
+
+        -- Aguardar a ScreenGui estar visivel e o Roblox desenhar o loading.
+        -- Sem isso, o tween pode terminar antes de aparecer na tela.
+        while cover.Parent and not window.ScreenGui.Enabled do
+            RunService.RenderStepped:Wait()
+        end
+        if not cover.Parent then return end
+        RunService.RenderStepped:Wait()
+        RunService.RenderStepped:Wait()
+
+        -- Icones Lucide podem depender de download da imagem. Evitar animar
+        -- enquanto ela ainda nao foi carregada, com limite de espera.
+        if logo.Image ~= "" and not logo.IsLoaded then
+            local startedAt = os.clock()
+            while cover.Parent and not logo.IsLoaded and os.clock() - startedAt < 2.5 do
+                RunService.RenderStepped:Wait()
+            end
+        end
+        if not cover.Parent then return end
+        -- Dar um frame para a imagem aparecer antes de movimenta-la.
+        RunService.RenderStepped:Wait()
+
+        -- Um unico slide-up de 32px ate o centro, sem salto ou bounce.
+        Tween(logo, 0.27, { ImageTransparency = 0 }, Enum.EasingStyle.Sine)
+        local logoRise = Tween(logo, 0.38, {
+            Position = UDim2.new(0.5, 0, 0, 0),
+        }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+        Tween(logoScale, 0.38, { Scale = 1 }, Enum.EasingStyle.Quart)
         logoRise.Completed:Wait()
         if not cover.Parent then return end
-        Tween(logo, 0.10, { Position = UDim2.new(0.5, 0, 0, 0) }, Enum.EasingStyle.Sine)
-        task.wait(0.12)
+        task.wait(0.08)
         local stepTime = math.min(0.075, 0.62 / math.max(#glyphs, 1))
         for _, glyph in ipairs(glyphs) do
             if not cover.Parent then return end
