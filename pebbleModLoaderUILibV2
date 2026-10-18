@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.6.3-liquid-tabs-layer-fix" }
+local PebbleUI = { Version = "1.6.1-visibility-fix" }
 
 --============================================================
 -- Services
@@ -336,6 +336,10 @@ local Defaults = {
     ColumnGap = 12,
     SectionGap = 10,
     CompactControls = true,
+    Layout = "Studio", -- "Classic" keeps the original layout
+    StudioRailWidth = 52,
+    StudioExplorerWidth = 190,
+    StudioHeaderHeight = 52,
 
     BackgroundTransparency = 0,
 
@@ -2371,77 +2375,6 @@ end
 -- Window
 --============================================================
 
--- Single, shared liquid selector that travels between sidebar tabs.
-function Window:_MoveLiquidSelection(tab, instant)
-    if not tab or not tab.Button or not tab.Button.Parent then return end
-    local pill = self.LiquidTabIndicator
-    if not pill then return end
-
-    self._liquidSequence = (self._liquidSequence or 0) + 1
-    local sequence = self._liquidSequence
-    if self._liquidMoveTween then self._liquidMoveTween:Cancel() end
-    if self._liquidSizeTween then self._liquidSizeTween:Cancel() end
-    if self._liquidSettleTween then self._liquidSettleTween:Cancel() end
-    if self._liquidSettleSizeTween then self._liquidSettleSizeTween:Cancel() end
-
-    local button = tab.Button
-    local sidebar = self.Sidebar
-    local targetY = button.AbsolutePosition.Y - sidebar.AbsolutePosition.Y
-    local targetX = button.AbsolutePosition.X - sidebar.AbsolutePosition.X
-    local targetW = button.AbsoluteSize.X
-    local targetH = button.AbsoluteSize.Y
-    if targetW <= 0 or targetH <= 0 then
-        task.delay(0.05, function()
-            if sequence == self._liquidSequence and pill.Parent then
-                self:_MoveLiquidSelection(tab, instant)
-            end
-        end)
-        return
-    end
-
-    pill.Visible = true
-    pill.BackgroundColor3 = self.Theme.SurfaceHover
-    local destination = UDim2.fromOffset(targetX, targetY)
-    local originalSize = UDim2.fromOffset(targetW, targetH)
-    if instant or not self._liquidInitialized then
-        pill.Position = destination
-        pill.Size = originalSize
-        pill.BackgroundTransparency = 0
-        self._liquidInitialized = true
-        return
-    end
-
-    local currentY = pill.Position.Y.Offset
-    local distance = targetY - currentY
-    if math.abs(distance) < 1 then
-        self._liquidMoveTween = Tween(pill, 0.24, {
-            Position = destination, Size = originalSize,
-        }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-        return
-    end
-
-    -- A gently stretched blob: leading edge moves first, then the tail catches up.
-    local stretch = math.min(17, math.abs(distance) * 0.20 + 5)
-    local movingDown = distance > 0
-    local stretchedY = movingDown and (targetY - stretch) or targetY
-    local stretchedH = targetH + stretch
-    self._liquidMoveTween = Tween(pill, 0.27, {
-        Position = UDim2.fromOffset(targetX, stretchedY),
-    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    self._liquidSizeTween = Tween(pill, 0.27, {
-        Size = UDim2.fromOffset(targetW, stretchedH),
-    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    task.delay(0.19, function()
-        if sequence ~= self._liquidSequence or not pill.Parent then return end
-        self._liquidSettleTween = Tween(pill, 0.25, {
-            Position = destination,
-        }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-        self._liquidSettleSizeTween = Tween(pill, 0.25, {
-            Size = originalSize,
-        }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-    end)
-end
-
 function Window:_setActiveTab(tab)
     if not tab or (self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint) then return end
     if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
@@ -2462,7 +2395,10 @@ function Window:_setActiveTab(tab)
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Button then
-            Tween(t.Button, 0.2, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+            Tween(t.Button, 0.24, {
+                BackgroundTransparency = selected and 0 or 1,
+                BackgroundColor3 = selected and self.Theme.SurfaceHover or self.Theme.Sidebar,
+            }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Accent then
             Tween(t.Accent, 0.22, { BackgroundTransparency = selected and 0 or 1 }, EASE_SOFT, Enum.EasingDirection.Out)
@@ -2470,7 +2406,6 @@ function Window:_setActiveTab(tab)
     end
 
     self.ActiveTab = tab
-    self:_MoveLiquidSelection(tab)
     PopIn(tab.Container, 0)
     safeCallback(self.Config.OnTabChange, tab)
 end
@@ -2483,6 +2418,7 @@ function Window:_applySidebarWidth(targetWidth, animated)
     targetWidth = math.floor(clamp(tonumber(targetWidth) or minWidth, minWidth, maxWidth) + 0.5)
 
     local current = self.SidebarWidth or minWidth
+    if self.Config.Layout == "Studio" then return self end
     if targetWidth <= current then return self end
 
     local delta = targetWidth - current
@@ -2527,7 +2463,7 @@ function Window:_applySidebarWidth(targetWidth, animated)
 end
 
 function Window:_fitSidebarText(text, textSize, font, hasIcon, extraPadding)
-    if self.Config.AutoFitSidebar == false then return self end
+    if self.Config.Layout == "Studio" or self.Config.AutoFitSidebar == false then return self end
     text = tostring(text or "")
     if text == "" then return self end
 
@@ -2599,11 +2535,12 @@ function Window:Tab(config)
         BackgroundColor3 = theme.SurfaceHover,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, config.Height or 30),
+        Size = self.Config.Layout == "Studio"
+            and UDim2.fromOffset(math.clamp(42 + TextService:GetTextSize(title, 12, theme.FontMedium, Vector2.new(999, 30)).X, 84, 174), config.Height or 32)
+            or UDim2.new(1, 0, 0, config.Height or 30),
         LayoutOrder = self.SidebarOrder,
         Text = "",
         AutoButtonColor = false,
-        ZIndex = 4,
         Parent = self.SidebarList,
     })
     Corner(button, config.Corner or theme.ControlRadius)
@@ -2611,7 +2548,7 @@ function Window:Tab(config)
     local icon
     if config.Icon then
         icon = CreateIcon(config.Icon, config.IconSize or 14,
-            config.IconColor or theme.Icon, 5)
+            config.IconColor or theme.Icon, 2)
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 11, 0.5, 0)
         icon.Parent = button
@@ -2628,7 +2565,6 @@ function Window:Tab(config)
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd,
-        ZIndex = 5,
         Parent = button,
     })
 
@@ -2640,7 +2576,6 @@ function Window:Tab(config)
         Size = UDim2.fromOffset(2, 12),
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(0, 2, 0.5, 0),
-        ZIndex = 5,
         Parent = button,
     })
     Corner(accent, 99)
@@ -2737,9 +2672,7 @@ function Window:Tab(config)
         local selected = self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint
         label.TextColor3 = selected and theme.Accent or theme.SubText
         if icon then icon.ImageColor3 = selected and theme.Accent or (config.IconColor or theme.Icon) end
-        button.BackgroundTransparency = 1
-        button.BackgroundColor3 = theme.Sidebar
-        if selected then self:_MoveLiquidSelection(tab, true) end
+        button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Sidebar
         for _, scrollFrame in ipairs({ leftScroll, rightScroll }) do
             StyleScrollBar(scrollFrame, { Thickness = theme.ScrollbarThickness, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
         end
@@ -3562,6 +3495,33 @@ end
 
 function Window:_UpdateScriptLayout()
     if not self.ScriptExplorer or self.Destroyed then return end
+    if self.Config.Layout == "Studio" then
+        local rail = self.SidebarWidth
+        local explorerWidth = self.Config.StudioExplorerWidth or Defaults.StudioExplorerWidth
+        local top = self.TopbarHeight
+        local contentLeft = rail + explorerWidth + 16
+        self._scriptRightInset = 0
+        self.Sidebar.Position = UDim2.fromOffset(6, 6)
+        self.Sidebar.Size = UDim2.new(0, rail - 10, 1, -12)
+        self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
+        self.ScriptExplorer.Position = UDim2.fromOffset(rail + 2, top + 7)
+        self.ScriptExplorer.Size = UDim2.new(0, explorerWidth, 1, -(top + 15))
+        self.Topbar.Position = UDim2.fromOffset(contentLeft, 5)
+        self.Topbar.Size = UDim2.new(1, -(contentLeft + 48), 0, top - 5)
+        self.ContentHost.Position = UDim2.fromOffset(contentLeft, top + 7)
+        self.ContentHost.Size = UDim2.new(1, -(contentLeft + 8), 1, -(top + 15))
+        self.ScriptEditor.Position = self.ContentHost.Position
+        self.ScriptEditor.Size = self.ContentHost.Size
+        self.CloseButton.Position = UDim2.new(1, -12, 0, 13)
+        if self._PositionGlobalSearch then self._PositionGlobalSearch() end
+        if self.BlueprintEditor then
+            self.BlueprintEditor.Position = self.ContentHost.Position
+            self.BlueprintEditor.Size = self.ContentHost.Size
+            self:_LayoutBlueprintExplorer()
+        end
+        return
+    end
+    if not self.ScriptExplorer or self.Destroyed then return end
     local desired = self.Config.ScriptExplorerWidth or 192
     local available = self.Main.AbsoluteSize.X - self.SidebarWidth - 336
     local width = math.floor(clamp(available, math.min(148, desired), desired))
@@ -3646,6 +3606,33 @@ function Window:_RenderScriptRows()
     self.ScriptExplorerElements.Empty.Visible = count == 0 and not self._scriptsCollapsed
     self.ScriptExplorerElements.Storage.Text = self._hasScriptStorage
         and (type(self.Config.SaveScripts) == "function" and "Saved" or "Local") or "Memory"
+    if self.StudioScriptTabs then
+        for _, child in ipairs(self.StudioScriptTabs:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+        for idx, record in ipairs(self.CustomScripts) do
+            local selected = record == self.ActiveScript
+            local nameWidth = TextService:GetTextSize(record.Name, 11, self.Theme.FontMedium, Vector2.new(999, 25)).X
+            local b = New("TextButton", {
+                Name = record.Id, LayoutOrder = idx, Text = "", AutoButtonColor = false,
+                Size = UDim2.fromOffset(math.clamp(nameWidth + 44, 88, 180), 30),
+                BackgroundColor3 = selected and self.Theme.SurfaceHover or self.Theme.Surface,
+                BorderSizePixel = 0, ZIndex = 26, Parent = self.StudioScriptTabs,
+            })
+            Corner(b, 5)
+            local icon = CreateIcon("file-code", 12, selected and self.Theme.Accent or self.Theme.Icon, 27)
+            icon.Position = UDim2.fromOffset(8, 9)
+            icon.Parent = b
+            New("TextLabel", {
+                BackgroundTransparency = 1, Text = record.Name, TextTruncate = Enum.TextTruncate.AtEnd,
+                TextColor3 = selected and self.Theme.Text or self.Theme.SubText,
+                Font = self.Theme.FontMedium, TextSize = 11,
+                Position = UDim2.fromOffset(26, 0), Size = UDim2.new(1, -32, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 27, Parent = b,
+            })
+            b.MouseButton1Click:Connect(function() self:OpenScript(record.Id) end)
+        end
+    end
     if self.BlueprintExplorerUI then self:_LayoutBlueprintExplorer() end
 end
 
@@ -4112,6 +4099,19 @@ function Window:_CreateScriptEditor()
     })
     BindTheme(self, title, "TextColor3", "Text")
     BindTheme(self, title, "Font", "FontMedium")
+    if self.Config.Layout == "Studio" then
+        title.Visible = false
+        local tabs = New("ScrollingFrame", {
+            Name = "OpenScriptTabs", BackgroundTransparency = 1, BorderSizePixel = 0,
+            Position = UDim2.fromOffset(8, 2), Size = UDim2.new(1, -188, 1, -4),
+            CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X,
+            ScrollBarThickness = 0, ScrollingDirection = Enum.ScrollingDirection.X,
+            ZIndex = 25, Parent = toolbar,
+        })
+        List(tabs, 5, Enum.FillDirection.Horizontal)
+        self.StudioScriptTabs = tabs
+        fileIcon.Visible = false
+    end
     local footer = New("Frame", {
         Name = "EditorStatusBar", BackgroundColor3 = theme.Surface2, BorderSizePixel = 0,
         Position = UDim2.new(0, 0, 1, -26), Size = UDim2.new(1, 0, 0, 26), ZIndex = 22, Parent = editor,
@@ -6649,13 +6649,15 @@ function PebbleUI:CreateWindow(config)
     self.BackgroundTransparency = clamp01(bgTransparency)
 
     local size = config.Size or Defaults.Size
-    if config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
+    if config.Layout ~= "Studio" and config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
         local width = size.X.Offset + (config.ScriptExplorerWidth or 192) + 12
         if size.X.Scale == 0 then width = math.min(width, (config.MaxSize or Defaults.MaxSize).X) end
         size = UDim2.new(size.X.Scale, width, size.Y.Scale, size.Y.Offset)
     end
-    local sidebarWidth = config.SidebarWidth or Defaults.SidebarWidth
-    local topHeight = config.TopbarHeight or Defaults.TopbarHeight
+    if config.Layout == nil then config.Layout = "Studio" end
+    local studio = config.Layout == "Studio"
+    local sidebarWidth = studio and (config.StudioRailWidth or Defaults.StudioRailWidth) or (config.SidebarWidth or Defaults.SidebarWidth)
+    local topHeight = studio and (config.StudioHeaderHeight or Defaults.StudioHeaderHeight) or (config.TopbarHeight or Defaults.TopbarHeight)
     local corner = config.CornerRadius or Defaults.CornerRadius
     self.SidebarWidth = sidebarWidth
     self.TopbarHeight = topHeight
@@ -6724,6 +6726,36 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
+    if studio then
+        local railMenu = New("Frame", {
+            Name = "StudioRail", BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(3, 75), Size = UDim2.new(1, -6, 0, 190),
+            Parent = sidebar,
+        })
+        local railItems = {
+            { "house", function() if self.Tabs[1] then self:_setActiveTab(self.Tabs[1]) end end },
+            { "file-code-2", function()
+                if self.ActiveScript then self:OpenScript(self.ActiveScript.Id)
+                elseif self.CustomScripts[1] then self:OpenScript(self.CustomScripts[1].Id) end
+            end },
+            { "folder-open", function() if self.ScriptExplorer then self.ScriptExplorer.Visible = not self.ScriptExplorer.Visible end end },
+        }
+        for i, item in ipairs(railItems) do
+            local b = New("TextButton", {
+                Name = "Rail_" .. i, BackgroundColor3 = self.Theme.Surface2,
+                BackgroundTransparency = 0.6, BorderSizePixel = 0, Text = "",
+                Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(3, (i-1)*44),
+                AutoButtonColor = false, Parent = railMenu,
+            })
+            Corner(b, 6)
+            local ic = CreateIcon(item[1], 17, self.Theme.Icon, 3)
+            ic.AnchorPoint = Vector2.new(0.5, 0.5)
+            ic.Position = UDim2.fromScale(0.5, 0.5)
+            ic.Parent = b
+            BindTheme(self, ic, "ImageColor3", "Icon")
+            b.MouseButton1Click:Connect(item[2])
+        end
+    end
 
     local brand = New("Frame", {
         Name = "Brand", BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -6927,30 +6959,12 @@ function PebbleUI:CreateWindow(config)
     local sidebarList = New("Frame", {
         Name = "SidebarList",
         BackgroundTransparency = 1,
-        -- Sibling ZIndex behavior: keep the entire tab list above the liquid pill.
-        -- The button's own ZIndex is not enough when its parent is underneath.
-        ZIndex = 3,
         Position = UDim2.fromOffset(8, 58),
         Size = UDim2.new(1, -16, 1, -68),
         Parent = sidebar,
     })
     List(sidebarList, 3)
     self.SidebarList = sidebarList
-
-    -- The selector lives outside UIListLayout so it can freely slide between buttons.
-    local liquidIndicator = New("Frame", {
-        Name = "LiquidTabIndicator",
-        Visible = false,
-        BackgroundColor3 = self.Theme.SurfaceHover,
-        BackgroundTransparency = 0,
-        BorderSizePixel = 0,
-        Size = UDim2.fromOffset(0, 0),
-        ZIndex = 2,
-        Parent = sidebar,
-    })
-    Corner(liquidIndicator, 7)
-    self.LiquidTabIndicator = liquidIndicator
-    BindTheme(self, liquidIndicator, "BackgroundColor3", "SurfaceHover")
 
     local topbar = New("Frame", {
         Name = "Topbar",
@@ -6960,6 +6974,17 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.Topbar = topbar
+    if config.Layout == "Studio" then
+        self.SidebarList.Parent = topbar
+        self.SidebarList.Position = UDim2.fromOffset(8, 6)
+        self.SidebarList.Size = UDim2.new(1, -20, 1, -12)
+        local tabLayout = self.SidebarList:FindFirstChildOfClass("UIListLayout")
+        if tabLayout then
+            tabLayout.FillDirection = Enum.FillDirection.Horizontal
+            tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+            tabLayout.Padding = UDim.new(0, 5)
+        end
+    end
 
     local titleLabel = New("TextLabel", {
         BackgroundTransparency = 1,
@@ -6975,6 +7000,7 @@ function PebbleUI:CreateWindow(config)
         Parent = topbar,
     })
     self.TitleLabel = titleLabel
+    if studio then titleLabel.Visible = false end
     BindTheme(self, titleLabel, "TextColor3", "TopbarText")
     BindTheme(self, titleLabel, "Font", "FontDisplay")
     local topbarLine = New("Frame", {
@@ -7036,6 +7062,7 @@ function PebbleUI:CreateWindow(config)
         BackgroundColor3 = self.Theme.Input, BorderSizePixel = 0,
         ZIndex = 60, Parent = main,
     })
+    if studio then searchBar.Visible = false end
     Corner(searchBar, self.Theme.ControlRadius)
     BindTheme(self, searchBar, "BackgroundColor3", "Input")
     local searchBorder = FineStroke(searchBar, self.Theme.Border, 0.2)
