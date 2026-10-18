@@ -2645,12 +2645,11 @@ function Window:Tab(config)
         LayoutOrder = self.SidebarOrder,
         Text = "",
         AutoButtonColor = false,
+        ZIndex = 3,
         Parent = self.SidebarList,
     })
     Corner(button, config.Corner or theme.ControlRadius)
-    AttachRadialHover(button, theme)
-
-    local icon
+    -- Tab hover uses background tween only; no radial overlay on navigation.\n\n    local icon
     if config.Icon then
         icon = CreateIcon(config.Icon, config.IconSize or 14,
             config.IconColor or theme.Icon, button.ZIndex + 3)
@@ -6752,7 +6751,7 @@ function PebbleUI:CreateWindow(config)
     end)
     self._MainRadialHover = AttachRadialHover(main, self.Theme, {
         Spread = 2.15,
-        ZIndex = 0,
+        ZIndex = 1,
         Color = self.Theme.RadialHover,
         GlobalMouse = true,
     })
@@ -6765,6 +6764,7 @@ function PebbleUI:CreateWindow(config)
         Position = UDim2.fromOffset(8, 8),
         Size = UDim2.new(0, sidebarWidth - 8, 1, -16),
         Active = true,
+        ZIndex = 2,
         Parent = main,
     })
     Corner(sidebar, math.max(4, corner - 2))
@@ -6772,12 +6772,7 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
-    self._SidebarRadialHover = AttachRadialHover(sidebar, self.Theme, {
-        Spread = 1.85,
-        ZIndex = 0,
-        Color = self.Theme.RadialHover,
-        GlobalMouse = true,
-    })
+    -- Navigation is an opaque foreground surface. Do not draw radial discs over tabs.
 
     local brand = New("Frame", {
         Name = "Brand", BackgroundTransparency = 1, BorderSizePixel = 0,
@@ -6997,12 +6992,7 @@ function PebbleUI:CreateWindow(config)
         Parent = main,
     })
     self.Topbar = topbar
-    self._TopbarRadialHover = AttachRadialHover(topbar, self.Theme, {
-        Spread = 2.0,
-        ZIndex = 0,
-        Color = self.Theme.RadialHover,
-        GlobalMouse = true,
-    })
+    -- Topbar stays in the foreground, without its own hovering overlay.
 
     local titleLabel = New("TextLabel", {
         BackgroundTransparency = 1,
