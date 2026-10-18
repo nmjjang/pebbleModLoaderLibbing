@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.6.0-lucide-blueprints" }
+local PebbleUI = { Version = "1.6.2-liquid-tabs" }
 
 --============================================================
 -- Services
@@ -2371,6 +2371,77 @@ end
 -- Window
 --============================================================
 
+-- Single, shared liquid selector that travels between sidebar tabs.
+function Window:_MoveLiquidSelection(tab, instant)
+    if not tab or not tab.Button or not tab.Button.Parent then return end
+    local pill = self.LiquidTabIndicator
+    if not pill then return end
+
+    self._liquidSequence = (self._liquidSequence or 0) + 1
+    local sequence = self._liquidSequence
+    if self._liquidMoveTween then self._liquidMoveTween:Cancel() end
+    if self._liquidSizeTween then self._liquidSizeTween:Cancel() end
+    if self._liquidSettleTween then self._liquidSettleTween:Cancel() end
+    if self._liquidSettleSizeTween then self._liquidSettleSizeTween:Cancel() end
+
+    local button = tab.Button
+    local sidebar = self.Sidebar
+    local targetY = button.AbsolutePosition.Y - sidebar.AbsolutePosition.Y
+    local targetX = button.AbsolutePosition.X - sidebar.AbsolutePosition.X
+    local targetW = button.AbsoluteSize.X
+    local targetH = button.AbsoluteSize.Y
+    if targetW <= 0 or targetH <= 0 then
+        task.delay(0.05, function()
+            if sequence == self._liquidSequence and pill.Parent then
+                self:_MoveLiquidSelection(tab, instant)
+            end
+        end)
+        return
+    end
+
+    pill.Visible = true
+    pill.BackgroundColor3 = self.Theme.SurfaceHover
+    local destination = UDim2.fromOffset(targetX, targetY)
+    local originalSize = UDim2.fromOffset(targetW, targetH)
+    if instant or not self._liquidInitialized then
+        pill.Position = destination
+        pill.Size = originalSize
+        pill.BackgroundTransparency = 0
+        self._liquidInitialized = true
+        return
+    end
+
+    local currentY = pill.Position.Y.Offset
+    local distance = targetY - currentY
+    if math.abs(distance) < 1 then
+        self._liquidMoveTween = Tween(pill, 0.24, {
+            Position = destination, Size = originalSize,
+        }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+        return
+    end
+
+    -- A gently stretched blob: leading edge moves first, then the tail catches up.
+    local stretch = math.min(17, math.abs(distance) * 0.20 + 5)
+    local movingDown = distance > 0
+    local stretchedY = movingDown and (targetY - stretch) or targetY
+    local stretchedH = targetH + stretch
+    self._liquidMoveTween = Tween(pill, 0.27, {
+        Position = UDim2.fromOffset(targetX, stretchedY),
+    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    self._liquidSizeTween = Tween(pill, 0.27, {
+        Size = UDim2.fromOffset(targetW, stretchedH),
+    }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    task.delay(0.19, function()
+        if sequence ~= self._liquidSequence or not pill.Parent then return end
+        self._liquidSettleTween = Tween(pill, 0.25, {
+            Position = destination,
+        }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        self._liquidSettleSizeTween = Tween(pill, 0.25, {
+            Size = originalSize,
+        }, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    end)
+end
+
 function Window:_setActiveTab(tab)
     if not tab or (self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint) then return end
     if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
@@ -2391,10 +2462,7 @@ function Window:_setActiveTab(tab)
             }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Button then
-            Tween(t.Button, 0.24, {
-                BackgroundTransparency = selected and 0 or 1,
-                BackgroundColor3 = selected and self.Theme.SurfaceHover or self.Theme.Sidebar,
-            }, EASE_SOFT, Enum.EasingDirection.Out)
+            Tween(t.Button, 0.2, { BackgroundTransparency = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
         end
         if t.Accent then
             Tween(t.Accent, 0.22, { BackgroundTransparency = selected and 0 or 1 }, EASE_SOFT, Enum.EasingDirection.Out)
@@ -2402,6 +2470,7 @@ function Window:_setActiveTab(tab)
     end
 
     self.ActiveTab = tab
+    self:_MoveLiquidSelection(tab)
     PopIn(tab.Container, 0)
     safeCallback(self.Config.OnTabChange, tab)
 end
@@ -2534,6 +2603,7 @@ function Window:Tab(config)
         LayoutOrder = self.SidebarOrder,
         Text = "",
         AutoButtonColor = false,
+        ZIndex = 4,
         Parent = self.SidebarList,
     })
     Corner(button, config.Corner or theme.ControlRadius)
@@ -2541,7 +2611,7 @@ function Window:Tab(config)
     local icon
     if config.Icon then
         icon = CreateIcon(config.Icon, config.IconSize or 14,
-            config.IconColor or theme.Icon, 2)
+            config.IconColor or theme.Icon, 5)
         icon.AnchorPoint = Vector2.new(0, 0.5)
         icon.Position = UDim2.new(0, 11, 0.5, 0)
         icon.Parent = button
@@ -2558,6 +2628,7 @@ function Window:Tab(config)
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd,
+        ZIndex = 5,
         Parent = button,
     })
 
@@ -2569,6 +2640,7 @@ function Window:Tab(config)
         Size = UDim2.fromOffset(2, 12),
         AnchorPoint = Vector2.new(0, 0.5),
         Position = UDim2.new(0, 2, 0.5, 0),
+        ZIndex = 5,
         Parent = button,
     })
     Corner(accent, 99)
@@ -2665,7 +2737,9 @@ function Window:Tab(config)
         local selected = self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint
         label.TextColor3 = selected and theme.Accent or theme.SubText
         if icon then icon.ImageColor3 = selected and theme.Accent or (config.IconColor or theme.Icon) end
-        button.BackgroundColor3 = selected and theme.SurfaceHover or theme.Sidebar
+        button.BackgroundTransparency = 1
+        button.BackgroundColor3 = theme.Sidebar
+        if selected then self:_MoveLiquidSelection(tab, true) end
         for _, scrollFrame in ipairs({ leftScroll, rightScroll }) do
             StyleScrollBar(scrollFrame, { Thickness = theme.ScrollbarThickness, Color = theme.Scrollbar, Transparency = theme.ScrollbarTransparency })
         end
@@ -3689,10 +3763,11 @@ function Window:_RefreshScriptAutocomplete()
     if y + height > parentSize.Y - 27 then y = math.max(40, y - height - 24) end
     ui.Completion.Position = UDim2.fromOffset(x,y)
     ui.Completion.Size = UDim2.fromOffset(width,height)
+    -- Preserve the highlighted candidate when the popup refreshes.
+    local previousWord = self._scriptCompletionItems and self._scriptCompletionItems[self._scriptCompletionIndex or 1]
     self._scriptCompletionItems = matches
     self._scriptCompletionStart = startsAt
     self._scriptCompletionCursor = cursor
-    local previousWord = self._scriptCompletionItems and self._scriptCompletionItems[self._scriptCompletionIndex or 1]
     local chosen = 1
     if previousWord then
         for i, suggestion in ipairs(matches) do
@@ -4145,6 +4220,7 @@ function Window:_CreateScriptEditor()
             TextXAlignment = Enum.TextXAlignment.Left, Position = UDim2.fromOffset(9,0),
             Size = UDim2.new(1,-12,1,0), ZIndex = 38, Parent = row })
         BindTheme(self,labelObj,"TextColor3","Text")
+        -- A click can make the editor lose focus; accept while the mouse is pressed.
         row.MouseButton1Down:Connect(function() self:_ChooseScriptAutocomplete(i) end)
         completionRows[i] = { Button = row, Label = labelObj }
     end
@@ -4156,13 +4232,16 @@ function Window:_CreateScriptEditor()
     scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function() self:_RenderScriptEditor() end)
     input.Focused:Connect(function() self:_UpdateEditorCursor(true) end)
     input.FocusLost:Connect(function()
-        self:_CloseScriptAutocomplete()
+        -- Defer closing so a suggestion's MouseButton1Down can accept it first.
+        task.defer(function()
+            if not input:IsFocused() then self:_CloseScriptAutocomplete() end
+        end)
         caret.Visible = false
         for _, rect in ipairs(self._scriptSelectionRects) do rect.Visible = false end
         if self._scriptsDirty then self:SaveScripts() end
     end)
-    -- Bind at a high priority so Enter accepts a completion instead of inserting a newline.
-    -- Returning Pass when the popup is hidden leaves normal text editing untouched.
+    -- While suggestions are open: Up/Down changes selection, Enter/Tab accepts it,
+    -- Escape dismisses. Otherwise preserve ordinary editing and cursor movement.
     local completionActionName = "PebbleUIAutocomplete_" .. tostring(self)
     local function completionAction(_, state, key)
         if not self.ActiveScript or not self.Visible or not editor.Visible or not input:IsFocused()
@@ -5606,6 +5685,109 @@ do
         self:_ApplyBlueprintView(); self:_RefreshBlueprintCompatibility()
         ui.Empty.Visible = #r.Nodes == 0
     end
+    -- Straighten Connections (Q): align connected port centers vertically.
+    -- Only selected nodes move; when two selected nodes connect, the leftmost
+    -- node stays in place and its right-hand neighbor is aligned to it.
+    function Window:_StraightenBlueprintConnections()
+        local record = self.ActiveBlueprint
+        local nodeUI = self._bpNodeUI
+        if not record or not nodeUI or self._bpDrag then return end
+
+        local selected = {}
+        for id, enabled in pairs(self._bpSelectionSet or {}) do
+            if enabled then selected[id] = true end
+        end
+        if self._bpSelection and nodeUI[self._bpSelection] then
+            selected[self._bpSelection] = true
+        end
+        if not next(selected) then
+            self:_BlueprintStatus("Select a node or connected nodes, then press Q")
+            return
+        end
+
+        local lookup = {}
+        for _, node in ipairs(record.Nodes) do lookup[node.Id] = node end
+
+        -- Endpoint centers are measured on screen, so this also accounts for
+        -- different rows, dynamic node properties, and graph zoom.
+        local function portY(id, direction, name)
+            local ui = nodeUI[id]
+            if not ui then return nil end
+            for _, endpoint in ipairs(ui.Endpoints) do
+                if endpoint.Direction == direction and endpoint.Port.Name == name
+                    and endpoint.Button and endpoint.Button.Parent then
+                    local button = endpoint.Button
+                    return button.AbsolutePosition.Y + button.AbsoluteSize.Y * 0.5
+                end
+            end
+            return nil
+        end
+
+        local candidates = {}
+        for _, link in ipairs(record.Links) do
+            local source, target = lookup[link.From], lookup[link.To]
+            if source and target and (selected[source.Id] or selected[target.Id]) then
+                local moveId, anchorId, moveDirection, movePort, anchorDirection, anchorPort
+                if selected[source.Id] and selected[target.Id] then
+                    if source.X <= target.X then
+                        moveId, anchorId = target.Id, source.Id
+                        moveDirection, movePort = "in", link.Input
+                        anchorDirection, anchorPort = "out", link.Output
+                    else
+                        moveId, anchorId = source.Id, target.Id
+                        moveDirection, movePort = "out", link.Output
+                        anchorDirection, anchorPort = "in", link.Input
+                    end
+                elseif selected[target.Id] then
+                    moveId, anchorId = target.Id, source.Id
+                    moveDirection, movePort = "in", link.Input
+                    anchorDirection, anchorPort = "out", link.Output
+                else
+                    moveId, anchorId = source.Id, target.Id
+                    moveDirection, movePort = "out", link.Output
+                    anchorDirection, anchorPort = "in", link.Input
+                end
+                table.insert(candidates, {
+                    Move = moveId, Anchor = anchorId,
+                    MoveDirection = moveDirection, MovePort = movePort,
+                    AnchorDirection = anchorDirection, AnchorPort = anchorPort,
+                    X = lookup[moveId].X,
+                })
+            end
+        end
+        table.sort(candidates, function(a, b)
+            if a.X ~= b.X then return a.X < b.X end
+            if a.Move ~= b.Move then return a.Move < b.Move end
+            return a.Anchor < b.Anchor
+        end)
+
+        local moved, count = {}, 0
+        local zoom = math.max(0.01, record.View.Zoom or 1)
+        for _, edge in ipairs(candidates) do
+            if not moved[edge.Move] then
+                local currentY = portY(edge.Move, edge.MoveDirection, edge.MovePort)
+                local referenceY = portY(edge.Anchor, edge.AnchorDirection, edge.AnchorPort)
+                local node = lookup[edge.Move]
+                local ui = nodeUI[edge.Move]
+                if currentY and referenceY and node and ui then
+                    local delta = (referenceY - currentY) / zoom
+                    if math.abs(delta) > 0.5 then
+                        node.Y = node.Y + delta
+                        ui.Frame.Position = UDim2.fromOffset(node.X, node.Y)
+                        count += 1
+                    end
+                    moved[edge.Move] = true
+                end
+            end
+        end
+        if count > 0 then
+            self._bpWireDirty = true
+            self:_BlueprintChanged(record, true)
+            self:_BlueprintStatus("Straightened " .. count .. " node(s)")
+        else
+            self:_BlueprintStatus("Connections already straight or no connected selection")
+        end
+    end
     function Window:_ApplyBlueprintView(animated)
         local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r or not ui then return end
         r.View.Zoom = clamp(r.View.Zoom or 0.85,0.35,1.6)
@@ -5649,18 +5831,40 @@ do
         local r,ui = self.ActiveBlueprint,self.BlueprintUI; if not r or not ui then return end
         local pool = self._bpWirePool or {}; self._bpWirePool = pool
         local used = 0
-        local function segment(a,b,color,transparency)
+        local now = os.clock()
+
+        local function lerpColor(a,b,t)
+            return Color3.new(
+                a.R + (b.R-a.R)*t,
+                a.G + (b.G-a.G)*t,
+                a.B + (b.B-a.B)*t
+            )
+        end
+        local function createSegment(parent,z)
+            local line = New("Frame", {
+                AnchorPoint = Vector2.new(0.5,0.5), BorderSizePixel = 0, ZIndex = z or 23,
+                BackgroundColor3 = Color3.new(1,1,1), Parent = parent
+            })
+            Corner(line, 999)
+            local grad = New("UIGradient", {
+                Rotation = 0,
+                Parent = line,
+            })
+            return { Frame = line, Gradient = grad }
+        end
+        local function applySegment(seg,a,b,startColor,endColor,startAlpha,endAlpha,thickness,z)
             local delta = b-a; local length = delta.Magnitude
-            if length < 0.01 then return end
-            used = used+1
-            local line = pool[used]
-            if not line then
-                line = New("Frame", { AnchorPoint = Vector2.new(0.5,0.5), BorderSizePixel = 0, ZIndex = 23, Parent = ui.WireLayer })
-                pool[used] = line
-            end
+            if length < 0.01 then return false end
+            local frame = seg.Frame; local grad = seg.Gradient
             local middle = (a+b)/2
-            line.Visible = true; line.Position = UDim2.fromOffset(middle.X,middle.Y); line.Size = UDim2.fromOffset(length+1,3)
-            line.Rotation = math.deg(math.atan2(delta.Y,delta.X)); line.BackgroundColor3 = color; line.BackgroundTransparency = transparency or 0.1
+            frame.Visible = true
+            frame.ZIndex = z or frame.ZIndex
+            frame.Position = UDim2.fromOffset(middle.X,middle.Y)
+            frame.Size = UDim2.fromOffset(length + math.max(2, thickness), thickness)
+            frame.Rotation = math.deg(math.atan2(delta.Y,delta.X))
+            grad.Color = ColorSequence.new(startColor,endColor)
+            grad.Transparency = NumberSequence.new(startAlpha,endAlpha)
+            return true
         end
         local function point(endpoint)
             if not endpoint or not endpoint.Button.Parent then return nil end
@@ -5668,32 +5872,87 @@ do
             if not inside(endpoint.Scroll,p) then return nil end
             return p-ui.Board.AbsolutePosition
         end
-        local function curve(a,b,color,transparency)
-            if not a or not b then return end
-            local offset = math.max(55,math.abs(b.X-a.X)*0.45)
-            local c1,c2 = a+Vector2.new(offset,0),b-Vector2.new(offset,0)
+        local function sampleCurve(a,b)
+            local samples = {}
+            local dx = math.abs(b.X-a.X)
+            local dy = math.abs(b.Y-a.Y)
+            local offset = math.max(72, dx*0.42)
+            local lift = math.min(28, dy*0.08)
+            local c1 = a + Vector2.new(offset, -lift)
+            local c2 = b - Vector2.new(offset, -lift)
+            local steps = math.clamp(math.floor((dx + dy) / 12), 32, 72)
             local previous = a
-            for i=1,36 do
-                local t=i/36; local u=1-t
+            for i=1,steps do
+                local t=i/steps; local u=1-t
                 local p=a*(u*u*u)+c1*(3*u*u*t)+c2*(3*u*t*t)+b*(t*t*t)
-                segment(previous,p,color,transparency); previous=p
+                samples[#samples+1] = { previous, p, (t - (0.5/steps)) }
+                previous=p
+            end
+            return samples
+        end
+        local function drawCurve(a,b,startColor,endColor,baseTransparency)
+            if not a or not b then return end
+            local curve = sampleCurve(a,b)
+            local pulse = (now*0.33)%1
+            local radius = 0.16
+            local coreThickness = 4
+            local glowThickness = 10
+            for _,segData in ipairs(curve) do
+                local p0,p1,midT = segData[1],segData[2],segData[3]
+                local t0 = math.max(0, midT - 0.01)
+                local t1 = math.min(1, midT + 0.01)
+                local c0 = lerpColor(startColor,endColor,t0)
+                local c1 = lerpColor(startColor,endColor,t1)
+                local dist = math.abs(midT-pulse)
+                dist = math.min(dist, 1-dist)
+                local highlight = math.clamp(1 - dist/radius, 0, 1)
+                local glowA0 = math.max(0, math.min(1, baseTransparency + 0.58 - highlight*0.25))
+                local glowA1 = glowA0
+                local coreA = math.max(0, math.min(1, baseTransparency + 0.10 - highlight*0.22))
+                local glowC0 = lerpColor(c0, Color3.new(1,1,1), 0.20 + highlight*0.45)
+                local glowC1 = lerpColor(c1, Color3.new(1,1,1), 0.20 + highlight*0.45)
+                local coreC0 = lerpColor(c0, Color3.new(1,1,1), highlight*0.18)
+                local coreC1 = lerpColor(c1, Color3.new(1,1,1), highlight*0.18)
+
+                used = used + 1
+                local glow = pool[used]
+                if not glow then glow = createSegment(ui.WireLayer,22); pool[used] = glow end
+                applySegment(glow,p0,p1,glowC0,glowC1,glowA0,glowA1,glowThickness,22)
+
+                used = used + 1
+                local core = pool[used]
+                if not core then core = createSegment(ui.WireLayer,23); pool[used] = core end
+                applySegment(core,p0,p1,coreC0,coreC1,coreA,coreA,coreThickness,23)
             end
         end
         local endpoints = {}
         for _,e in ipairs(self._bpEndpoints or {}) do endpoints[e.Node .. ":" .. e.Direction .. ":" .. e.Port.Name] = e end
         for _,link in ipairs(r.Links) do
-            local a = endpoints[link.From .. ":out:" .. link.Output]
-            local b = endpoints[link.To .. ":in:" .. link.Input]
-            local node = nodeById(r,link.From)
-            local color = node and definition(node).Color or self.Theme.SubText
-            curve(point(a),point(b),color,(r.Invalid and (r.Invalid[link.From] or r.Invalid[link.To])) and 0.75 or 0.12)
+            local aEndpoint = endpoints[link.From .. ":out:" .. link.Output]
+            local bEndpoint = endpoints[link.To .. ":in:" .. link.Input]
+            local sourceNode = nodeById(r,link.From)
+            local targetNode = nodeById(r,link.To)
+            local sourceDef = sourceNode and definition(sourceNode)
+            local targetDef = targetNode and definition(targetNode)
+            local startColor = sourceDef and sourceDef.Color or self.Theme.Accent
+            local endColor = targetDef and targetDef.Color or self.Theme.Text
+            local invalid = r.Invalid and (r.Invalid[link.From] or r.Invalid[link.To])
+            drawCurve(point(aEndpoint),point(bEndpoint),startColor,endColor,invalid and 0.62 or 0.08)
         end
         if self._bpPending then
-            local p = point(self._bpPending)
+            local pendingPoint = point(self._bpPending)
             local mouse = pointer()-ui.Board.AbsolutePosition
-            if self._bpPending.Direction == "out" then curve(p,mouse,self.Theme.Accent,0.25) else curve(mouse,p,self.Theme.Accent,0.25) end
+            local pendingNode = nodeById(r,self._bpPending.Node)
+            local pendingDef = pendingNode and definition(pendingNode)
+            local activeColor = pendingDef and pendingDef.Color or self.Theme.Accent
+            local white = Color3.new(1,1,1)
+            if self._bpPending.Direction == "out" then
+                drawCurve(pendingPoint,mouse,activeColor,white,0.14)
+            else
+                drawCurve(mouse,pendingPoint,white,activeColor,0.14)
+            end
         end
-        for i=used+1,#pool do pool[i].Visible = false end
+        for i=used+1,#pool do pool[i].Frame.Visible = false end
         -- Grid follows pan and zoom, with a fixed count of reusable line frames.
         local grid = self._bpGridPool or {}; self._bpGridPool=grid
         local spacing = math.max(16,32*r.View.Zoom)
@@ -6029,6 +6288,7 @@ do
             local ctrl=UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)
             if input.KeyCode==Enum.KeyCode.Escape then self._bpPending=nil; self._bpRejectedTarget=nil; self._bpPaletteContext=nil; self:_CloseBlueprintPalette(); self:_CloseCreationMenu(); self:_RefreshBlueprintCompatibility()
             elseif input.KeyCode==Enum.KeyCode.Delete or input.KeyCode==Enum.KeyCode.Backspace then if self._bpSelection then self:DeleteBlueprintNode(self.ActiveBlueprint,self._bpSelection) end
+            elseif input.KeyCode==Enum.KeyCode.Q and not ctrl then self:_StraightenBlueprintConnections()
             elseif input.KeyCode==Enum.KeyCode.F then self:_FrameBlueprint()
             elseif ctrl and input.KeyCode==Enum.KeyCode.S then self:SaveBlueprints()
             elseif ctrl and input.KeyCode==Enum.KeyCode.D and self._bpSelection then
@@ -6040,7 +6300,7 @@ do
         track(RunService.RenderStepped:Connect(function(dt)
             accumulator=accumulator+dt
             if accumulator<1/60 then return end; accumulator=0
-            if not self.Destroyed and self.Visible and self.ActiveBlueprint and self._bpWireDirty then self:_DrawBlueprintWires() end
+            if not self.Destroyed and self.Visible and self.ActiveBlueprint then if self._bpWireDirty or true then self:_DrawBlueprintWires() end end
         end))
         WatchTheme(self,editor,function()
             if self.ActiveBlueprint then self:_BuildBlueprintBoard() end
@@ -6178,38 +6438,41 @@ local function PlayStartupIntro(window)
     local main = window.Main
     local theme = window.Theme
     local duration = math.max(0.15, tonumber(config.LoadingDuration) or 2.4)
-    local introFadeDuration = math.max(0.08, tonumber(config.LoadingIntroFadeDuration) or 0.28)
+    local introFadeDuration = math.max(0.08, tonumber(config.LoadingIntroFadeDuration) or 0.35)
     local titleText = tostring(config.LoadingTitle or window.Title)
     local iconName = config.LoadingIcon or "cat"
 
     local cover = New("CanvasGroup", {
         Name = "StartupIntro",
         BackgroundColor3 = theme.BackgroundTop,
-        BackgroundTransparency = 1, -- Fundo preto nasce transparente; o resto do loading permanece independente.
+        BackgroundTransparency = 0, -- Fundo opaco desde o primeiro frame, sem preview da UI.
         BorderSizePixel = 0,
         AnchorPoint = main.AnchorPoint,
         Position = main.Position,
         Size = main.Size,
-        GroupTransparency = 0, -- Evita apagar o CanvasGroup inteiro durante o fade do fundo.
+        GroupTransparency = 0,
         ZIndex = 10000,
         Active = true,
         Parent = window.ScreenGui,
     })
     Corner(cover, config.CornerRadius or Defaults.CornerRadius)
     window.LoadingOverlay = cover
+    local notifiedLoaded = false
+    local function notifyLoaded()
+        if notifiedLoaded then return end
+        notifiedLoaded = true
+        safeCallback(config.OnLoaded, window)
+    end
 
-    -- A janela do script jamais pode aparecer por baixo do fade inicial.
-    local startupReleased = false
-    main.Visible = false
-    main.GroupTransparency = 1
-    local guardVisible = main:GetPropertyChangedSignal("Visible"):Connect(function()
-        if not startupReleased and main.Visible then
-            main.Visible = false
-        end
-    end)
-    cover.Destroying:Connect(function()
-        startupReleased = true
-        if guardVisible.Connected then guardVisible:Disconnect() end
+    -- Fail-safe: nenhuma animação pode deixar um painel preto preso.
+    local maxIntroSeconds = math.max(5, duration + introFadeDuration + 5)
+    task.delay(maxIntroSeconds, function()
+        if not cover.Parent then return end
+        warn("[PebbleUI] Intro timed out; restoring window visibility.")
+        cover:Destroy()
+        if window.LoadingOverlay == cover then window.LoadingOverlay = nil end
+        if main.Parent and window.Visible then main.Visible = true end
+        notifyLoaded()
     end)
 
     local stack = New("Frame", {
@@ -6296,13 +6559,10 @@ local function PlayStartupIntro(window)
         if not cover.Parent then return end
         RunService.RenderStepped:Wait()
 
-        -- Primeiro aparece a janelona preta inteira com um fade-in curto.
-        local introFade = Tween(cover, introFadeDuration, { BackgroundTransparency = 0 }, Enum.EasingStyle.Sine)
-        introFade.Completed:Wait()
-        -- Garante que a tela esteja 100% opaca antes do gatinho entrar.
-        cover.BackgroundTransparency = 0
+        -- Fundo ja esta opaco antes da ScreenGui ser exibida.
+        -- Pequena pausa preserva o ritmo do loading sem revelar a UI.
+        task.wait(introFadeDuration)
         if not cover.Parent then return end
-        task.wait(0.03)
 
         -- Preload evita que o icon apareca no meio do slide por atraso da textura.
         if logo.Image ~= "" then
@@ -6343,22 +6603,16 @@ local function PlayStartupIntro(window)
         progress.Completed:Wait()
         if not cover.Parent then return end
         task.wait(0.12)
-        -- A janela inteira nasce transparente, inclusive todos os seus filhos.
-        -- Comeca a revelar somente apos o progresso terminar.
+        -- O conteudo principal so pode ser renderizado a partir daqui.
         local mainScale = EnsureScale(main)
         mainScale.Scale = 0.985
-        main.GroupTransparency = 1
-        -- So agora o script pode ser exibido.
-        startupReleased = true
-        guardVisible:Disconnect()
         main.Visible = true
         Tween(mainScale, 0.65, { Scale = 1 }, EASE_SOFT)
-        Tween(main, 0.62, { GroupTransparency = 0 }, Enum.EasingStyle.Sine)
-        local fade = Tween(cover, 0.62, { GroupTransparency = 1 }, Enum.EasingStyle.Sine)
+        local fade = Tween(cover, 0.58, { GroupTransparency = 1 }, EASE_SOFT)
         fade.Completed:Wait()
         if cover.Parent then cover:Destroy() end
         if window.LoadingOverlay == cover then window.LoadingOverlay = nil end
-        safeCallback(config.OnLoaded, window)
+        notifyLoaded()
     end)
 end
 
@@ -6417,16 +6671,15 @@ function PebbleUI:CreateWindow(config)
         ResetOnSpawn = false,
         IgnoreGuiInset = false,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-        Enabled = false, -- Nunca renderizar a UI antes de montar a tela inicial.
+        Enabled = false, -- Construir completamente antes de exibir.
     })
     local ok = pcall(function() screen.Parent = CoreGui end)
     if not ok then screen.Parent = PlayerGui end
     self.ScreenGui = screen
 
-    local main = New("CanvasGroup", {
+    local main = New("Frame", {
         Name = "Main",
-        GroupTransparency = config.Loading == false and 0 or 1,
-        Visible = false, -- Nunca mostrar o conteudo durante a introducao.
+        Visible = config.Loading == false, -- Escondida ate o loading terminar.
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = config.Position or Defaults.Position,
         Size = size,
@@ -6441,14 +6694,8 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, mainStroke, "Color", "Stroke")
     self.Main = main
 
-    -- Loading independente do Main, exibido ANTES da construcao da UI.
-    -- Nenhum elemento do Main pode piscar, porque ele permanece invisivel.
-    if config.Loading ~= false then
-        PlayStartupIntro(self)
-    else
-        main.Visible = true
-    end
-    screen.Enabled = true
+    -- Não iniciar loading enquanto a estrutura da janela ainda está incompleta.
+    -- Loading reativado por padrao. Para desativar: Loading = false.
 
     local mainGrad = New("UIGradient", {
         Color = ColorSequence.new({
@@ -6686,6 +6933,21 @@ function PebbleUI:CreateWindow(config)
     })
     List(sidebarList, 3)
     self.SidebarList = sidebarList
+
+    -- The selector lives outside UIListLayout so it can freely slide between buttons.
+    local liquidIndicator = New("Frame", {
+        Name = "LiquidTabIndicator",
+        Visible = false,
+        BackgroundColor3 = self.Theme.SurfaceHover,
+        BackgroundTransparency = 0,
+        BorderSizePixel = 0,
+        Size = UDim2.fromOffset(0, 0),
+        ZIndex = 2,
+        Parent = sidebar,
+    })
+    Corner(liquidIndicator, 7)
+    self.LiquidTabIndicator = liquidIndicator
+    BindTheme(self, liquidIndicator, "BackgroundColor3", "SurfaceHover")
 
     local topbar = New("Frame", {
         Name = "Topbar",
@@ -6980,14 +7242,17 @@ function PebbleUI:CreateWindow(config)
     List(notifHolder, 4)
     self.NotificationHolder = notifHolder
 
-    -- Soft launch animation for the entire window.
-    main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
-    local mainScale = EnsureScale(main)
-    mainScale.Scale = 0.99
-    task.defer(function()
-        Tween(main, 0.28, { BackgroundTransparency = self.BackgroundTransparency }, EASE_SOFT, Enum.EasingDirection.Out)
-        Tween(mainScale, 0.28, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
-    end)
+    -- A animacao inicial da janela so roda sem loading.
+    -- Com loading, o painel permanece oculto ate a transicao final.
+    if config.Loading == false then
+        main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
+        local mainScale = EnsureScale(main)
+        mainScale.Scale = 0.99
+        task.defer(function()
+            Tween(main, 0.28, { BackgroundTransparency = self.BackgroundTransparency }, EASE_SOFT, Enum.EasingDirection.Out)
+            Tween(mainScale, 0.28, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
+        end)
+    end
 
     local toggleKey = config.ToggleKey or Defaults.ToggleKey
     local inputConn
@@ -7035,6 +7300,40 @@ function PebbleUI:CreateWindow(config)
     end
     self:_CreateScriptExplorer()
     self:_CreateCustomBlueprints()
+
+    -- Monta o loading com a ScreenGui DESLIGADA.
+    -- Assim a primeira renderizacao mostra apenas o loading, nunca a UI.
+    if config.Loading ~= false then
+        main.Visible = false
+        PlayStartupIntro(self)
+        screen.Enabled = true
+    else
+        main.Visible = true
+        screen.Enabled = true
+        task.defer(function()
+            if not self.Destroyed then safeCallback(config.OnLoaded, self) end
+        end)
+    end
+
+    -- Manual recovery for unexpected overlays; call window:RestoreVisibility().
+    function self:RestoreVisibility()
+        if self.Destroyed then return false end
+        if self.LoadingOverlay then
+            self.LoadingOverlay:Destroy()
+            self.LoadingOverlay = nil
+        end
+        for _, child in ipairs(self.ScreenGui:GetChildren()) do
+            if child.Name == "StartupIntro" then child:Destroy() end
+        end
+        self.ScreenGui.Enabled = true
+        self.Visible = true
+        self.Main.Visible = true
+        self.Main.BackgroundTransparency = self.BackgroundTransparency
+        local scale = EnsureScale(self.Main)
+        scale.Scale = 1
+        return true
+    end
+
     screen.Destroying:Connect(function()
         self:_DisposeBlueprints()
         self:_DisposeScripts()
