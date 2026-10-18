@@ -1,4 +1,4 @@
-local PebbleUI = { Version = "1.7.0-real-layout" }
+local PebbleUI = { Version = "1.7.1-real-ultrawide" }
 
 --============================================================
 -- Services
@@ -318,24 +318,26 @@ PebbleUI.Theme = DefaultTheme
 local Defaults = {
     Title = "Pebble UI",
     RealLayout = true, -- Explorer na esquerda + tabs horizontais no topo
+    UltraWide = true, -- Janela mais larga, inspirada em monitores ultrawide
     Version = "v1.6.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(780, 520),
+    Size = UDim2.fromOffset(1280, 440),
     Position = UDim2.fromScale(0.5, 0.5),
-    MinSize = Vector2.new(600, 380),
-    MaxSize = Vector2.new(1400, 900),
+    MinSize = Vector2.new(920, 400),
+    MaxSize = Vector2.new(1900, 980),
 
-    TopbarHeight = 42,
+    TopbarHeight = 40,
     SidebarWidth = 140,
     CollapsedSidebarWidth = 64,
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
+    ScriptExplorerWidth = 220,
     CornerRadius = 8,
-    LeftColumnWidth = 272,
-    ColumnGap = 12,
-    SectionGap = 10,
+    LeftColumnWidth = 380,
+    ColumnGap = 16,
+    SectionGap = 12,
     CompactControls = true,
 
     BackgroundTransparency = 0,
@@ -3502,18 +3504,18 @@ end
 function Window:_UpdateScriptLayout()
     if not self.ScriptExplorer or self.Destroyed then return end
     if self.RealLayout then
-        local width = self.Config.ScriptExplorerWidth or 192
+        local width = self.Config.ScriptExplorerWidth or Defaults.ScriptExplorerWidth or 192
         self._scriptRightInset = 0
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
         self.ScriptExplorer.Position = UDim2.fromOffset(0, 50)
         self.ScriptExplorer.Size = UDim2.new(0, width, 1, -50)
         self.Topbar.Position = UDim2.fromOffset(12, 4)
-        self.Topbar.Size = UDim2.new(1, -60, 0, 40)
-        self.ContentHost.Position = UDim2.fromOffset(width + 12, 98)
-        self.ContentHost.Size = UDim2.new(1, -(width + 24), 1, -110)
+        self.Topbar.Size = UDim2.new(1, -72, 0, 40)
+        self.ContentHost.Position = UDim2.fromOffset(width + 16, 98)
+        self.ContentHost.Size = UDim2.new(1, -(width + 32), 1, -110)
         if self.TabStrip then
-            self.TabStrip.Position = UDim2.fromOffset(width + 10, 52)
-            self.TabStrip.Size = UDim2.new(1, -(width + 20), 0, 38)
+            self.TabStrip.Position = UDim2.fromOffset(width + 14, 52)
+            self.TabStrip.Size = UDim2.new(1, -(width + 28), 0, 38)
         end
         if self.ScriptEditor then
             self.ScriptEditor.Position = self.ContentHost.Position
@@ -3528,7 +3530,7 @@ function Window:_UpdateScriptLayout()
         if self._PositionGlobalSearch then self._PositionGlobalSearch() end
         return
     end
-    local desired = self.Config.ScriptExplorerWidth or 192
+    local desired = self.Config.ScriptExplorerWidth or Defaults.ScriptExplorerWidth or 192
     local available = self.Main.AbsoluteSize.X - self.SidebarWidth - 336
     local width = math.floor(clamp(available, math.min(148, desired), desired))
     self._scriptRightInset = width + 12
@@ -6620,9 +6622,13 @@ function PebbleUI:CreateWindow(config)
     if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
     self.BackgroundTransparency = clamp01(bgTransparency)
 
+    local usingUltraWide = self.RealLayout and config.UltraWide ~= false and config.Size == nil
     local size = config.Size or Defaults.Size
+    if usingUltraWide then
+        size = Defaults.Size
+    end
     if not self.RealLayout and config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
-        local width = size.X.Offset + (config.ScriptExplorerWidth or 192) + 12
+        local width = size.X.Offset + (config.ScriptExplorerWidth or Defaults.ScriptExplorerWidth or 192) + 12
         if size.X.Scale == 0 then width = math.min(width, (config.MaxSize or Defaults.MaxSize).X) end
         size = UDim2.new(size.X.Scale, width, size.Y.Scale, size.Y.Offset)
     end
