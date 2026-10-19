@@ -3522,7 +3522,7 @@ function Window:_UpdateScriptLayout()
             Size = UDim2.new(0, explorerWidth, 1, -12),
         })
         apply(self.StudioExplorerBackdrop, {
-            Size = UDim2.new(0, rail + explorerWidth - 4, 1, -12),
+            Size = UDim2.new(0, rail + explorerWidth + 2, 1, -12),
         })
         apply(self.Topbar, {
             Position = UDim2.fromOffset(contentLeft, 44),
@@ -6867,11 +6867,11 @@ function PebbleUI:CreateWindow(config)
             Name = "StudioExplorerFullWidthBackground",
             BackgroundColor3 = self.Theme.Sidebar,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(6, 6),
-            Size = UDim2.new(0, sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) - 4, 1, -12),
+            Position = UDim2.fromOffset(0, 6),
+            Size = UDim2.new(0, sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 2, 1, -12),
             ZIndex = 1, Parent = main,
         })
-        Corner(explorerBackdrop, math.max(4, corner - 2))
+        -- Fundo do Explorer acompanha a borda esquerda sem recuo lateral.
         BindTheme(self, explorerBackdrop, "BackgroundColor3", "Sidebar")
         self.StudioExplorerBackdrop = explorerBackdrop
         sidebar.BackgroundTransparency = 1
