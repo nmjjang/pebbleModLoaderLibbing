@@ -320,27 +320,27 @@ local Defaults = {
     Version = "v1.6.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(780, 520),
+    Size = UDim2.fromOffset(660, 430),
     Position = UDim2.fromScale(0.5, 0.5),
-    MinSize = Vector2.new(600, 380),
+    MinSize = Vector2.new(520, 340),
     MaxSize = Vector2.new(1400, 900),
 
-    TopbarHeight = 42,
-    SidebarWidth = 140,
-    CollapsedSidebarWidth = 64,
+    TopbarHeight = 38,
+    SidebarWidth = 118,
+    CollapsedSidebarWidth = 54,
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
     CornerRadius = 8,
-    LeftColumnWidth = 272,
+    LeftColumnWidth = 240,
     ColumnGap = 12,
     SectionGap = 10,
     CompactControls = true,
     Layout = "Studio", -- "Classic" keeps the original layout
-    StudioRailWidth = 52,
-    StudioExplorerWidth = 210,
-    StudioExplorerCollapsedWidth = 48,
-    StudioHeaderHeight = 52,
+    StudioRailWidth = 46,
+    StudioExplorerWidth = 180,
+    StudioExplorerCollapsedWidth = 42,
+    StudioHeaderHeight = 44,
 
     BackgroundTransparency = 0,
 
@@ -3522,7 +3522,7 @@ function Window:_UpdateScriptLayout()
             Size = UDim2.new(0, explorerWidth, 1, -12),
         })
         apply(self.StudioExplorerBackdrop, {
-            Size = UDim2.new(0, rail + explorerWidth - 4, 1, -12),
+            Size = UDim2.new(0, rail + explorerWidth + 2, 1, -12),
         })
         apply(self.Topbar, {
             Position = UDim2.fromOffset(contentLeft, 44),
@@ -6867,11 +6867,11 @@ function PebbleUI:CreateWindow(config)
             Name = "StudioExplorerFullWidthBackground",
             BackgroundColor3 = self.Theme.Sidebar,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(6, 6),
-            Size = UDim2.new(0, sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) - 4, 1, -12),
+            Position = UDim2.fromOffset(0, 6),
+            Size = UDim2.new(0, sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 2, 1, -12),
             ZIndex = 1, Parent = main,
         })
-        Corner(explorerBackdrop, math.max(4, corner - 2))
+        -- Fundo do Explorer acompanha a borda esquerda sem recuo lateral.
         BindTheme(self, explorerBackdrop, "BackgroundColor3", "Sidebar")
         self.StudioExplorerBackdrop = explorerBackdrop
         sidebar.BackgroundTransparency = 1
@@ -6972,6 +6972,7 @@ function PebbleUI:CreateWindow(config)
     })
     Corner(brand, self.Theme.ControlRadius)
     self.Brand = brand
+    brand.Visible = false
 
     -- A compact profile mark anchors the sidebar.
     local avatarHolder = New("Frame", {
@@ -7168,8 +7169,8 @@ function PebbleUI:CreateWindow(config)
     local sidebarList = New("Frame", {
         Name = "SidebarList",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(8, 58),
-        Size = UDim2.new(1, -16, 1, -68),
+        Position = UDim2.fromOffset(8, 8),
+        Size = UDim2.new(1, -16, 1, -18),
         Parent = sidebar,
     })
     List(sidebarList, 3)
