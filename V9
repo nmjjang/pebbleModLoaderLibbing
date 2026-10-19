@@ -3517,11 +3517,11 @@ function Window:_UpdateScriptLayout()
         self.Sidebar.Visible = false -- Studio uses the Explorer as its leftmost column.
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
         apply(self.ScriptExplorer, {
-            Position = UDim2.fromOffset(0, 6),
-            Size = UDim2.new(0, explorerWidth, 1, -12),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(0, explorerWidth, 1, 0),
         })
         apply(self.StudioExplorerBackdrop, {
-            Size = UDim2.new(0, explorerWidth, 1, -12),
+            Size = UDim2.new(0, explorerWidth, 1, 0),
         })
         apply(self.Topbar, {
             Position = UDim2.fromOffset(contentLeft, 44),
@@ -6867,11 +6867,12 @@ function PebbleUI:CreateWindow(config)
             Name = "StudioExplorerFullWidthBackground",
             BackgroundColor3 = self.Theme.Sidebar,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(0, 6),
-            Size = UDim2.new(0, config.StudioExplorerWidth or Defaults.StudioExplorerWidth, 1, -12),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(0, config.StudioExplorerWidth or Defaults.StudioExplorerWidth, 1, 0),
             ZIndex = 1, Parent = main,
         })
-        -- Main already clips the background at the window rounded corners.
+        Corner(explorerBackdrop, corner)
+        -- Rounded backdrop so the left edge follows the window shape.
         BindTheme(self, explorerBackdrop, "BackgroundColor3", "Sidebar")
         self.StudioExplorerBackdrop = explorerBackdrop
         sidebar.BackgroundTransparency = 1
