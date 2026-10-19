@@ -3514,15 +3514,14 @@ function Window:_UpdateScriptLayout()
             end
         end
         self._scriptRightInset = 0
-        self.Sidebar.Position = UDim2.fromOffset(6, 6)
-        self.Sidebar.Size = UDim2.new(0, rail - 10, 1, -12)
+        self.Sidebar.Visible = false -- Studio uses the Explorer as its leftmost column.
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
         apply(self.ScriptExplorer, {
-            Position = UDim2.fromOffset(rail + 2, 6),
-            Size = UDim2.new(0, explorerWidth, 1, -12),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(0, explorerWidth, 1, 0),
         })
         apply(self.StudioExplorerBackdrop, {
-            Size = UDim2.new(0, rail + explorerWidth + 2, 1, -12),
+            Size = UDim2.new(0, explorerWidth, 1, 0),
         })
         apply(self.Topbar, {
             Position = UDim2.fromOffset(contentLeft, 44),
@@ -6792,7 +6791,7 @@ function PebbleUI:CreateWindow(config)
     end
     if config.Layout == nil then config.Layout = "Studio" end
     local studio = config.Layout == "Studio"
-    local sidebarWidth = studio and (config.StudioRailWidth or Defaults.StudioRailWidth) or (config.SidebarWidth or Defaults.SidebarWidth)
+    local sidebarWidth = studio and 0 or (config.SidebarWidth or Defaults.SidebarWidth)
     local topHeight = studio and (config.StudioHeaderHeight or Defaults.StudioHeaderHeight) or (config.TopbarHeight or Defaults.TopbarHeight)
     local corner = config.CornerRadius or Defaults.CornerRadius
     self.SidebarWidth = sidebarWidth
@@ -6862,16 +6861,18 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
+    if studio then sidebar.Visible = false end
     if studio then
         local explorerBackdrop = New("Frame", {
             Name = "StudioExplorerFullWidthBackground",
             BackgroundColor3 = self.Theme.Sidebar,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(0, 6),
-            Size = UDim2.new(0, sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 2, 1, -12),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(0, config.StudioExplorerWidth or Defaults.StudioExplorerWidth, 1, 0),
             ZIndex = 1, Parent = main,
         })
-        -- Fundo do Explorer acompanha a borda esquerda sem recuo lateral.
+        Corner(explorerBackdrop, corner)
+        -- Rounded backdrop so the left edge follows the window shape.
         BindTheme(self, explorerBackdrop, "BackgroundColor3", "Sidebar")
         self.StudioExplorerBackdrop = explorerBackdrop
         sidebar.BackgroundTransparency = 1
