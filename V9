@@ -320,27 +320,27 @@ local Defaults = {
     Version = "v1.6.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(780, 520),
+    Size = UDim2.fromOffset(660, 430),
     Position = UDim2.fromScale(0.5, 0.5),
-    MinSize = Vector2.new(600, 380),
+    MinSize = Vector2.new(520, 340),
     MaxSize = Vector2.new(1400, 900),
 
-    TopbarHeight = 42,
-    SidebarWidth = 140,
-    CollapsedSidebarWidth = 64,
+    TopbarHeight = 38,
+    SidebarWidth = 118,
+    CollapsedSidebarWidth = 54,
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
     CornerRadius = 8,
-    LeftColumnWidth = 272,
+    LeftColumnWidth = 240,
     ColumnGap = 12,
     SectionGap = 10,
     CompactControls = true,
     Layout = "Studio", -- "Classic" keeps the original layout
-    StudioRailWidth = 52,
-    StudioExplorerWidth = 210,
-    StudioExplorerCollapsedWidth = 48,
-    StudioHeaderHeight = 52,
+    StudioRailWidth = 46,
+    StudioExplorerWidth = 180,
+    StudioExplorerCollapsedWidth = 42,
+    StudioHeaderHeight = 44,
 
     BackgroundTransparency = 0,
 
@@ -3514,16 +3514,14 @@ function Window:_UpdateScriptLayout()
             end
         end
         self._scriptRightInset = 0
-        self.Sidebar.Position = UDim2.fromOffset(6, 6)
-        self.Sidebar.Size = UDim2.new(0, rail - 10, 1, -12)
+        self.Sidebar.Visible = false -- Studio uses the Explorer as its leftmost column.
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
         apply(self.ScriptExplorer, {
-            Position = UDim2.fromOffset(rail + 2, 6),
+            Position = UDim2.fromOffset(0, 6),
             Size = UDim2.new(0, explorerWidth, 1, -12),
         })
         apply(self.StudioExplorerBackdrop, {
-            -- The navigation rail keeps its height; the Explorer has its own compact background.
-            Size = UDim2.new(0, rail - 4, 1, -12),
+            Size = UDim2.new(0, explorerWidth, 1, -12),
         })
         apply(self.Topbar, {
             Position = UDim2.fromOffset(contentLeft, 44),
@@ -4414,18 +4412,6 @@ function Window:_CreateScriptExplorer()
     if self.Config.Layout == "Studio" then
         frame.BackgroundTransparency = 1
         border.Transparency = 1
-        local compactBackground = New("Frame", {
-            Name = "ExplorerContentBackground",
-            BackgroundColor3 = theme.Sidebar,
-            BorderSizePixel = 0,
-            Position = UDim2.fromOffset(0, 0),
-            Size = UDim2.new(1, 0, 0, 245),
-            ZIndex = 10,
-            Parent = frame,
-        })
-        Corner(compactBackground, 6)
-        BindTheme(self, compactBackground, "BackgroundColor3", "Sidebar")
-        self.ScriptExplorerCompactBackground = compactBackground
     end
     local title = New("TextLabel", {
         BackgroundTransparency = 1, Text = "Explorer", Font = theme.FontMedium, TextSize = 12,
@@ -5543,10 +5529,6 @@ do
             scripts.FooterLine.Position = UDim2.fromOffset(8, footerY)
             scripts.Count.Position = UDim2.fromOffset(12, footerY + 3)
             scripts.Count.Size = UDim2.new(1, -24, 0, 23)
-            if self.ScriptExplorerCompactBackground then
-                -- End the side panel just after the last visible Explorer row.
-                self.ScriptExplorerCompactBackground.Size = UDim2.new(1, 0, 0, footerY + 33)
-            end
         else
             local room = math.max(160, height - 114)
             local scriptsHeight = self._scriptsCollapsed and 0 or math.floor(room * 0.46)
@@ -6809,7 +6791,7 @@ function PebbleUI:CreateWindow(config)
     end
     if config.Layout == nil then config.Layout = "Studio" end
     local studio = config.Layout == "Studio"
-    local sidebarWidth = studio and (config.StudioRailWidth or Defaults.StudioRailWidth) or (config.SidebarWidth or Defaults.SidebarWidth)
+    local sidebarWidth = studio and 0 or (config.SidebarWidth or Defaults.SidebarWidth)
     local topHeight = studio and (config.StudioHeaderHeight or Defaults.StudioHeaderHeight) or (config.TopbarHeight or Defaults.TopbarHeight)
     local corner = config.CornerRadius or Defaults.CornerRadius
     self.SidebarWidth = sidebarWidth
@@ -6879,16 +6861,17 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
+    if studio then sidebar.Visible = false end
     if studio then
         local explorerBackdrop = New("Frame", {
             Name = "StudioExplorerFullWidthBackground",
             BackgroundColor3 = self.Theme.Sidebar,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(6, 6),
-            Size = UDim2.new(0, sidebarWidth - 4, 1, -12),
+            Position = UDim2.fromOffset(0, 6),
+            Size = UDim2.new(0, config.StudioExplorerWidth or Defaults.StudioExplorerWidth, 1, -12),
             ZIndex = 1, Parent = main,
         })
-        Corner(explorerBackdrop, math.max(4, corner - 2))
+        -- Main already clips the background at the window rounded corners.
         BindTheme(self, explorerBackdrop, "BackgroundColor3", "Sidebar")
         self.StudioExplorerBackdrop = explorerBackdrop
         sidebar.BackgroundTransparency = 1
@@ -6989,6 +6972,7 @@ function PebbleUI:CreateWindow(config)
     })
     Corner(brand, self.Theme.ControlRadius)
     self.Brand = brand
+    brand.Visible = false
 
     -- A compact profile mark anchors the sidebar.
     local avatarHolder = New("Frame", {
@@ -7185,8 +7169,8 @@ function PebbleUI:CreateWindow(config)
     local sidebarList = New("Frame", {
         Name = "SidebarList",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(8, 58),
-        Size = UDim2.new(1, -16, 1, -68),
+        Position = UDim2.fromOffset(8, 8),
+        Size = UDim2.new(1, -16, 1, -18),
         Parent = sidebar,
     })
     List(sidebarList, 3)
