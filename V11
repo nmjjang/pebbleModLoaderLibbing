@@ -1,3 +1,4 @@
+```
 local PebbleUI = { Version = "1.6.3-compact-explorer" }
 
 --============================================================
@@ -320,28 +321,27 @@ local Defaults = {
     Version = "v1.6.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(228, 550),
-    ExplorerOnly = true, -- Apenas Explorer, sem barra do jogador ou painel lateral.
+    Size = UDim2.fromOffset(1148, 680),
     Position = UDim2.fromScale(0.5, 0.5),
-    MinSize = Vector2.new(220, 300),
+    MinSize = Vector2.new(520, 340),
     MaxSize = Vector2.new(1400, 900),
 
-    TopbarHeight = 42,
-    SidebarWidth = 140,
-    CollapsedSidebarWidth = 64,
+    TopbarHeight = 38,
+    SidebarWidth = 118,
+    CollapsedSidebarWidth = 54,
     AutoFitSidebar = true,
     MaxSidebarWidth = 300,
     ExpandWindowForSidebar = true,
     CornerRadius = 8,
-    LeftColumnWidth = 272,
+    LeftColumnWidth = 240,
     ColumnGap = 12,
     SectionGap = 10,
     CompactControls = true,
     Layout = "Studio", -- "Classic" keeps the original layout
-    StudioRailWidth = 52,
-    StudioExplorerWidth = 210,
-    StudioExplorerCollapsedWidth = 48,
-    StudioHeaderHeight = 52,
+    StudioRailWidth = 46,
+    StudioExplorerWidth = 180,
+    StudioExplorerCollapsedWidth = 42,
+    StudioHeaderHeight = 44,
 
     BackgroundTransparency = 0,
 
@@ -3515,16 +3515,15 @@ function Window:_UpdateScriptLayout()
             end
         end
         self._scriptRightInset = 0
-        self.Sidebar.Position = UDim2.fromOffset(6, 6)
-        self.Sidebar.Size = UDim2.new(0, rail - 10, 1, -12)
+        self.Sidebar.Visible = false -- Studio uses the Explorer as its leftmost column.
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
         apply(self.ScriptExplorer, {
-            Position = UDim2.fromOffset(rail + 2, 6),
-            Size = UDim2.new(0, explorerWidth, 1, -12),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(0, explorerWidth, 1, 0),
         })
-        if self.StudioExplorerBackdrop then
-            self.StudioExplorerBackdrop.Visible = false
-        end
+        apply(self.StudioExplorerBackdrop, {
+            Size = UDim2.new(0, explorerWidth, 1, 0),
+        })
         apply(self.Topbar, {
             Position = UDim2.fromOffset(contentLeft, 44),
             Size = UDim2.new(1, -(contentLeft + 8), 0, 34),
@@ -4412,9 +4411,7 @@ function Window:_CreateScriptExplorer()
     BindTheme(self, border, "Color", "SidebarDivider")
     self.ScriptExplorer = frame
     if self.Config.Layout == "Studio" then
-        -- The Explorer itself fills the full height; no separate left rail
-        -- or short background that leaves the lower area transparent.
-        frame.BackgroundTransparency = 0
+        frame.BackgroundTransparency = 1
         border.Transparency = 1
     end
     local title = New("TextLabel", {
@@ -6783,20 +6780,10 @@ function PebbleUI:CreateWindow(config)
     self._blueprintsById = {}
     self._blueprintConnections = {}
 
-    local bgTransparency = config.BackgroundTransparency
-    if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
-    self.BackgroundTransparency = clamp01(bgTransparency)
+    -- Fundo principal sempre opaco.
+    self.BackgroundTransparency = 0
 
-    local explorerOnly = config.ExplorerOnly
-    if explorerOnly == nil then explorerOnly = Defaults.ExplorerOnly end
-    if explorerOnly then
-        config.Layout = "Studio"
-        config.ScriptExplorer = true
-        config.StudioRailWidth = 0
-        config.StudioExplorerWidth = 228
-        config.Resizable = false
-    end
-    local size = (explorerOnly and not config.Size) and UDim2.fromOffset(228, 550) or (config.Size or Defaults.Size)
+    local size = config.Size or Defaults.Size
     if config.Layout ~= "Studio" and config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
         local width = size.X.Offset + (config.ScriptExplorerWidth or 192) + 12
         if size.X.Scale == 0 then width = math.min(width, (config.MaxSize or Defaults.MaxSize).X) end
@@ -6804,7 +6791,7 @@ function PebbleUI:CreateWindow(config)
     end
     if config.Layout == nil then config.Layout = "Studio" end
     local studio = config.Layout == "Studio"
-    local sidebarWidth = studio and (config.StudioRailWidth or Defaults.StudioRailWidth) or (config.SidebarWidth or Defaults.SidebarWidth)
+    local sidebarWidth = studio and 0 or (config.SidebarWidth or Defaults.SidebarWidth)
     local topHeight = studio and (config.StudioHeaderHeight or Defaults.StudioHeaderHeight) or (config.TopbarHeight or Defaults.TopbarHeight)
     local corner = config.CornerRadius or Defaults.CornerRadius
     self.SidebarWidth = sidebarWidth
@@ -6874,19 +6861,20 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
+    if studio then sidebar.Visible = false end
     if studio then
         local explorerBackdrop = New("Frame", {
             Name = "StudioExplorerFullWidthBackground",
             BackgroundColor3 = self.Theme.Sidebar,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(6, 6),
-            Size = UDim2.new(0, sidebarWidth - 4, 1, -12),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(0, config.StudioExplorerWidth or Defaults.StudioExplorerWidth, 1, 0),
             ZIndex = 1, Parent = main,
         })
-        Corner(explorerBackdrop, math.max(4, corner - 2))
+        Corner(explorerBackdrop, corner)
+        -- Rounded backdrop so the left edge follows the window shape.
         BindTheme(self, explorerBackdrop, "BackgroundColor3", "Sidebar")
         self.StudioExplorerBackdrop = explorerBackdrop
-        explorerBackdrop.Visible = false -- Hide the unwanted full-height left strip.
         sidebar.BackgroundTransparency = 1
         sidebarStroke.Transparency = 1
     end
@@ -6985,6 +6973,7 @@ function PebbleUI:CreateWindow(config)
     })
     Corner(brand, self.Theme.ControlRadius)
     self.Brand = brand
+    brand.Visible = false
 
     -- A compact profile mark anchors the sidebar.
     local avatarHolder = New("Frame", {
@@ -7181,8 +7170,8 @@ function PebbleUI:CreateWindow(config)
     local sidebarList = New("Frame", {
         Name = "SidebarList",
         BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(8, 58),
-        Size = UDim2.new(1, -16, 1, -68),
+        Position = UDim2.fromOffset(8, 8),
+        Size = UDim2.new(1, -16, 1, -18),
         Parent = sidebar,
     })
     List(sidebarList, 3)
@@ -7669,11 +7658,10 @@ function PebbleUI:CreateWindow(config)
     -- A animacao inicial da janela so roda sem loading.
     -- Com loading, o painel permanece oculto ate a transicao final.
     if config.Loading == false then
-        main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
+        main.BackgroundTransparency = 0
         local mainScale = EnsureScale(main)
         mainScale.Scale = 0.99
         task.defer(function()
-            Tween(main, 0.28, { BackgroundTransparency = self.BackgroundTransparency }, EASE_SOFT, Enum.EasingDirection.Out)
             Tween(mainScale, 0.28, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
         end)
     end
@@ -7746,52 +7734,6 @@ function PebbleUI:CreateWindow(config)
     self:_CreateScriptExplorer()
     self:_CreateCustomBlueprints()
     if studio and self.ScriptExplorer then self:_SetExplorerCollapsed(false, true) end
-    if explorerOnly and self.ScriptExplorer then
-        -- Compact Explorer: o quadro de scripts ocupa a janela inteira.
-        self.Sidebar.Visible = false
-        if self.StudioExplorerBackdrop then self.StudioExplorerBackdrop.Visible = false end
-        if self.StudioToolbar then self.StudioToolbar.Visible = false end
-        if self.StudioDragHandle then self.StudioDragHandle.Visible = false end
-        if self.Topbar then self.Topbar.Visible = false end
-        if self.ContentHost then self.ContentHost.Visible = false end
-        if self.ScriptEditor then self.ScriptEditor.Visible = false end
-        if self.BlueprintEditor then self.BlueprintEditor.Visible = false end
-        if self.CloseButton then self.CloseButton.Visible = false end
-        if self.ProfileButton then self.ProfileButton.Visible = false end
-        if minimizeButton then minimizeButton.Visible = false end
-        if maximizeButton then maximizeButton.Visible = false end
-        self.ScriptExplorer.Position = UDim2.fromOffset(4, 4)
-        self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
-        self.ScriptExplorer.Size = UDim2.new(1, -8, 1, -8)
-        self._UpdateScriptLayout = function(window)
-            if not window.ScriptExplorer or window.Destroyed then return end
-            window.ScriptExplorer.Position = UDim2.fromOffset(4, 4)
-            window.ScriptExplorer.Size = UDim2.new(1, -8, 1, -8)
-            if window.Sidebar then window.Sidebar.Visible = false end
-            if window.ContentHost then window.ContentHost.Visible = false end
-            if window.Topbar then window.Topbar.Visible = false end
-            if window.StudioToolbar then window.StudioToolbar.Visible = false end
-        end
-        -- Arrastar pelo cabeçalho do Explorer, sem precisar da antiga barra de player.
-        local draggingExplorer, dragStart, originalPos, dragInput
-        self.ScriptExplorer.InputBegan:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            if input.Position.Y > self.ScriptExplorer.AbsolutePosition.Y + 37 then return end
-            draggingExplorer = true
-            dragStart = input.Position
-            originalPos = main.Position
-            dragInput = input
-        end)
-        table.insert(self._scriptConnections, UserInputService.InputChanged:Connect(function(input)
-            if not draggingExplorer then return end
-            if input ~= dragInput and input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            local delta = input.Position - dragStart
-            main.Position = UDim2.new(originalPos.X.Scale, originalPos.X.Offset + delta.X, originalPos.Y.Scale, originalPos.Y.Offset + delta.Y)
-        end))
-        table.insert(self._scriptConnections, UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then draggingExplorer = false end
-        end))
-    end
 
     -- Monta o loading com a ScreenGui DESLIGADA.
     -- Assim a primeira renderizacao mostra apenas o loading, nunca a UI.
@@ -7836,3 +7778,4 @@ end
 
 print("[PebbleUI] Loaded v" .. PebbleUI.Version)
 return PebbleUI
+```
