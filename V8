@@ -12,6 +12,7 @@ local RunService = game:GetService("RunService")
 local TextService = game:GetService("TextService")
 local CoreGui = game:GetService("CoreGui")
 local HttpService = game:GetService("HttpService")
+local SoundService = game:GetService("SoundService")
 
 assert(RunService:IsClient(), "PebbleUI must be loaded on the client.")
 local LocalPlayer = Players.LocalPlayer
@@ -133,15 +134,23 @@ end
 
 -- ============ ANIMATION HELPERS ============
 
+local SettingsMotion = { Enabled = true, Speed = 1, Style = "Smooth" }
 local EASE_OUT    = Enum.EasingStyle.Quint
 local EASE_SOFT   = Enum.EasingStyle.Quart
 local EASE_SETTLE = Enum.EasingStyle.Quart
 
 local function Tween(obj, duration, props, style, direction)
+    if not SettingsMotion.Enabled then
+        for key, value in pairs(props) do pcall(function() obj[key] = value end) end
+        return { Play = function() end, Cancel = function() end }
+    end
+    local durationAdjusted = (duration or 0.28) / math.max(0.1, SettingsMotion.Speed)
+    if SettingsMotion.Style == "Minimal" then durationAdjusted = 0.05 end
+    if SettingsMotion.Style == "Snappy" then durationAdjusted = durationAdjusted * 0.55 end
     local t = TweenService:Create(
         obj,
-        TweenInfo.new(duration or 0.28,
-            style or EASE_OUT,
+        TweenInfo.new(durationAdjusted,
+            SettingsMotion.Style == "Snappy" and Enum.EasingStyle.Back or (style or EASE_OUT),
             direction or Enum.EasingDirection.Out),
         props
     )
@@ -320,7 +329,7 @@ local Defaults = {
     Version = "v1.6.0",
     Icon = "sparkles",
 
-    Size = UDim2.fromOffset(660, 430),
+    Size = UDim2.fromOffset(1148, 680),
     Position = UDim2.fromScale(0.5, 0.5),
     MinSize = Vector2.new(520, 340),
     MaxSize = Vector2.new(1400, 900),
@@ -2373,10 +2382,324 @@ function Tab:Section(config)
 end
 
 --============================================================
+-- Built-in Settings tab (reference-inspired, native Roblox controls)
+--============================================================
+function Window:CreateSettingsTab()
+    if self.SettingsTab then return self.SettingsTab end
+    local tab = self:Tab({ Title = "Settings", Icon = "settings" })
+    self.SettingsTab = tab
+    local theme = self.Theme
+    local main = self.Main
+    local state = {
+        FocusSolid = false, PanelOpacity = 100, BackgroundStrength = 56,
+        Blur = 0, Saturation = 100, MusicFocused = false, Playing = false,
+        Visualizer = true, Rainbow = false, BackgroundScope = "Whole app",
+        SoundKind = "Tap", SoundId = "", BackgroundAsset = "",
+    }
+    self.SettingsState = state
+    -- Track original opacity so decorative transparent hitboxes stay transparent.
+    local originalOpacity = setmetatable({}, {__mode = "k"})
+    local function panelSet(opacity)
+        state.PanelOpacity = opacity
+        local alpha = 1 - math.clamp(opacity / 100, 0, 1)
+        for _, obj in ipairs(self.Main:GetDescendants()) do
+            if obj:IsA("GuiObject") and obj ~= self.SettingsBackground
+                then
+                if obj:IsA("Frame") or obj:IsA("TextButton") or obj:IsA("TextBox")
+                    or obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
+                    if originalOpacity[obj] == nil then originalOpacity[obj] = obj.BackgroundTransparency end
+                    local base = originalOpacity[obj]
+                    obj.BackgroundTransparency = base + (1 - base) * alpha
+                end
+            end
+        end
+    end
+    self.SettingsApplyPanelOpacity = panelSet
+    local function updateDepth(value)
+        state.PanelDepth = value
+        local strength = math.clamp(value / 200, 0, 1)
+        -- Shadows are 9-sliced soft images extending outside each panel/control.
+        local targets = {}
+        for _, element in ipairs(self.Main:GetDescendants()) do
+            if (element:IsA("Frame") or element:IsA("TextButton") or element:IsA("TextBox"))
+                and element ~= self.Main and element ~= self.SettingsBackground
+                and element.Name ~= "PebbleDepthShadow"
+                and element.BackgroundTransparency < 0.95
+                and element.AbsoluteSize.X >= 35 and element.AbsoluteSize.Y >= 18
+                and not element:IsDescendantOf(self.SettingsBackground) then
+                table.insert(targets, element)
+            end
+        end
+        for _, element in ipairs(targets) do
+            local shadow = element:FindFirstChild("PebbleDepthShadow")
+            if not shadow then
+                shadow = New("ImageLabel", {
+                    Name="PebbleDepthShadow", BackgroundTransparency=1,
+                    Image="rbxassetid://6014261993", ScaleType=Enum.ScaleType.Slice,
+                    SliceCenter=Rect.new(49,49,450,450), ImageColor3=Color3.fromRGB(0,0,0),
+                    AnchorPoint=Vector2.new(0.5,0.5), Position=UDim2.fromScale(0.5,0.5),
+                    ZIndex=math.max(0,element.ZIndex-1), Parent=element,
+                })
+            end
+            local spread = math.floor(4 + strength*17)
+            shadow.Size = UDim2.new(1,spread*2,1,spread*2)
+            shadow.ImageTransparency = 1 - strength*0.75
+            shadow.Visible = value > 0
+        end
+    end
+    self.SettingsApplyPanelDepth = updateDepth
+    local bg = New("ImageLabel", {
+        Name = "SettingsBackground", BackgroundTransparency = 1,
+        ImageTransparency = 1, Image = "", BorderSizePixel = 0,
+        Position = UDim2.fromScale(0, 0), Size = UDim2.fromScale(1, 1),
+        ScaleType = Enum.ScaleType.Crop, ZIndex = 0, Parent = main,
+    })
+    self.SettingsBackground = bg
+    local function refreshBackground()
+        local id = tostring(state.BackgroundAsset or ""):match("%d+")
+        bg.Image = id and ("rbxassetid://" .. id) or ""
+        bg.Visible = state.BackgroundScope == "Whole app" and id ~= nil
+        bg.ImageTransparency = 1 - state.BackgroundStrength / 100
+        -- Roblox has no native ImageLabel blur/saturation; preserve those values as settings.
+    end
+    local sWindow = tab:Section({Title = "WINDOW", Side = "Left", Icon = "app-window"})
+    sWindow:Slider({Title="Window Opacity", Min=0, Max=100, Step=1, Default=100, Suffix="%",
+        Callback=function(v) self:SetBackgroundTransparency(1 - v/100) end})
+    sWindow:Checkbox({Title="Solid When Focused", Default=false, Keybind=false,
+        Callback=function(v) state.FocusSolid=v; if v then self:SetBackgroundTransparency(0) end end})
+    sWindow:Slider({Title="Panel Depth", Min=0, Max=200, Step=5, Default=100, Suffix="%",
+        Callback=updateDepth})
+    sWindow:Slider({Title="Window Corner Radius", Min=0, Max=32, Step=1, Default=8,
+        Callback=function(v) local c=main:FindFirstChildOfClass("UICorner"); if c then c.CornerRadius=UDim.new(0,v) end end})
+    local borderStroke=main:FindFirstChildOfClass("UIStroke")
+    sWindow:Slider({Title="Window Border Thickness", Min=0, Max=6, Step=0.5, Default=1,
+        Callback=function(v) if borderStroke then borderStroke.Thickness=v end end})
+    sWindow:Colorpicker({Title="Window Border Color", Default=theme.Stroke,
+        Callback=function(c) state.BorderColor=c; if borderStroke then borderStroke.Color=c end end})
+    sWindow:Checkbox({Title="Rainbow Border", Default=false, Keybind=false,
+        Callback=function(v) state.Rainbow=v; if not v and borderStroke then borderStroke.Color=state.BorderColor or theme.Stroke end end})
+
+    local sBackground=tab:Section({Title="BACKGROUND", Side="Left", Icon="image"})
+    local backgroundInput = sBackground:Input({Title="Background Asset ID", Placeholder="rbxassetid / numeric ID", Default="",
+        Callback=function(value) state.PendingBackgroundAsset=tostring(value) end})
+    sBackground:Button({Title="Apply Background", Icon="check", Callback=function()
+        state.BackgroundAsset = state.PendingBackgroundAsset or ""
+        refreshBackground()
+    end})
+    sBackground:Button({Title="Reset Background", Icon="rotate-ccw", Callback=function()
+        state.BackgroundAsset = ""
+        state.PendingBackgroundAsset = ""
+        backgroundInput:Set("", false)
+        refreshBackground()
+    end})
+    sBackground:Slider({Title="Panel Opacity", Min=0, Max=100, Default=100, Suffix="%", Callback=panelSet})
+    sBackground:Slider({Title="Background Strength", Min=0, Max=100, Default=56, Suffix="%",
+        Callback=function(v) state.BackgroundStrength=v; refreshBackground() end})
+    sBackground:Slider({Title="Background Blur", Min=0, Max=24, Default=0, Suffix="px",
+        Callback=function(v) state.Blur=v end})
+    sBackground:Slider({Title="Background Saturation", Min=0, Max=200, Default=100, Suffix="%",
+        Callback=function(v) state.Saturation=v end})
+    sBackground:Dropdown({Title="Shows behind", Values={"Whole app","Editor only"}, Default="Whole app",
+        Callback=function(v) state.BackgroundScope=v; refreshBackground() end})
+
+    local sMusic=tab:Section({Title="MUSIC", Side="Right", Icon="music"})
+    local music=New("Sound",{ Name="PebbleSettingsMusic", Volume=1, Looped=true, Parent=SoundService })
+    self.SettingsMusic=music
+    sMusic:Dropdown({Title="Music Source", Values={"File","Roblox Asset ID"}, Default="File",
+        Callback=function(v) state.MusicSource=v end})
+    sMusic:Input({Title="Choose file / Sound ID", Placeholder="Roblox audio asset ID", Default="",
+        Callback=function(v)
+            local id=tostring(v):match("%d+")
+            if id then music.SoundId="rbxassetid://"..id; state.MusicId=id
+            else music:Stop(); music.SoundId=""; state.MusicId=nil end
+        end})
+    sMusic:Checkbox({Title="Play Music", Default=false, Keybind=false,
+        Callback=function(v)
+            state.Playing=v
+            if v and state.MusicId then music:Play() else music:Stop() end
+        end})
+    sMusic:Slider({Title="Volume", Min=0, Max=100, Default=100, Suffix="%",
+        Callback=function(v) music.Volume=v/100 end})
+    sMusic:Checkbox({Title="Only When Focused", Default=false, Keybind=false,
+        Callback=function(v) state.MusicFocused=v end})
+    sMusic:Checkbox({Title="Titlebar Visualizer", Default=true, Keybind=false,
+        Callback=function(v) state.Visualizer=v end})
+    local visualBars={}
+    local visualHolder=New("Frame",{Name="MusicVisualizer",BackgroundTransparency=1,
+        AnchorPoint=Vector2.new(1,0.5),Position=UDim2.new(1,-56,0.5,0),
+        Size=UDim2.fromOffset(42,22),Visible=false,ZIndex=45,Parent=self.Topbar})
+    for i=1,9 do
+        local bar=New("Frame",{Name="Bar"..i,BackgroundColor3=theme.Accent,
+            BorderSizePixel=0,AnchorPoint=Vector2.new(0,1),
+            Position=UDim2.new(0,(i-1)*5,1,0),Size=UDim2.fromOffset(3,3),
+            ZIndex=46,Parent=visualHolder})
+        table.insert(visualBars,bar)
+    end
+    local visualConn=RunService.Heartbeat:Connect(function()
+        if self.Destroyed then return end
+        visualHolder.Visible=state.Visualizer and music.IsPlaying
+        if not visualHolder.Visible then return end
+        local level=math.clamp(music.PlaybackLoudness/400,0,1)
+        for i,bar in ipairs(visualBars) do
+            local bounce=math.abs(math.sin(os.clock()*8+i*0.79))
+            bar.Size=UDim2.fromOffset(3,math.max(3,math.floor(3+19*level*bounce)))
+        end
+    end)
+    table.insert(self._scriptConnections,visualConn)
+    local sAnimations=tab:Section({Title="ANIMATIONS", Side="Right", Icon="sparkles"})
+    sAnimations:Checkbox({Title="Enable Animations", Default=true, Keybind=false,
+        Callback=function(v) SettingsMotion.Enabled=v end})
+    sAnimations:Slider({Title="Animation Speed", Min=0.25, Max=3, Step=0.05, Default=1, Suffix="x",
+        Callback=function(v) SettingsMotion.Speed=v end})
+    sAnimations:Dropdown({Title="Animation Style", Values={"Smooth","Snappy","Minimal"}, Default="Smooth",
+        Callback=function(v) SettingsMotion.Style=v end})
+    sAnimations:Dropdown({Title="Button Sound", Values={"Off","Tap","Click","Soft"}, Default="Off",
+        Callback=function(v) state.SoundKind=v end})
+    sAnimations:Input({Title="Button Sound Asset ID", Placeholder="Optional sound asset ID", Default="",
+        Callback=function(v) state.SoundId=tostring(v):match("%d+") or "" end})
+
+    local fx=New("Sound", {Name="PebbleSettingsClick",Volume=0.35,Parent=SoundService})
+    self.SettingsClick=fx
+    self._settingsClickConnection=UserInputService.InputBegan:Connect(function(input)
+        if self.Destroyed then return end
+        if input.UserInputType~=Enum.UserInputType.MouseButton1 then return end
+        if state.SoundKind=="Off" or state.SoundId=="" then return end
+        local mousePos=UserInputService:GetMouseLocation()
+        for _, object in ipairs(self.Main:GetDescendants()) do
+            if object:IsA("GuiButton") and object.Visible and object.AbsoluteSize.X > 0 then
+                local at, size = object.AbsolutePosition, object.AbsoluteSize
+                if mousePos.X >= at.X and mousePos.X <= at.X + size.X
+                    and mousePos.Y >= at.Y and mousePos.Y <= at.Y + size.Y then
+                    fx.SoundId="rbxassetid://"..state.SoundId
+                    fx.PlaybackSpeed=state.SoundKind=="Soft" and 0.8 or (state.SoundKind=="Click" and 1.3 or 1)
+                    fx:Play()
+                    break
+                end
+            end
+        end
+    end)
+    table.insert(self._scriptConnections,self._settingsClickConnection)
+    local focusLost=UserInputService.WindowFocusReleased:Connect(function()
+        if self.Destroyed then return end
+        if state.MusicFocused then music:Pause() end
+    end)
+    local focusIn=UserInputService.WindowFocused:Connect(function()
+        if self.Destroyed then return end
+        if state.FocusSolid then self:SetBackgroundTransparency(0) end
+        if state.MusicFocused and state.Playing and state.MusicId then music:Resume() end
+    end)
+    table.insert(self._scriptConnections,focusLost)
+    table.insert(self._scriptConnections,focusIn)
+    local rainbowConn=RunService.Heartbeat:Connect(function()
+        if self.Destroyed then return end
+        if state.Rainbow and borderStroke then borderStroke.Color=Color3.fromHSV((os.clock()*0.15)%1,1,1) end
+    end)
+    table.insert(self._scriptConnections,rainbowConn)
+    self.ScreenGui.Destroying:Connect(function()
+        if music then music:Destroy() end
+        if fx then fx:Destroy() end
+    end)
+    refreshBackground()
+    return tab
+end
+
+-- Settings is a standalone view, not an ordinary tab. Existing native control
+-- factories are reused internally, then their frames are moved into one column.
+function Window:CreateSettingsView()
+    if self.SettingsView then return self.SettingsView end
+    local previousTab = self.ActiveTab
+    local settings = self:CreateSettingsTab()
+    -- Undo the temporary navigation entry. The settings screen is accessed
+    -- only through the cog in the top toolbar.
+    for i = #self.Tabs, 1, -1 do
+        if self.Tabs[i] == settings then table.remove(self.Tabs, i) break end
+    end
+    if settings.Button then settings.Button:Destroy() end
+    settings.Button = nil
+    if self.ActiveTab == settings then self.ActiveTab = previousTab end
+    settings.Container.Visible = false
+
+    local view = New("Frame", {
+        Name = "StandaloneSettings", BackgroundTransparency = 1,
+        Size = UDim2.fromScale(1, 1), Visible = false,
+        Parent = self.ContentHost,
+    })
+    self.SettingsView = view
+    local scroll = StyleScrollBar(New("ScrollingFrame", {
+        Name = "SettingsRows", BackgroundTransparency = 1, BorderSizePixel = 0,
+        Size = UDim2.fromScale(1, 1), CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ElasticBehavior = Enum.ElasticBehavior.Never, Parent = view,
+    }), { Thickness = 3, Color = self.Theme.Scrollbar, Transparency = 0.35 })
+    local column = New("Frame", {
+        Name = "SettingsColumn", BackgroundTransparency = 1,
+        Size = UDim2.new(1, -12, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+        Parent = scroll,
+    })
+    Padding(column, 0, 0, 4, 12)
+    List(column, 14)
+    local heading = New("TextLabel", {
+        Name = "SettingsHeading", BackgroundTransparency = 1,
+        Text = "Settings", TextColor3 = self.Theme.Text,
+        Font = self.Theme.FontBold, TextSize = 19,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Size = UDim2.new(1, 0, 0, 35), LayoutOrder = 0, Parent = column,
+    })
+    BindTheme(self, heading, "TextColor3", "Text")
+    local order = { WINDOW = 1, BACKGROUND = 2, MUSIC = 3, ANIMATIONS = 4 }
+    for _, section in ipairs(settings.Sections) do
+        section.Frame.Parent = column
+        section.Frame.LayoutOrder = order[section.Title.Text] or 10
+        section.Frame.Size = UDim2.new(1, 0, 0, section.Frame.Size.Y.Offset)
+        section.Frame.BackgroundTransparency = 0
+        -- Hide the ordinary boxed-section chrome. Rows and separators remain.
+        local border = section.Frame:FindFirstChildOfClass("UIStroke")
+        if border then border.Transparency = 1 end
+    end
+    -- Remove the unused split-column frame, preserving relocated sections.
+    settings.Container:Destroy()
+    settings.Container = nil
+    self.SettingsTab = nil
+    task.defer(function()
+        if self.SettingsApplyPanelDepth then self.SettingsApplyPanelDepth(100) end
+    end)
+    return view
+end
+
+function Window:ToggleSettings(force)
+    if not self.SettingsView then return self end
+    local opening = force
+    if opening == nil then opening = not self.SettingsView.Visible end
+    if opening then
+        if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
+        if self.ActiveScript then self:_LeaveScriptEditor() end
+        if self.ActiveDropdown then self.ActiveDropdown:Close() end
+        if self.ActiveColorpicker then self.ActiveColorpicker:Close() end
+        for _, tab in ipairs(self.Tabs) do tab.Container.Visible = false end
+        self.SettingsView.Visible = true
+        self.SettingsOpen = true
+    else
+        self.SettingsView.Visible = false
+        self.SettingsOpen = false
+        if self.ActiveTab then self.ActiveTab.Container.Visible = true
+        elseif self.Tabs[1] then self:_setActiveTab(self.Tabs[1]) end
+    end
+    return self
+end
+
+--============================================================
 -- Window
 --============================================================
 
 function Window:_setActiveTab(tab)
+    if self.SettingsView and self.SettingsView.Visible then
+        self.SettingsView.Visible = false
+        self.SettingsOpen = false
+        if self.ActiveTab and self.ActiveTab.Container then
+            self.ActiveTab.Container.Visible = true
+        end
+    end
     if not tab or (self.ActiveTab == tab and not self.ActiveScript and not self.ActiveBlueprint) then return end
     if self.ActiveBlueprint then self:_LeaveBlueprintEditor() end
     if self.ActiveScript then self:_LeaveScriptEditor() end
@@ -2733,6 +3056,10 @@ function Window:GetBackgroundTransparency()
 end
 
 function Window:ToggleVisibility()
+    if self._minimized and self._restoreFromMinimize then
+        self._restoreFromMinimize()
+        return true
+    end
     if self.Destroyed or not self.Main.Parent then return false end
     self.Visible = not self.Visible
     self._visibilityRevision = (self._visibilityRevision or 0) + 1
@@ -3514,15 +3841,14 @@ function Window:_UpdateScriptLayout()
             end
         end
         self._scriptRightInset = 0
-        self.Sidebar.Position = UDim2.fromOffset(6, 6)
-        self.Sidebar.Size = UDim2.new(0, rail - 10, 1, -12)
+        self.Sidebar.Visible = false -- Studio uses the Explorer as its leftmost column.
         self.ScriptExplorer.AnchorPoint = Vector2.new(0, 0)
         apply(self.ScriptExplorer, {
-            Position = UDim2.fromOffset(rail + 2, 6),
-            Size = UDim2.new(0, explorerWidth, 1, -12),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(0, explorerWidth, 1, 0),
         })
         apply(self.StudioExplorerBackdrop, {
-            Size = UDim2.new(0, rail + explorerWidth + 2, 1, -12),
+            Size = UDim2.new(0, explorerWidth, 1, 0),
         })
         apply(self.Topbar, {
             Position = UDim2.fromOffset(contentLeft, 44),
@@ -4410,6 +4736,15 @@ function Window:_CreateScriptExplorer()
     BindTheme(self, frame, "BackgroundColor3", "Sidebar")
     BindTheme(self, border, "Color", "SidebarDivider")
     self.ScriptExplorer = frame
+    if self.Config.Layout == "Studio" and self.StudioExplorerBackdrop then
+        -- The backdrop is clipped by the rounded main frame; no rectangular overlay
+        -- may paint across its top-left/bottom-left rounded corners.
+        local backdrop = self.StudioExplorerBackdrop
+        backdrop.Position = UDim2.fromOffset(0, 0)
+        backdrop.Size = UDim2.new(0, self.Config.StudioExplorerWidth or Defaults.StudioExplorerWidth, 1, 0)
+        local rounding = backdrop:FindFirstChildOfClass("UICorner")
+        if rounding then rounding.CornerRadius = UDim.new(0, self.Config.CornerRadius or Defaults.CornerRadius) end
+    end
     if self.Config.Layout == "Studio" then
         frame.BackgroundTransparency = 1
         border.Transparency = 1
@@ -6780,9 +7115,8 @@ function PebbleUI:CreateWindow(config)
     self._blueprintsById = {}
     self._blueprintConnections = {}
 
-    local bgTransparency = config.BackgroundTransparency
-    if bgTransparency == nil then bgTransparency = Defaults.BackgroundTransparency end
-    self.BackgroundTransparency = clamp01(bgTransparency)
+    -- Fundo principal sempre opaco.
+    self.BackgroundTransparency = 0
 
     local size = config.Size or Defaults.Size
     if config.Layout ~= "Studio" and config.ScriptExplorer ~= false and config.ExpandWindowForScripts ~= false then
@@ -6792,7 +7126,7 @@ function PebbleUI:CreateWindow(config)
     end
     if config.Layout == nil then config.Layout = "Studio" end
     local studio = config.Layout == "Studio"
-    local sidebarWidth = studio and (config.StudioRailWidth or Defaults.StudioRailWidth) or (config.SidebarWidth or Defaults.SidebarWidth)
+    local sidebarWidth = studio and 0 or (config.SidebarWidth or Defaults.SidebarWidth)
     local topHeight = studio and (config.StudioHeaderHeight or Defaults.StudioHeaderHeight) or (config.TopbarHeight or Defaults.TopbarHeight)
     local corner = config.CornerRadius or Defaults.CornerRadius
     self.SidebarWidth = sidebarWidth
@@ -6862,16 +7196,18 @@ function PebbleUI:CreateWindow(config)
     BindTheme(self, sidebar, "BackgroundColor3", "Sidebar")
     BindTheme(self, sidebarStroke, "Color", "SidebarDivider")
     self.Sidebar = sidebar
+    if studio then sidebar.Visible = false end
     if studio then
         local explorerBackdrop = New("Frame", {
             Name = "StudioExplorerFullWidthBackground",
             BackgroundColor3 = self.Theme.Sidebar,
             BorderSizePixel = 0,
-            Position = UDim2.fromOffset(0, 6),
-            Size = UDim2.new(0, sidebarWidth + (config.StudioExplorerWidth or Defaults.StudioExplorerWidth) + 2, 1, -12),
+            Position = UDim2.fromOffset(0, 0),
+            Size = UDim2.new(0, config.StudioExplorerWidth or Defaults.StudioExplorerWidth, 1, 0),
             ZIndex = 1, Parent = main,
         })
-        -- Fundo do Explorer acompanha a borda esquerda sem recuo lateral.
+        Corner(explorerBackdrop, corner)
+        -- Rounded backdrop so the left edge follows the window shape.
         BindTheme(self, explorerBackdrop, "BackgroundColor3", "Sidebar")
         self.StudioExplorerBackdrop = explorerBackdrop
         sidebar.BackgroundTransparency = 1
@@ -6901,7 +7237,7 @@ function PebbleUI:CreateWindow(config)
                 elseif self.CustomScripts[1] then self:OpenScript(self.CustomScripts[1].Id) end
             end },
             { "folder-open", "Explorer", function() self:ToggleExplorer() end },
-            { "settings", "Settings", function() if #self.Tabs > 0 then self:_setActiveTab(self.Tabs[#self.Tabs]) end end },
+            { "settings", "Settings", function() self:ToggleSettings() end },
         }
         local controls = {}
         local hovered = nil
@@ -7329,29 +7665,29 @@ function PebbleUI:CreateWindow(config)
         if maximizeIcon then maximizeIcon.Image = GetIcon(isMaximized and "copy" or "maximize-2") end
         self:_UpdateScriptLayout()
     end
+    local function restoreFromMinimize()
+        if not isMinimized then return end
+        isMinimized = false
+        self._minimized = false
+        main.Visible = true
+        self.Visible = true
+        main.Size = restoreSize
+        if self.StudioToolbar then self.StudioToolbar.Visible = true end
+        if self.Sidebar then self.Sidebar.Visible = self.Config.Layout ~= "Studio" end
+        if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
+        if self.Topbar then self.Topbar.Visible = true end
+        if self.ContentHost then self.ContentHost.Visible = not (self.ActiveScript or self.ActiveBlueprint) end
+        if self.ScriptEditor and self.ActiveScript then self.ScriptEditor.Visible = true end
+        if self.BlueprintEditor and self.ActiveBlueprint then self.BlueprintEditor.Visible = true end
+    end
+    self._restoreFromMinimize = restoreFromMinimize
     local minimizeButton = makeWindowButton("MinimizeButton", "minus", -70, function()
-        if isMinimized then
-            isMinimized = false
-            main.Size = restoreSize
-            if self.StudioToolbar then self.StudioToolbar.Visible = true end
-            self.Sidebar.Visible = true
-            if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
-            self.Topbar.Visible = true
-            self.ContentHost.Visible = self.ScriptEditor == nil or not self.ScriptEditor.Visible
-            if self.ScriptEditor and self.ActiveScript then self.ScriptEditor.Visible = true end
-            if self.BlueprintEditor and self.ActiveBlueprint then self.BlueprintEditor.Visible = true end
-        else
-            restoreSize = main.Size
-            isMinimized = true
-            if self.StudioToolbar then self.StudioToolbar.Visible = false end
-            self.Sidebar.Visible = false
-            if self.ScriptExplorer then self.ScriptExplorer.Visible = false end
-            self.Topbar.Visible = false
-            self.ContentHost.Visible = false
-            if self.ScriptEditor then self.ScriptEditor.Visible = false end
-            if self.BlueprintEditor then self.BlueprintEditor.Visible = false end
-            main.Size = UDim2.fromOffset(main.AbsoluteSize.X, minimizedHeight)
-        end
+        if isMinimized then restoreFromMinimize(); return end
+        restoreSize = main.Size
+        isMinimized = true
+        self._minimized = true
+        self.Visible = false
+        main.Visible = false
     end)
     maximizeButton, maximizeIcon = makeWindowButton("MaximizeButton", "maximize-2", -41, maximizeOrRestore)
     closeBtn.Position = UDim2.new(1, -12, 0, 13)
@@ -7657,11 +7993,10 @@ function PebbleUI:CreateWindow(config)
     -- A animacao inicial da janela so roda sem loading.
     -- Com loading, o painel permanece oculto ate a transicao final.
     if config.Loading == false then
-        main.BackgroundTransparency = math.min(1, self.BackgroundTransparency + 0.18)
+        main.BackgroundTransparency = 0
         local mainScale = EnsureScale(main)
         mainScale.Scale = 0.99
         task.defer(function()
-            Tween(main, 0.28, { BackgroundTransparency = self.BackgroundTransparency }, EASE_SOFT, Enum.EasingDirection.Out)
             Tween(mainScale, 0.28, { Scale = 1 }, EASE_SOFT, Enum.EasingDirection.Out)
         end)
     end
@@ -7733,6 +8068,7 @@ function PebbleUI:CreateWindow(config)
     end
     self:_CreateScriptExplorer()
     self:_CreateCustomBlueprints()
+    if config.SettingsTab ~= false then self:CreateSettingsView() end
     if studio and self.ScriptExplorer then self:_SetExplorerCollapsed(false, true) end
 
     -- Monta o loading com a ScreenGui DESLIGADA.
