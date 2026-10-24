@@ -9052,74 +9052,165 @@ function PebbleUI:CreateWindow(config)
         if maximizeIcon then maximizeIcon.Image = GetIcon(isMaximized and "copy" or "maximize-2") end
         self:_UpdateScriptLayout()
     end
-    -- Minimize uses the same 0.22s shrink/fade as Close; restore reverses it.
-    local minimizeRevision = 0
-    local minimizeTween
-    local minimizedBackgroundTransparency
-    local function cancelMinimizeTween()
-        if minimizeTween then
-            minimizeTween:Cancel()
-            minimizeTween = nil
-        end
+    -- Windows 11-inspired minimize / restore: animate the visual scale,
+    -- not Main.Size. Changing Size reflows the entire interface every frame.
+    local windowMotionScale = EnsureScale(main)
+    local motionTweens = {}
+    local motionRevision = 0
+    local motionHomePosition = main.Position
+    local motionHomeTransparency = main.BackgroundTransparency
+    local motionImageTransparency = self.BackgroundImage and self.BackgroundImage.ImageTransparency or 0
+    local motionTintTransparency = self.BackgroundTint and self.BackgroundTint.BackgroundTransparency or 1
+    local motionStrokeTransparency = mainStroke.Transparency
+    local motionHidden = false
+
+    local function motionDuration(base)
+        if not SettingsMotion.Enabled then return 0 end
+        if SettingsMotion.Style == "Minimal" then return 0.06 end
+        local speed = math.max(0.1, SettingsMotion.Speed)
+        return (base / speed) * (SettingsMotion.Style == "Snappy" and 0.8 or 1)
     end
+
+    local function cancelWindowMotion()
+        for _, tween in ipairs(motionTweens) do
+            tween:Cancel()
+        end
+        table.clear(motionTweens)
+    end
+
+    local function startWindowMotion(object, duration, properties, easing, direction)
+        if not object or not object.Parent then return nil end
+        if duration <= 0 then
+            for property, value in pairs(properties) do
+                object[property] = value
+            end
+            return nil
+        end
+        local tween = TweenService:Create(object, TweenInfo.new(
+            duration, easing, direction
+        ), properties)
+        table.insert(motionTweens, tween)
+        tween:Play()
+        return tween
+    end
+
+    local function offsetWindowPosition(position, pixels)
+        return UDim2.new(position.X.Scale, position.X.Offset,
+            position.Y.Scale, position.Y.Offset + pixels)
+    end
+
+    local function setWindowMotionPose(hidden)
+        windowMotionScale.Scale = hidden and 0.955 or 1
+        main.Position = hidden and offsetWindowPosition(motionHomePosition, 14) or motionHomePosition
+        main.BackgroundTransparency = hidden and 1 or motionHomeTransparency
+        if self.BackgroundImage then
+            self.BackgroundImage.ImageTransparency = hidden and 1 or motionImageTransparency
+        end
+        if self.BackgroundTint then
+            self.BackgroundTint.BackgroundTransparency = hidden and 1 or motionTintTransparency
+        end
+        mainStroke.Transparency = hidden and 1 or motionStrokeTransparency
+    end
+
     local function restoreFromMinimize()
         if not isMinimized or self.Destroyed then return end
-        minimizeRevision += 1
-        cancelMinimizeTween()
+        motionRevision += 1
+        local revision = motionRevision
+        cancelWindowMotion()
         isMinimized = false
         self._minimized = false
         self.Visible = true
-        main.Visible = true
-        -- Once hidden, size/background were reset; reconstruct the exit pose.
-        if main.Size == restoreSize then
-            main.Size = UDim2.new(restoreSize.X.Scale, restoreSize.X.Offset - 18,
-                restoreSize.Y.Scale, restoreSize.Y.Offset - 18)
-            main.BackgroundTransparency = 1
+
+        -- When returning from a completely hidden state, start at the exact
+        -- end pose of the minimize animation and play it backwards.
+        if not main.Visible or motionHidden then
+            setWindowMotionPose(true)
         end
-        -- Keep the full UI visible while the reverse tween runs.
-        if self.StudioToolbar then self.StudioToolbar.Visible = true end
-        if self.Sidebar then self.Sidebar.Visible = self.Config.Layout ~= "Studio" end
-        if self.ScriptExplorer then self.ScriptExplorer.Visible = true end
-        if self.Topbar then self.Topbar.Visible = true end
-        if self.ContentHost then self.ContentHost.Visible = not (self.ActiveScript or self.ActiveBlueprint) end
-        if self.ScriptEditor and self.ActiveScript then self.ScriptEditor.Visible = true end
-        if self.BlueprintEditor and self.ActiveBlueprint then self.BlueprintEditor.Visible = true end
-        -- If animations are disabled, Tween applies both targets immediately.
-        minimizeTween = Tween(main, 0.22, {
-            Size = restoreSize,
-            BackgroundTransparency = minimizedBackgroundTransparency or 0,
-        }, EASE_SOFT, Enum.EasingDirection.Out)
-        self:_UpdateScriptLayout()
+        motionHidden = false
+        main.Visible = true
+
+        local duration = motionDuration(0.34)
+        local easing = Enum.EasingStyle.Quint
+        local direction = Enum.EasingDirection.Out
+        local t = startWindowMotion(windowMotionScale, duration, { Scale = 1 }, easing, direction)
+        startWindowMotion(main, duration, {
+            Position = motionHomePosition,
+            BackgroundTransparency = motionHomeTransparency,
+        }, easing, direction)
+        if self.BackgroundImage then
+            startWindowMotion(self.BackgroundImage, duration,
+                { ImageTransparency = motionImageTransparency }, easing, direction)
+        end
+        if self.BackgroundTint then
+            startWindowMotion(self.BackgroundTint, duration,
+                { BackgroundTransparency = motionTintTransparency }, easing, direction)
+        end
+        startWindowMotion(mainStroke, duration,
+            { Transparency = motionStrokeTransparency }, easing, direction)
+
+        if t then
+            t.Completed:Connect(function(state)
+                if state == Enum.PlaybackState.Completed and revision == motionRevision
+                    and not self.Destroyed and not isMinimized then
+                    setWindowMotionPose(false)
+                end
+            end)
+        end
     end
     self._restoreFromMinimize = restoreFromMinimize
+
     local minimizeButton = makeWindowButton("MinimizeButton", "minus", -70, function()
         if isMinimized then restoreFromMinimize(); return end
         if self.Destroyed then return end
-        minimizeRevision += 1
-        local revision = minimizeRevision
-        cancelMinimizeTween()
-        restoreSize = main.Size
-        minimizedBackgroundTransparency = main.BackgroundTransparency
+        motionRevision += 1
+        local revision = motionRevision
+        cancelWindowMotion()
+
+        -- Capture the current layout, without mutating its dimensions.
+        motionHomePosition = main.Position
+        motionHomeTransparency = main.BackgroundTransparency
+        motionImageTransparency = self.BackgroundImage and self.BackgroundImage.ImageTransparency or 0
+        motionTintTransparency = self.BackgroundTint and self.BackgroundTint.BackgroundTransparency or 1
+        motionStrokeTransparency = mainStroke.Transparency
+        motionHidden = false
         isMinimized = true
         self._minimized = true
         self.Visible = false
-        minimizeTween = Tween(main, 0.22, {
-            Size = UDim2.new(restoreSize.X.Scale, restoreSize.X.Offset - 18,
-                restoreSize.Y.Scale, restoreSize.Y.Offset - 18),
+
+        local duration = motionDuration(0.30)
+        local easing = Enum.EasingStyle.Quint
+        local direction = Enum.EasingDirection.In
+        local t = startWindowMotion(windowMotionScale, duration,
+            { Scale = 0.955 }, easing, direction)
+        startWindowMotion(main, duration, {
+            Position = offsetWindowPosition(motionHomePosition, 14),
             BackgroundTransparency = 1,
-        }, EASE_SOFT, Enum.EasingDirection.In)
-        -- Hide only after the exit animation; an immediate restore cancels this.
-        local hideDelay = not SettingsMotion.Enabled and 0
-            or SettingsMotion.Style == "Minimal" and 0.05
-            or (0.22 / math.max(0.1, SettingsMotion.Speed)) * (SettingsMotion.Style == "Snappy" and 0.55 or 1)
-        task.delay(hideDelay + 0.01, function()
-            if not self.Destroyed and isMinimized and revision == minimizeRevision then
-                main.Visible = false
-                -- Restore visual properties while hidden so saves/layout keep the real size.
-                main.Size = restoreSize
-                main.BackgroundTransparency = minimizedBackgroundTransparency
-            end
-        end)
+        }, easing, direction)
+        if self.BackgroundImage then
+            startWindowMotion(self.BackgroundImage, duration,
+                { ImageTransparency = 1 }, easing, direction)
+        end
+        if self.BackgroundTint then
+            startWindowMotion(self.BackgroundTint, duration,
+                { BackgroundTransparency = 1 }, easing, direction)
+        end
+        startWindowMotion(mainStroke, duration,
+            { Transparency = 1 }, easing, direction)
+
+        local function finishMinimize()
+            if self.Destroyed or not isMinimized or revision ~= motionRevision then return end
+            motionHidden = true
+            main.Visible = false
+            -- Return to stable saved geometry only while hidden.
+            setWindowMotionPose(false)
+        end
+        if t then
+            t.Completed:Connect(function(state)
+                if state == Enum.PlaybackState.Completed then finishMinimize() end
+            end)
+        else
+            finishMinimize()
+        end
     end)
     maximizeButton, maximizeIcon = makeWindowButton("MaximizeButton", "maximize-2", -41, maximizeOrRestore)
     closeBtn.Position = UDim2.new(1, -12, 0, 13)
